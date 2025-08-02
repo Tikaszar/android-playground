@@ -1,0 +1,42 @@
+# Rust
+/target/
+**/*.rs.bk
+Cargo.lock
+*.so
+
+# Android
+*.apk
+*.aab
+*.dex
+local.properties
+
+# IDEs
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Build artifacts
+/build/
+/dist/
+/out/
+
+# Logs
+*.log
+
+# Plugin development
+/plugins/*/target/
+/systems/*/target/
+/core/*/target/
+
+# Hot reload temp files
+*.so.tmp
+*.so.old
+
+# Local development
+.env
+.env.local
