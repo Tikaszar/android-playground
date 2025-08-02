@@ -1,0 +1,45 @@
+[workspace]
+resolver = "2"
+members = [
+    "core/types",
+    "core/android",
+    "core/server",
+    "core/plugin",
+    "systems/ui",
+    "systems/networking",
+    "systems/physics",
+    "systems/logic",
+    "systems/rendering",
+    "plugins/idle-game",
+    "plugins/playground-editor",
+]
+
+[workspace.package]
+version = "0.1.0"
+authors = ["Ptolemy <ptolemy.l.jones@gmail.com>"]
+edition = "2021"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/Tikaszar/android-playground"
+
+[workspace.dependencies]
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+tokio = { version = "1", features = ["full"] }
+tracing = "0.1"
+tracing-subscriber = "0.3"
+thiserror = "1.0"
+anyhow = "1.0"
+
+# For plugin system
+libloading = "0.8"
+
+# For server
+axum = "0.7"
+tower = "0.4"
+tower-http = { version = "0.5", features = ["fs", "cors"] }
+
+# Android specific
+jni = "0.21"
+
+# For hot reload
+notify = "6.1"

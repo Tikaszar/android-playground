@@ -1,0 +1,11 @@
+[package]
+name = "playground-ui"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+playground-types = { path = "../../core/types" }
+serde = { workspace = true }
+thiserror = { workspace = true }
