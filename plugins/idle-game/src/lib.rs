@@ -1,16 +1,15 @@
 use playground_plugin::{Plugin, Stateful};
-use playground_types::{Context, Event, RenderContext};
+use playground_types::{Context, Event, PluginError, PluginId, PluginMetadata, RenderContext, Version};
 use serde::{Deserialize, Serialize};
-use std::error::Error;
 
-#[derive(Default, Serialize, Deserialize)]
+#[derive(Default, Clone, Serialize, Deserialize)]
 struct IdleGameState {
     currency: u64,
     generators: Vec<Generator>,
     multiplier: f64,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 struct Generator {
     name: String,
     count: u32,
@@ -31,23 +30,20 @@ impl IdleGame {
 }
 
 impl Plugin for IdleGame {
-    fn id(&self) -> &str {
-        "idle-game"
+    fn metadata(&self) -> &PluginMetadata {
+        static METADATA: PluginMetadata = PluginMetadata {
+            id: PluginId(String::new()),
+            name: String::new(),
+            version: Version {
+                major: 0,
+                minor: 1,
+                patch: 0,
+            },
+        };
+        &METADATA
     }
 
-    fn name(&self) -> &str {
-        "Idle Game"
-    }
-
-    fn version(&self) -> &str {
-        "0.1.0"
-    }
-
-    fn dependencies(&self) -> Vec<&str> {
-        vec!["ui", "logic"]
-    }
-
-    fn on_load(&mut self, _ctx: &mut Context) -> Result<(), Box<dyn Error>> {
+    fn on_load(&mut self, _ctx: &mut Context) -> Result<(), PluginError> {
         tracing::info!("Idle Game plugin loaded");
         Ok(())
     }
@@ -73,14 +69,14 @@ impl Plugin for IdleGame {
 }
 
 impl Stateful for IdleGame {
-    fn save_state(&self) -> serde_json::Value {
-        serde_json::to_value(&self.state).unwrap_or(serde_json::Value::Null)
+    type State = IdleGameState;
+    
+    fn save_state(&self) -> Self::State {
+        self.state.clone()
     }
-
-    fn load_state(&mut self, state: serde_json::Value) {
-        if let Ok(loaded_state) = serde_json::from_value(state) {
-            self.state = loaded_state;
-        }
+    
+    fn restore_state(&mut self, state: Self::State) {
+        self.state = state;
     }
 }
 
