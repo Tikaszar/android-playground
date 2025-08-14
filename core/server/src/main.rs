@@ -2,6 +2,7 @@ use axum::{
     routing::{get, post},
     Json, Router,
 };
+use playground_types::server::plugin::PluginInfo;
 use std::net::SocketAddr;
 use tower_http::cors::CorsLayer;
 use tracing_subscriber;
@@ -29,8 +30,20 @@ async fn root() -> &'static str {
     "Android Playground Server"
 }
 
-async fn list_plugins() -> Json<Vec<String>> {
-    Json(vec!["idle-game".to_string(), "playground-editor".to_string()])
+async fn list_plugins() -> Json<Vec<PluginInfo>> {
+    let plugins = vec![
+        PluginInfo {
+            name: "idle-game".to_string(),
+            version: "0.1.0".to_string(),
+            description: "An idle game plugin.".to_string(),
+        },
+        PluginInfo {
+            name: "playground-editor".to_string(),
+            version: "0.1.0".to_string(),
+            description: "A browser-based editor for the playground.".to_string(),
+        },
+    ];
+    Json(plugins)
 }
 
 async fn reload_plugin(Json(plugin_name): Json<String>) -> &'static str {
