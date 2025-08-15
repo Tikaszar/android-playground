@@ -7,5 +7,7 @@ license.workspace = true
 
 [dependencies]
 playground-types = { path = "../../core/types" }
-serde = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
 thiserror = { workspace = true }
+tokio = { workspace = true }
+log = { workspace = true }
