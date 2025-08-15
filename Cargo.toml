@@ -34,9 +34,9 @@ anyhow = "1.0"
 libloading = "0.8"
 
 # For server
-axum = "0.7"
+axum = "0.8"
 tower = "0.4"
-tower-http = { version = "0.5", features = ["fs", "cors"] }
+tower-http = { version = "0.6", features = ["fs", "cors"] }
 
 # Android specific
 jni = "0.21"

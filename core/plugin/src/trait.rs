@@ -1,3 +1,5 @@
+#![allow(improper_ctypes_definitions)]
+
 use playground_types::context::Context;
 use playground_types::error::PluginError;
 use playground_types::event::Event;
@@ -15,4 +17,4 @@ pub trait Plugin: Send + Sync + 'static {
     fn on_event(&mut self, event: &Event) -> bool;
 }
 
-pub type CreatePluginFn = unsafe extern "C" fn() -> Box<dyn Plugin>;
+pub type CreatePluginFn = unsafe extern "C" fn() -> *mut dyn Plugin;

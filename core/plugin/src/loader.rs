@@ -13,7 +13,7 @@ pub struct PluginLoader {
 
 struct LoadedPlugin {
     plugin: Box<dyn Plugin>,
-    library: libloading::Library,
+    _library: libloading::Library,
 }
 
 impl PluginLoader {
@@ -40,7 +40,8 @@ impl PluginLoader {
                 .get(b"create_plugin")
                 .map_err(|e| PluginError::LoadFailed(format!("Failed to find create_plugin: {}", e)))?;
 
-            let mut plugin = create_fn();
+            let plugin_ptr = create_fn();
+            let plugin = Box::from_raw(plugin_ptr);
             let metadata = plugin.metadata();
             let plugin_id = metadata.id.clone();
 
@@ -50,7 +51,7 @@ impl PluginLoader {
 
             self.loaded_plugins.insert(
                 plugin_id.clone(),
-                LoadedPlugin { plugin, library },
+                LoadedPlugin { plugin, _library: library },
             );
 
             Ok(plugin_id)
