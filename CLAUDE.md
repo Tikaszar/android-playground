@@ -21,7 +21,7 @@ systems/        # Engine components (depend on core)
 ├── networking  # WebSocket, WebRTC protocols
 ├── physics     # 2D/3D physics simulation
 ├── logic       # ECS, state machines
-└── rendering   # WebGL/Canvas abstraction
+└── rendering   # Multi-backend renderer (WebGL, future Vulkan)
 
 plugins/        # Games and applications
 ├── idle-game   # First production game
@@ -76,8 +76,59 @@ cargo watch -x 'build -p idle-game'
 4. **Battery-efficient builds** - Incremental compilation and minimal rebuilds
 5. **APK packaging** - Final distribution through standard Android packages
 
+## Rendering System Design
+
+### BaseRenderer Architecture
+
+The rendering system uses a stateless base trait that all renderer implementations (WebGL, Vulkan) must implement. Key features:
+
+- **Single Draw Call Batching**: All geometry is batched into ONE optimized draw call per frame
+- **Immutable Pipelines**: All render state (blend, depth, rasterizer) is baked into pipelines at creation
+- **Hot-Reload Support**: Automatic shader recompilation on file changes
+- **Compute Shader Ready**: Full compute API (stubbed in WebGL, implemented in Vulkan)
+- **Texture Streaming**: Automatic LOD management and memory budget adjustment
+- **Debug & Metrics**: Performance tracking, GPU markers, resource naming
+
+### Buffer Types
+
+Distinct buffer types for type safety:
+- `VertexBuffer`: Vertex data with format
+- `IndexBuffer`: Index data with type
+- `UniformBuffer`: Shader uniforms
+- `StorageBuffer`: Compute storage (read/write)
+- `StagingBuffer`: CPU to GPU transfers
+
+### Render Graph
+
+- Persistent graphs with runtime modification
+- Swappable graph templates
+- Unified graph for render and compute passes
+- Pass inheritance hierarchy:
+  - Base `Pass` trait
+  - `RenderPass`, `ComputePass`, `CopyPass`, `BlitPass`
+
+### Resource Management
+
+- Opaque handle system with recycling
+- Runtime shader compilation from `.glsl` files
+- Automatic device recovery on GPU lost
+- Safe handle validation (never crashes)
+
+### Coordinate System
+
+- Right-handed: X=Right, Y=Up, Z=Forward (all positive)
+- Units in meters
+
+### File Organization
+
+**One class per file principle**: Each struct/trait lives in its own file. For example:
+- `math/vector.rs` contains generic `Vector<const N: usize, T>`
+- `math/matrix.rs` contains generic `Matrix<R, C>`
+- `math/types.rs` contains convenience types (`Vec2`, `Vec3`, `Vec4`, `Mat4`, etc.)
+
 ## Current Status
 
-- Initial documentation and architecture design complete
-- Repository structure created
-- No implementation code yet - ready for core crate initialization
+- Core layer implementation complete
+- Plugin system functional
+- Rendering system design finalized
+- Ready for BaseRenderer and WebGL implementation
