@@ -1,17 +1,18 @@
 # Android Playground
 
-This is a personal playground for building and testing game engine concepts on Android using AI agents. The project is designed for rapid prototyping and experimentation with a mobile-first, plugin-based architecture.
+A mobile-first, plugin-based game engine designed for development entirely on Android devices using Termux. Built by AI agents for rapid prototyping and experimentation.
 
 ## Purpose
 
-This repository is used as a development environment for AI agents to build and test designs. It is not intended for public use or collaboration.
+This repository serves as a development environment for AI agents to build and test game engine designs. It features a multi-backend rendering system, hot-reload capabilities, and battery-efficient architecture.
 
 ## Getting Started
 
 ### Prerequisites
 
-- [Termux](https://termux.com/) for a terminal environment on Android.
-- [Rust](https://rustup.rs/) for building the engine and plugins.
+- [Termux](https://termux.com/) for terminal environment on Android
+- [Rust](https://rustup.rs/) for building the engine and plugins
+- Web browser for the development IDE
 
 ### Building the Project
 
@@ -22,10 +23,66 @@ cd android-playground
 
 # Build all crates
 cargo build --workspace
+
+# Build with WebGL renderer (for browser IDE)
+cargo build -p playground-rendering --features webgl
+
+# Run the development server
+cargo run -p playground-server
 ```
 
 ## Architecture
 
-The engine is built with a modular, crate-based architecture. The core components are separated into a `core` layer, with various `systems` providing engine functionality. Games and applications are implemented as `plugins`.
+### Core Systems
+- **Plugin System**: Dynamic loading of game modules with hot-reload support
+- **Rendering System**: Multi-backend renderer (WebGL implemented, Vulkan planned)
+- **Type System**: Shared types ensuring plugin compatibility
+- **Server**: Axum-based web server for browser IDE
 
-For more detailed information, please see the `GEMINI.md` file.
+### System Layers
+```
+core/           # Foundation (minimal dependencies)
+├── types       # Shared types and traits
+├── android     # Android JNI bindings
+├── server      # Web server for browser editor
+└── plugin      # Plugin trait and loading
+
+systems/        # Engine components
+├── rendering   # Multi-backend renderer with BaseRenderer trait
+├── ui          # Immediate mode GUI / DOM rendering
+├── networking  # WebSocket, WebRTC protocols
+├── physics     # 2D/3D physics simulation
+└── logic       # ECS, state machines
+
+plugins/        # Games and applications
+├── idle-game   # First production game
+└── playground-editor  # Browser development tools
+```
+
+## Current Implementation Status
+
+✅ **Completed**
+- Core type system and plugin infrastructure
+- BaseRenderer trait with full rendering API
+- WebGL2 renderer implementation
+- Resource management with handle recycling
+- Render graph system with passes
+- State caching and batching
+- Shader compilation and hot-reload
+- Performance metrics and debugging
+
+🚧 **In Progress**
+- Browser-based IDE (playground-editor)
+- UI system implementation
+- Plugin hot-reload mechanism
+
+📋 **Planned**
+- Vulkan renderer for compute shaders
+- Physics and networking systems
+- APK packaging for distribution
+
+## Technical Details
+
+For detailed technical information, architecture decisions, and development guidelines, see:
+- `CLAUDE.md` - AI agent development instructions
+- `GEMINI.md` - Alternative AI context

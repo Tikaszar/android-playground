@@ -126,9 +126,80 @@ Distinct buffer types for type safety:
 - `math/matrix.rs` contains generic `Matrix<R, C>`
 - `math/types.rs` contains convenience types (`Vec2`, `Vec3`, `Vec4`, `Mat4`, etc.)
 
+## WebGL Renderer Implementation
+
+### Current Features
+- WebGL2 context management with automatic recovery
+- Resource pooling with ID recycling for buffers, textures, shaders
+- State caching to minimize redundant GL calls
+- GLSL shader compilation with caching
+- Command buffer system for deferred rendering
+- Framebuffer object pooling for render targets
+- Full implementation of BaseRenderer trait
+
+### WebGL Limitations
+- No compute shader support (returns NotSupported error)
+- No storage buffers (SSBOs not available in WebGL2)
+- WebGL types are not Send+Sync (single-threaded only)
+- Maximum 16 texture units
+- Maximum 64KB uniform buffer size
+
+### Building with WebGL
+```bash
+# Build with WebGL feature enabled
+cargo build -p playground-rendering --features webgl
+
+# Note: WebGL feature is for WASM/browser targets
+# Native builds should use default features
+```
+
 ## Current Status
 
-- Core layer implementation complete
-- Plugin system functional
-- Rendering system design finalized
-- Ready for BaseRenderer and WebGL implementation
+✅ **Implemented**
+- Core layer (types, plugin, server, android)
+- BaseRenderer trait with complete API
+- WebGL2 renderer backend
+- Resource management system
+- Render graph with pass system
+- Command buffer architecture
+- State management (blend, depth, rasterizer)
+- Performance metrics collection
+- Debug naming and markers
+
+🚧 **In Development**
+- Browser IDE (playground-editor plugin)
+- UI system components
+- Hot-reload file watching
+
+📋 **Next Steps**
+- Vulkan renderer for compute support
+- Physics system integration
+- Networking protocols
+- ECS implementation in logic system
+
+## Development Notes
+
+### Renderer Usage
+```rust
+// Create WebGL renderer for browser
+let canvas = get_canvas_element();
+let mut renderer = WebGLRenderer::with_canvas(canvas)?;
+renderer.initialize()?;
+
+// Create resources
+let vb = renderer.create_vertex_buffer(data, &format)?;
+let texture = renderer.create_texture(&desc)?;
+
+// Render frame
+renderer.begin_frame()?;
+renderer.render(&graph)?;
+renderer.end_frame()?;
+renderer.present()?;
+```
+
+### Important Considerations
+- Always use feature flags for renderer selection
+- WebGL renderer is for browser IDE only
+- Vulkan will be primary renderer for production
+- All rendering goes through BaseRenderer trait
+- Single draw call per frame is the target
