@@ -6,7 +6,7 @@ pub mod pipeline;
 pub mod render_target;
 
 pub use handle::Handle;
-pub use buffer::{VertexBuffer, IndexBuffer, UniformBuffer, StorageBuffer, VertexFormat, IndexType};
+pub use buffer::{BufferHandle, VertexBuffer, IndexBuffer, UniformBuffer, StorageBuffer, VertexFormat, IndexType};
 pub use texture::{TextureHandle, TextureDesc, TextureRegion, TextureFormat};
 pub use shader::{ShaderHandle, ShaderStage};
 pub use pipeline::{PipelineHandle, PipelineDesc};
