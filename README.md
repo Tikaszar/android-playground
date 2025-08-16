@@ -81,7 +81,10 @@ core/           # Foundation (minimal dependencies)
 ## Current Implementation Status
 
 ✅ **Completed**
-- Core type system and plugin infrastructure
+- Core infrastructure (types, plugin, server, client, android)
+- **WebSocket multiplexer** with binary protocol and channel system
+- **Frame-based packet batching** at 60fps with priority queues
+- **WASM client module** for browser integration
 - BaseRenderer trait with full rendering API
 - WebGL2 renderer implementation
 - Resource management with handle recycling
@@ -102,12 +105,13 @@ core/           # Foundation (minimal dependencies)
 - **WebSocket terminal** with ANSI escape sequence parsing (350+ lines)
 
 🚧 **In Progress**
-- WebSocket architecture implementation
-- Binary protocol design
-- Channel system for networking
+- Systems integration with WebSocket infrastructure
+- Authentication system (Passkey/1Password)
+- LSP client for code intelligence
 
 📋 **Planned**
-- Complete networking implementation
+- Systems/networking integration
+- Reconnection logic for WebSocket client
 - Vulkan renderer
 - Physics system
 - ECS implementation

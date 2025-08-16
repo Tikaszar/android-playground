@@ -174,20 +174,22 @@ cargo build -p playground-rendering --features webgl
 
 The entire networking layer is built on WebSockets with binary protocol for efficiency:
 
-#### Core Layer Networking
-- **core/server**: WebSocket multiplexer with channel management
-  - Channel 0: Control channel for registration and discovery
-  - Channels 1-999: Reserved for Systems
-  - Channels 1000+: Dynamically allocated to Plugins/Apps
-  - Frame-based packet batching (configurable per-channel)
-  - Binary serialization using `bytes` crate
-  - Passkey authentication with 1Password integration
-  - Google OAuth support for external access
+#### Core Layer Networking (IMPLEMENTED)
+- **core/server**: WebSocket multiplexer with channel management ✅
+  - Channel 0: Control channel for registration and discovery ✅
+  - Channels 1-999: Reserved for Systems ✅
+  - Channels 1000+: Dynamically allocated to Plugins/Apps ✅
+  - Frame-based packet batching (60fps default) ✅
+  - Binary serialization using `bytes` crate ✅
+  - Priority queue system (5 levels) ✅
+  - Passkey authentication with 1Password integration (pending)
+  - Google OAuth support for external access (pending)
 
-- **core/client**: Browser WASM WebSocket client
-  - Mirrors server channel architecture
-  - Automatic reconnection with exponential backoff
-  - Binary message handling and routing
+- **core/client**: Browser WASM WebSocket client ✅
+  - Mirrors server channel architecture ✅
+  - Binary message handling and routing ✅
+  - WASM bindings for browser integration ✅
+  - Automatic reconnection with exponential backoff (pending)
 
 #### Channel System
 - Dynamic channel registration at runtime
@@ -232,7 +234,13 @@ Three supported compilation modes (configurable via feature flags and runtime co
 ## Current Status
 
 ✅ **Implemented**
-- Core layer (types, plugin, server, android)
+- Core layer (types, plugin, server, android, client)
+- **WebSocket multiplexer** in core/server with binary protocol
+- **Channel management system** with dynamic registration
+- **Frame-based packet batching** at 60fps
+- **Priority queue system** with 5 levels
+- **Binary packet protocol** with efficient serialization
+- **WASM client module** with browser integration
 - BaseRenderer trait with complete API
 - WebGL2 renderer backend
 - Resource management system
@@ -254,19 +262,17 @@ Three supported compilation modes (configurable via feature flags and runtime co
 - **WebSocket terminal** with full Termux integration (350+ lines)
 
 🚧 **In Development**
-- WebSocket multiplexer in core/server
-- Binary packet protocol implementation
-- Channel management system
+- Systems/networking integration with core/server
+- Reconnection logic in core/client
 - Passkey/1Password authentication
 - LSP client for rust-analyzer
 - Hot-reload file watching
 - Debugger interface
 
 📋 **Next Steps**
-- Complete core/server WebSocket implementation
-- Implement core/client WASM module
-- Build channel registration and discovery
-- Add frame-based packet batching
+- Integrate systems/networking with core/server channels
+- Update systems/ui to use WebSocket infrastructure
+- Add reconnection logic to core/client
 - Integrate Passkey/1Password authentication
 - Implement LSP client for rust-analyzer
 - Hot-reload mechanism with file watching

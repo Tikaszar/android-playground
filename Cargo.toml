@@ -4,6 +4,7 @@ members = [
     "core/types",
     "core/android",
     "core/server",
+    "core/client",
     "core/plugin",
     "systems/ui",
     "systems/networking",
