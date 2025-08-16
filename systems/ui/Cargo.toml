@@ -6,6 +6,41 @@ edition.workspace = true
 license.workspace = true
 
 [dependencies]
+# Core dependencies
 playground-types = { path = "../../core/types" }
+playground-server = { path = "../../core/server" }
+playground-rendering = { path = "../rendering" }
+
+# Async runtime
+tokio = { workspace = true }
+async-trait = "0.1"
+
+# Serialization
 serde = { workspace = true }
+serde_json = { workspace = true }
+
+# Collections
+indexmap = "2.2"
+slotmap = "1.0"
+
+# Math
+nalgebra = { workspace = true }
+
+# Text rendering
+fontdue = "0.9"
+unicode-segmentation = "1.11"
+
+# Terminal (disabled for now due to Android compatibility)
+# portable-pty = "0.8"
+# vt100 = "0.15"
+
+# Web communication
+axum = { workspace = true }
+tower = { workspace = true }
+tower-http = { workspace = true }
+
+# Utilities
 thiserror = { workspace = true }
+anyhow = { workspace = true }
+tracing = { workspace = true }
+uuid = { version = "1.10", features = ["v4", "serde"] }

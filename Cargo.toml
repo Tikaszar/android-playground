@@ -44,3 +44,6 @@ jni = "0.21"
 
 # For hot reload
 notify = "6.1"
+
+# Math
+nalgebra = { version = "0.33", features = ["serde-serialize"] }
