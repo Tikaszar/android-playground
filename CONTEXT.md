@@ -5,205 +5,165 @@ This file captures the current development session context for seamless continua
 ## Last Session Summary
 
 **Date**: 2025-08-16
-**Focus**: Text Rendering & Terminal WebSocket Implementation
-**Completed**: SDF text rendering system and WebSocket terminal connection
+**Focus**: WebSocket Architecture Documentation & Design Clarification
+**Completed**: Full architectural documentation update removing WebRTC, establishing 4-layer system
 
 ## Session Achievements
 
-### ✅ Implemented Text Rendering System
+### ✅ Established 4-Layer Architecture
 
-Successfully created a comprehensive text rendering system with SDF (Signed Distance Field) support:
+Successfully documented and clarified the complete engine architecture:
 
-1. **Text Renderer** (`systems/ui/src/rendering/text_renderer.rs`)
-   - SDF font atlas generation and caching
-   - Glyph metrics and positioning
-   - Text layout with automatic line breaking
-   - Unicode support with font fallback chains
-   - Thread-safe text layout caching
-   - Mesh generation for GPU rendering
+1. **Apps Layer** (Top)
+   - Complete products (games, IDEs)
+   - Manage and coordinate collections of plugins
+   - Examples: playground-editor, idle-mmo-rpg
 
-2. **Font Management**
-   - FontAtlas with texture packing
-   - Multi-font support with fallback chains
-   - Runtime glyph loading
-   - Configurable SDF radius for quality
+2. **Plugins Layer**
+   - Reusable feature modules
+   - Use Systems APIs ONLY (never Core directly)
+   - Examples: inventory, combat, chat, editor-core
+   - Exception: May implement custom Systems internally
 
-3. **Text Layout Engine**
-   - Word wrapping with max width constraints
-   - Line height and baseline calculations
-   - Text metrics (width, height, ascent, descent)
-   - Cached layout results for performance
+3. **Systems Layer**
+   - Engine components
+   - Use Core APIs ONLY
+   - Provide: ui, networking, rendering, physics, logic
+   - Register channels 1-999 with core/server
 
-### ✅ Implemented WebSocket Terminal
+4. **Core Layer** (Foundation)
+   - Minimal dependencies
+   - Provides: types, server, client, plugin, android
+   - WebSocket multiplexer and channel management
 
-Successfully created a WebSocket-based terminal connection system:
+### ✅ WebSocket-Only Networking Design
 
-1. **WebSocket Terminal** (`systems/ui/src/terminal/websocket.rs`)
-   - Full duplex WebSocket communication
-   - Async message handling with tokio
-   - Terminal resize support
-   - Heartbeat/keepalive mechanism
-   - Thread-safe connection management
+Established complete WebSocket architecture (NO WebRTC):
 
-2. **ANSI Parser**
-   - Complete ANSI escape sequence parsing
-   - SGR (Select Graphic Rendition) codes
-   - 16-color support (standard + bright)
-   - Style attributes (bold, italic, underline)
-   - Cursor positioning and screen clearing
+1. **Binary Protocol**
+   - Custom packet structure with channel routing
+   - Frame-based batching (configurable, default 60fps)
+   - Priority queues per channel (5 levels)
+   - Serialization using `bytes` crate
 
-3. **Terminal Integration**
-   - Direct connection to Termux via WebSocket
-   - Command history navigation
-   - Input buffer with cursor management
-   - Async output streaming
-   - Error handling and reconnection support
+2. **Channel System**
+   - Channel 0: Control (registration, discovery)
+   - Channels 1-999: Systems
+   - Channels 1000+: Plugins/Apps
+   - Dynamic runtime registration
+   - KV store for discovery
 
-## Technical Implementation Details
+3. **Authentication**
+   - Passkey with 1Password integration
+   - Google OAuth for external access
+   - Server-side 1Password API primary
 
-### Text Rendering Architecture
+4. **WASM Compilation Strategies**
+   - Separate: Each System, Plugin, App as .wasm
+   - Hybrid: Each System and App as .wasm
+   - Unified: Complete App as single .wasm
 
-The text rendering system uses:
-- **SDF Generation**: Distance field calculation from bitmap fonts
-- **Atlas Packing**: Efficient texture atlas management
-- **Layout Caching**: HashMap-based cache with composite keys
-- **Thread Safety**: Arc<RwLock> for concurrent access
+## Technical Design Decisions
 
-### WebSocket Terminal Architecture
+### Architectural Rules Established
 
-The terminal system features:
-- **Dual Channel Design**: Separate input/output mpsc channels
-- **Async Processing**: Tokio spawned read/write loops
-- **Message Protocol**: JSON-based terminal messages
-- **State Management**: Arc<RwLock<bool>> for connection state
+1. **Strict Layer Separation**
+   - Apps → Plugins → Systems → Core
+   - Plugins NEVER use Core directly
+   - Systems NEVER depend on other Systems
+   - All networking through core/server
 
-## Code Quality
+2. **Server Authority**
+   - Browser is purely a view
+   - All logic/state on server
+   - No client-side decision making
 
-- ✅ All code compiles successfully
-- ⚠️ 47 warnings (mostly unused variables and imports)
-- ✅ Proper error handling with new UiError variants
-- ✅ Type-safe implementations with proper trait bounds
-- ✅ Thread-safe designs throughout
+3. **Communication Flow**
+   - Plugin → System → core/server → WebSocket → core/client → System → Plugin
+   - Frame-based batching always (no immediate sends)
+   - Binary protocol for efficiency
 
-## Completed Today
+### Current Implementation Status
 
-### Previously Implemented (from last session)
-- ✅ Mobile Gesture System (500+ lines)
-- ✅ Gesture Element Wrapper (300+ lines)
-- ✅ Floating Toolbar (400+ lines)
-- ✅ Docking Gesture Handler (250+ lines)
+**core/server**: Basic HTTP server, needs WebSocket implementation
+**core/client**: Not yet created, will be WASM module
+**systems/networking**: Skeleton only, needs full implementation
+**systems/ui**: Has misplaced WebSocket code that should use core/server
 
-### Newly Implemented (this session)
-- ✅ SDF Text Renderer (400+ lines)
-- ✅ WebSocket Terminal (350+ lines)
-- ✅ ANSI Parser (200+ lines)
-- ✅ Font Atlas System (150+ lines)
+## Documentation Updates
+
+### Files Modified
+- `CLAUDE.md`: Complete rewrite with 4-layer architecture and WebSocket design
+- `README.md`: Updated to reflect current architecture (private project)
+
+### Key Changes
+- Removed ALL WebRTC references
+- Added complete WebSocket protocol documentation
+- Established channel architecture
+- Defined packet structure and flow
+- Added authentication design
+- Specified WASM compilation modes
 
 ## Next Session Starting Points
 
-### High Priority Tasks
+### Immediate Implementation Tasks
 
-1. **LSP Client Implementation**
-   - rust-analyzer integration
-   - Language Server Protocol client
-   - Code completion and diagnostics
-   - Go-to-definition and hover support
-   - Refactoring operations
+1. **core/server WebSocket Implementation**
+   - Add tokio-tungstenite for WebSocket support
+   - Implement channel registration system
+   - Create packet routing/multiplexing
+   - Add frame-based batching
+   - Implement binary serialization
 
-2. **Hot-Reload File Watching**
-   - File system monitoring
-   - Plugin recompilation triggers
-   - State preservation during reload
-   - Dependency tracking
+2. **core/client WASM Module**
+   - Create new crate for browser client
+   - Mirror server channel architecture
+   - Implement reconnection logic
+   - Add binary message handling
 
-3. **Debugger Interface**
-   - Breakpoint management
-   - Stack trace visualization
-   - Variable inspection
-   - Step debugging controls
+3. **Channel 0 Control Protocol**
+   - Registration messages
+   - Channel allocation
+   - Discovery/query system
+   - Error handling
 
-### Medium Priority Tasks
+4. **Systems Registration**
+   - Update systems/ui to use core/server
+   - Update systems/networking implementation
+   - Remove direct WebSocket usage from systems
 
-1. **Performance Optimizations**
-   - Fix compilation warnings (47 remaining)
-   - Implement text rendering batching
-   - Optimize gesture recognition
-   - Profile and optimize hot paths
+### Architecture Priorities
 
-2. **Testing Infrastructure**
-   - Unit tests for text rendering
-   - Integration tests for terminal
-   - Gesture recognition tests
-   - Mock WebSocket server for testing
-
-## File Structure Updates
-
-```
-systems/ui/src/
-├── rendering/
-│   ├── mod.rs
-│   ├── render_data.rs
-│   ├── ui_renderer.rs
-│   └── text_renderer.rs      (NEW - 400+ lines)
-├── terminal/
-│   ├── mod.rs
-│   ├── terminal.rs
-│   └── websocket.rs          (NEW - 350+ lines)
-├── input/
-│   ├── gestures.rs
-│   └── gesture_element.rs
-└── mobile/
-    ├── mod.rs
-    └── floating_toolbar.rs
-```
-
-## Dependencies Added
-
-- `tokio-tungstenite` v0.24 - WebSocket client implementation
-- `futures-util` v0.3 - Async stream utilities
-- `url` v2.5 - URL parsing for WebSocket connections
-
-## Development Environment
-
-- **Platform**: Termux on Android
-- **Rust Version**: Latest stable
-- **Key Dependencies**: nalgebra, uuid, serde, tokio, tokio-tungstenite
-- **Build Command**: `cargo check -p playground-ui`
+1. Get basic WebSocket working in core/server
+2. Create minimal core/client for testing
+3. Implement channel registration
+4. Add packet serialization
+5. Test with systems/ui terminal
 
 ## Important Notes
 
-1. The text rendering system is **GPU-ready** with mesh generation
-2. WebSocket terminal provides **real Termux integration** without PTY
-3. All new systems are **thread-safe** and **async-ready**
-4. Error handling has been expanded with new UiError variants
-5. The codebase now exceeds **5000+ lines** of UI implementation
+1. **Local-only focus**: This project runs entirely on Android device
+2. **No WebRTC**: All networking is WebSocket-based
+3. **Binary protocol**: Using bytes crate for efficiency
+4. **Frame batching**: Never send packets immediately
+5. **Dynamic channels**: Runtime registration, not compile-time
 
 ## Git Status
 
 - Branch: main
-- New files added:
-  - `systems/ui/src/rendering/text_renderer.rs`
-  - `systems/ui/src/terminal/websocket.rs`
-- Modified files:
-  - `systems/ui/src/rendering/mod.rs`
-  - `systems/ui/src/terminal/mod.rs`
-  - `systems/ui/src/error.rs`
-  - `systems/ui/Cargo.toml`
-- Ready for: `git add -A && git commit -m "feat(ui): Implement SDF text rendering and WebSocket terminal"`
+- Last commit: "docs: Update architecture to WebSocket-only networking with 4-layer system"
+- Documentation fully updated
+- Implementation needs to follow
 
 ## Session Handoff
 
-The text rendering and WebSocket terminal systems are fully implemented and integrated. The UI system now has all core components needed for a functional IDE:
-- Complete gesture recognition
-- Text rendering with fonts
-- Terminal with WebSocket connection
-- Docking layout system
-- Mobile-optimized UI elements
+The architecture is now fully documented and clarified. The 4-layer system (Apps → Plugins → Systems → Core) is established with strict separation rules. WebSocket-only networking with binary protocol and channel system is designed.
 
 The next session should focus on:
-1. LSP client for code intelligence
-2. Hot-reload mechanism for plugins
-3. Debugger interface
-4. Performance optimizations and warning fixes
+1. Implementing core/server WebSocket multiplexer
+2. Creating core/client WASM module
+3. Building channel registration system
+4. Migrating systems/ui to use core/server
+5. Completing systems/networking implementation
 
-All compilation succeeds and the system is ready for the next phase of development.
+All architectural decisions are finalized. Implementation can proceed according to the documented design.
