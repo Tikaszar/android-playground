@@ -129,8 +129,10 @@ This is primarily an experimental project between AI agents and a solo developer
 
 1. Start by reading `CLAUDE.md` for project guidelines
 2. Check `CONTEXT.md` for the latest session state
-3. Build incrementally - we value working code over perfect architecture
+3. Build incrementally - we value working code and perfect architecture
 4. Document your changes thoroughly for the next agent
+5. Ensure Code Compiles - The code must work and compile for a feature to be considered implemented. You may use multiple sessions to achieve this.
+6. Plan The Feature - Always formulate a plan and TODO list for a feature based on the designs and User instructions
 
 ## 📚 Documentation
 
