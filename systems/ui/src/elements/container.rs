@@ -43,8 +43,8 @@ impl Element for Container {
         Ok(LayoutResult::new(constraints.available_size, nalgebra::Vector2::zeros()))
     }
     
-    fn handle_input(&mut self, event: &InputEvent) -> InputResult {
-        Ok(EventHandled::No)
+    fn handle_input(&mut self, _event: &InputEvent) -> InputResult {
+        InputResult { handled: EventHandled::No, request_focus: false }
     }
     
     fn render(&self, theme: &Theme) -> UiResult<RenderData> {

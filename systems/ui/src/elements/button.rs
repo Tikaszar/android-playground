@@ -55,7 +55,7 @@ impl Element for Button {
             InputEvent::PointerDown { .. } => {
                 self.pressed = true;
                 self.mark_dirty();
-                Ok(EventHandled::Yes)
+                InputResult { handled: EventHandled::Yes, request_focus: false }
             }
             InputEvent::PointerUp { .. } => {
                 if self.pressed {
@@ -65,9 +65,9 @@ impl Element for Button {
                     self.pressed = false;
                     self.mark_dirty();
                 }
-                Ok(EventHandled::Yes)
+                InputResult { handled: EventHandled::Yes, request_focus: false }
             }
-            _ => Ok(EventHandled::No),
+            _ => InputResult { handled: EventHandled::No, request_focus: false },
         }
     }
     

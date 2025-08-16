@@ -18,6 +18,10 @@ pub enum UiError {
     ThemeError(String),
     #[error("Terminal error: {0}")]
     TerminalError(String),
+    #[error("Element not found: {0}")]
+    ElementNotFound(String),
+    #[error("Generic error: {0}")]
+    Other(String),
 }
 
 pub type UiResult<T> = Result<T, UiError>;

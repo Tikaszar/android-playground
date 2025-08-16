@@ -71,6 +71,82 @@ impl RenderData {
         self.indices.push(base_index + 3);
     }
     
+    /// Add a rounded rectangle
+    pub fn add_rounded_rect(
+        &mut self,
+        position: Vector2<f32>,
+        size: Vector2<f32>,
+        radius: f32,
+        color: Vector4<f32>,
+    ) {
+        // For now, just draw a regular quad
+        // TODO: Implement actual rounded corners with more vertices
+        self.add_quad(position, size, color);
+    }
+    
+    /// Add text (placeholder - actual text rendering needs SDF)
+    pub fn add_text(
+        &mut self,
+        position: Vector2<f32>,
+        text: &str,
+        size: f32,
+        color: Vector4<f32>,
+    ) {
+        // TODO: Implement actual text rendering with SDF
+        // For now, just add a placeholder quad for each character
+        let char_width = size * 0.6;
+        let mut x = position.x;
+        for _ in text.chars() {
+            self.add_quad(
+                Vector2::new(x, position.y),
+                Vector2::new(char_width, size),
+                color * 0.2, // Dimmed to show it's placeholder
+            );
+            x += char_width + 2.0;
+        }
+    }
+    
+    /// Add a line
+    pub fn add_line(
+        &mut self,
+        start: Vector2<f32>,
+        end: Vector2<f32>,
+        thickness: f32,
+        color: Vector4<f32>,
+    ) {
+        // Calculate perpendicular vector for thickness
+        let dir = end - start;
+        let perp = Vector2::new(-dir.y, dir.x).normalize() * (thickness * 0.5);
+        
+        let base_index = self.vertices.len() as u32;
+        
+        // Add vertices for line quad
+        self.vertices.push(start - perp);
+        self.vertices.push(start + perp);
+        self.vertices.push(end + perp);
+        self.vertices.push(end - perp);
+        
+        // Add colors
+        for _ in 0..4 {
+            self.colors.push(color);
+        }
+        
+        // Add default UVs
+        self.uvs.push(Vector2::new(0.0, 0.0));
+        self.uvs.push(Vector2::new(0.0, 1.0));
+        self.uvs.push(Vector2::new(1.0, 1.0));
+        self.uvs.push(Vector2::new(1.0, 0.0));
+        
+        // Add indices
+        self.indices.push(base_index);
+        self.indices.push(base_index + 1);
+        self.indices.push(base_index + 2);
+        
+        self.indices.push(base_index);
+        self.indices.push(base_index + 2);
+        self.indices.push(base_index + 3);
+    }
+    
     /// Merge another RenderData into this one
     pub fn merge(&mut self, other: &RenderData) {
         let vertex_offset = self.vertices.len() as u32;

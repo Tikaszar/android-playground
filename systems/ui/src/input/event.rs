@@ -3,6 +3,29 @@
 use nalgebra::Vector2;
 use serde::{Deserialize, Serialize};
 
+/// Result of handling an input event
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum EventHandled {
+    Yes,
+    No,
+}
+
+/// Result of input handling
+#[derive(Debug, Clone, Copy)]
+pub struct InputResult {
+    pub handled: EventHandled,
+    pub request_focus: bool,
+}
+
+impl Default for InputResult {
+    fn default() -> Self {
+        Self {
+            handled: EventHandled::No,
+            request_focus: false,
+        }
+    }
+}
+
 /// Input event types
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum InputEvent {
@@ -107,27 +130,5 @@ impl Default for Modifiers {
             alt: false,
             meta: false,
         }
-    }
-}
-
-/// Result of handling an input event
-pub type InputResult = Result<EventHandled, InputError>;
-
-/// Whether the event was handled
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum EventHandled {
-    Yes,
-    No,
-}
-
-/// Input error
-#[derive(Debug, Clone)]
-pub struct InputError {
-    pub message: String,
-}
-
-impl From<String> for InputError {
-    fn from(message: String) -> Self {
-        Self { message }
     }
 }

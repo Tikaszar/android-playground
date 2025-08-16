@@ -147,6 +147,14 @@ impl ElementBase {
             visible: true,
         }
     }
+    
+    pub fn mark_dirty(&mut self) {
+        self.dirty = true;
+    }
+    
+    pub fn mark_clean(&mut self) {
+        self.dirty = false;
+    }
 }
 
 /// UI element graph that manages all elements

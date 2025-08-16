@@ -41,7 +41,7 @@ impl Element for Text {
     }
     
     fn handle_input(&mut self, _event: &InputEvent) -> InputResult {
-        Ok(EventHandled::No)
+        InputResult { handled: EventHandled::No, request_focus: false }
     }
     
     fn render(&self, theme: &Theme) -> UiResult<RenderData> {

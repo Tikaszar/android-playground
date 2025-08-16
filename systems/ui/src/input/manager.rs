@@ -2,7 +2,7 @@
 
 use crate::element::{ElementGraph, ElementId};
 use crate::error::UiResult;
-use crate::input::{InputEvent, EventHandled};
+use crate::input::{InputEvent, EventHandled, InputResult};
 use nalgebra::Vector2;
 use std::collections::VecDeque;
 
@@ -59,7 +59,10 @@ impl InputManager {
         if let Some(element_id) = self.get_target_element(&event) {
             if let Some(element) = graph.get_mut(element_id) {
                 let result = element.handle_input(&event);
-                if let Ok(EventHandled::Yes) = result {
+                if result.handled == EventHandled::Yes {
+                    if result.request_focus {
+                        self.focused_element = Some(element_id);
+                    }
                     return Ok(());
                 }
             }
