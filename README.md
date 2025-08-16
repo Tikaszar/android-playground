@@ -70,14 +70,23 @@ plugins/        # Games and applications
 - State caching and batching
 - Shader compilation and hot-reload
 - Performance metrics and debugging
+- **VSCode/Godot-style docking system** with drag & drop
+- **Conversational-first UI system** with Element trait architecture
+- **File tree component** with lazy loading and expand/collapse
+- **Chat interface** with message bubbles and inline code
+- **Code editor** with vim mode and multi-cursor support
+- **Terminal integration** with Termux connection
 
 🚧 **In Progress**
-- Browser-based IDE (playground-editor)
-- UI system implementation
+- Mobile gesture support (touch, swipe, pinch)
+- Text rendering system with SDF fonts
+- WebSocket connection for terminal
 - Plugin hot-reload mechanism
 
 📋 **Planned**
 - Vulkan renderer for compute shaders
+- Debugger interface with breakpoints
+- LSP client for rust-analyzer
 - Physics and networking systems
 - APK packaging for distribution
 
