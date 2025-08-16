@@ -8,25 +8,39 @@ Android Playground is a mobile-first, plugin-based game engine designed for deve
 
 ## Architecture
 
-### Crate Structure
+### 4-Layer Architecture
 ```
-core/           # Foundation layer (minimal dependencies)
-├── types       # Shared types and traits (zero dependencies)
-├── android     # Android JNI bindings
-├── server      # Axum-based web server for browser editor
-└── plugin      # Plugin trait and loading mechanism
+apps/           # Complete products (games, IDEs, etc.)
+├── playground-editor  # Browser-based IDE
+└── idle-mmo-rpg      # Future production game
+
+plugins/        # Reusable feature modules
+├── inventory   # Inventory management system
+├── combat      # Combat mechanics
+├── chat        # Real-time chat system
+└── editor-core # Core editor functionality
 
 systems/        # Engine components (depend on core)
-├── ui          # Conversational-first IDE with persistent UI graph
-├── networking  # WebSocket, WebRTC protocols
+├── ui          # UI framework with persistent graph
+├── networking  # Game networking and plugin communication
 ├── physics     # 2D/3D physics simulation
 ├── logic       # ECS, state machines
 └── rendering   # Multi-backend renderer (WebGL, future Vulkan)
 
-plugins/        # Games and applications
-├── idle-game   # First production game
-└── playground-editor  # In-browser development tools
+core/           # Foundation layer (minimal dependencies)
+├── types       # Shared types and traits (zero dependencies)
+├── android     # Android JNI bindings
+├── server      # WebSocket multiplexer and channel management
+├── client      # Browser WASM WebSocket client
+└── plugin      # Plugin trait and loading mechanism
 ```
+
+### Architectural Rules
+1. **Apps** manage and coordinate collections of Plugins
+2. **Plugins** ONLY use Systems APIs (NEVER use Core directly)
+3. **Systems** ONLY use Core APIs
+4. **Core** provides foundational functionality
+5. **Exception**: Plugins may implement custom Systems internally that use Core
 
 ### Plugin System
 
@@ -70,11 +84,12 @@ cargo watch -x 'build -p idle-game'
 
 ## Key Design Decisions
 
-1. **Everything is a plugin** - Even core systems can be replaced/reloaded
+1. **Strict layer separation** - Apps → Plugins → Systems → Core
 2. **Message passing over direct calls** - Enables hot-reload without breaking references
-3. **Shared state through core types** - All plugins depend on `core/types` for compatibility
+3. **WebSocket-only networking** - Binary protocol with frame-based batching
 4. **Battery-efficient builds** - Incremental compilation and minimal rebuilds
-5. **APK packaging** - Final distribution through standard Android packages
+5. **Server-side authority** - Browser is purely a view, all logic on server
+6. **APK packaging** - Final distribution through standard Android packages
 
 ## Rendering System Design
 
@@ -153,6 +168,67 @@ cargo build -p playground-rendering --features webgl
 # Native builds should use default features
 ```
 
+## Networking System Design
+
+### WebSocket Architecture
+
+The entire networking layer is built on WebSockets with binary protocol for efficiency:
+
+#### Core Layer Networking
+- **core/server**: WebSocket multiplexer with channel management
+  - Channel 0: Control channel for registration and discovery
+  - Channels 1-999: Reserved for Systems
+  - Channels 1000+: Dynamically allocated to Plugins/Apps
+  - Frame-based packet batching (configurable per-channel)
+  - Binary serialization using `bytes` crate
+  - Passkey authentication with 1Password integration
+  - Google OAuth support for external access
+
+- **core/client**: Browser WASM WebSocket client
+  - Mirrors server channel architecture
+  - Automatic reconnection with exponential backoff
+  - Binary message handling and routing
+
+#### Channel System
+- Dynamic channel registration at runtime
+- KV store for channel discovery (query by name)
+- Priority queues per channel (5 levels: Low, Medium, High, Critical, Blocker)
+- Frame-based batching with configurable rates (default 60fps)
+- Single WebSocket endpoint: `ws://localhost:3000/ws`
+
+#### Message Protocol
+```rust
+struct Packet {
+    channel_id: u16,
+    packet_type: u16,
+    priority: u8,
+    payload_size: u32,
+    payload: Vec<u8>,
+}
+```
+
+#### Communication Flow
+1. Plugin → System API call
+2. System → Serialize to binary packet
+3. System → Queue in core/server
+4. core/server → Batch packets per frame
+5. core/server → Send via WebSocket
+6. core/client → Receive and route by channel
+7. Client System → Deserialize
+8. Client System → Deliver to Plugin
+
+### System Registration Flow
+- **Systems**: Register with core/server or core/client, receive channels 1-999
+- **Plugins**: Register through systems/networking, receive channels 1000+
+- **Apps**: Coordinate plugins through systems/networking
+
+### WASM Compilation Strategies
+
+Three supported compilation modes (configurable via feature flags and runtime config):
+1. **Separate**: Each System, Plugin, and App compiles to individual .wasm
+2. **Hybrid**: Each System and App compiles to .wasm
+3. **Unified**: Complete App compiles as single .wasm
+
 ## Current Status
 
 ✅ **Implemented**
@@ -178,17 +254,26 @@ cargo build -p playground-rendering --features webgl
 - **WebSocket terminal** with full Termux integration (350+ lines)
 
 🚧 **In Development**
+- WebSocket multiplexer in core/server
+- Binary packet protocol implementation
+- Channel management system
+- Passkey/1Password authentication
 - LSP client for rust-analyzer
 - Hot-reload file watching
 - Debugger interface
 
 📋 **Next Steps**
+- Complete core/server WebSocket implementation
+- Implement core/client WASM module
+- Build channel registration and discovery
+- Add frame-based packet batching
+- Integrate Passkey/1Password authentication
 - Implement LSP client for rust-analyzer
 - Hot-reload mechanism with file watching
 - Debugger interface with breakpoints
 - Vulkan renderer for compute support
 - Physics system integration
-- Networking protocols (WebRTC)
+- Complete systems/networking for multiplayer
 - ECS implementation in logic system
 
 ## UI System Design

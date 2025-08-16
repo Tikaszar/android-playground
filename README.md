@@ -39,31 +39,44 @@ cargo run -p playground-server
 
 ## Architecture
 
-### Core Systems
-- **Plugin System**: Dynamic loading of game modules with hot-reload support
-- **Rendering System**: Multi-backend renderer (WebGL implemented, Vulkan planned)
-- **Type System**: Shared types ensuring plugin compatibility
-- **Server**: Axum-based web server for browser IDE
+### 4-Layer System
+- **Apps**: Complete products (IDE, games) that coordinate plugins
+- **Plugins**: Reusable feature modules that use systems
+- **Systems**: Engine components that provide core functionality
+- **Core**: Foundation layer with minimal dependencies
 
-### System Layers
+### Layer Structure
 ```
-core/           # Foundation (minimal dependencies)
-├── types       # Shared types and traits
-├── android     # Android JNI bindings
-├── server      # Web server for browser editor
-└── plugin      # Plugin trait and loading
+apps/           # Complete products
+├── playground-editor  # Browser-based IDE
+└── idle-mmo-rpg      # Production game (planned)
+
+plugins/        # Feature modules
+├── inventory   # Inventory management
+├── combat      # Combat mechanics
+├── chat        # Real-time chat
+└── editor-core # Core editor features
 
 systems/        # Engine components
 ├── rendering   # Multi-backend renderer with BaseRenderer trait
-├── ui          # Immediate mode GUI / DOM rendering
-├── networking  # WebSocket, WebRTC protocols
+├── ui          # UI framework with persistent graph
+├── networking  # WebSocket-based multiplayer and IPC
 ├── physics     # 2D/3D physics simulation
 └── logic       # ECS, state machines
 
-plugins/        # Games and applications
-├── idle-game   # First production game
-└── playground-editor  # Browser development tools
+core/           # Foundation (minimal dependencies)
+├── types       # Shared types and traits
+├── android     # Android JNI bindings
+├── server      # WebSocket multiplexer and channel management
+├── client      # Browser WASM WebSocket client
+└── plugin      # Plugin trait and loading
 ```
+
+### Architectural Rules
+- **Apps** use Plugins and coordinate them
+- **Plugins** use Systems ONLY (never Core directly)
+- **Systems** use Core ONLY
+- **Exception**: Plugins may implement custom Systems internally
 
 ## Current Implementation Status
 
@@ -89,16 +102,16 @@ plugins/        # Games and applications
 - **WebSocket terminal** with ANSI escape sequence parsing (350+ lines)
 
 🚧 **In Progress**
-- LSP client for rust-analyzer integration
-- Plugin hot-reload mechanism with file watching
-- Debugger interface with breakpoints
+- WebSocket architecture implementation
+- Binary protocol design
+- Channel system for networking
 
 📋 **Planned**
-- Vulkan renderer for compute shaders
-- Physics system (2D/3D with collision detection)
-- Networking protocols (WebRTC for P2P)
-- ECS implementation in logic system
-- APK packaging for distribution
+- Complete networking implementation
+- Vulkan renderer
+- Physics system
+- ECS implementation
+- APK packaging
 
 ## Key Features
 
@@ -148,9 +161,9 @@ This is primarily an experimental project between AI agents and a solo developer
 - Debugger interface implementation
 
 ### Short Term (2-3 Sessions)
-- Complete Vulkan renderer
+- Complete WebSocket networking
+- Vulkan renderer
 - Physics system integration
-- WebRTC networking
 
 ### Long Term Vision
 - Full APK packaging
