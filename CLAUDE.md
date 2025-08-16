@@ -170,23 +170,25 @@ cargo build -p playground-rendering --features webgl
 - **File tree component** with expand/collapse and lazy loading
 - **Chat interface** with message bubbles and code blocks
 - **Code editor** with vim mode, syntax highlighting, multi-cursor
-- **Terminal** with input handling and Termux integration
-- **Mobile gesture support** with full multi-touch recognition
-- **Floating toolbar** for mobile-specific actions
-- **Gesture element wrapper** for adding gestures to any UI element
+- **Terminal** with WebSocket connection and ANSI parsing
+- **Mobile gesture support** with full multi-touch recognition (500+ lines)
+- **Floating toolbar** for mobile-specific actions (400+ lines)
+- **Gesture element wrapper** for adding gestures to any UI element (300+ lines)
+- **SDF text rendering** with font atlas and layout engine (400+ lines)
+- **WebSocket terminal** with full Termux integration (350+ lines)
 
 🚧 **In Development**
-- Text rendering with SDF fonts
-- WebSocket terminal connection
-- Debugger interface
+- LSP client for rust-analyzer
 - Hot-reload file watching
+- Debugger interface
 
 📋 **Next Steps**
 - Implement LSP client for rust-analyzer
-- Complete text rendering with SDF fonts
+- Hot-reload mechanism with file watching
+- Debugger interface with breakpoints
 - Vulkan renderer for compute support
 - Physics system integration
-- Networking protocols
+- Networking protocols (WebRTC)
 - ECS implementation in logic system
 
 ## UI System Design

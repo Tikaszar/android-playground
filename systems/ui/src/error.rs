@@ -20,6 +20,14 @@ pub enum UiError {
     TerminalError(String),
     #[error("Element not found: {0}")]
     ElementNotFound(String),
+    #[error("Invalid input: {0}")]
+    InvalidInput(String),
+    #[error("Not found: {0}")]
+    NotFound(String),
+    #[error("Lock error: {0}")]
+    LockError(String),
+    #[error("Serialization error: {0}")]
+    SerializationError(String),
     #[error("Generic error: {0}")]
     Other(String),
 }
