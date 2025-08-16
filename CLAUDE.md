@@ -17,7 +17,7 @@ core/           # Foundation layer (minimal dependencies)
 └── plugin      # Plugin trait and loading mechanism
 
 systems/        # Engine components (depend on core)
-├── ui          # Immediate mode GUI / DOM rendering
+├── ui          # Conversational-first IDE with persistent UI graph
 ├── networking  # WebSocket, WebRTC protocols
 ├── physics     # 2D/3D physics simulation
 ├── logic       # ECS, state machines
@@ -177,6 +177,81 @@ cargo build -p playground-rendering --features webgl
 - Networking protocols
 - ECS implementation in logic system
 
+## UI System Design
+
+### Conversational-First IDE
+
+The UI system implements a unique conversational IDE that prioritizes chat-based interactions while maintaining full traditional IDE capabilities. All UI state is server-side with the browser acting as a pure view.
+
+### Core UI Architecture
+
+- **Persistent UI Graph**: UI elements exist as persistent nodes in the RenderGraph
+- **Single Draw Call**: All UI contributes to ONE optimized draw call per frame
+- **Server-Side State**: Browser is purely a view, all logic/storage on server
+- **Conversational-First**: IM chat as primary interface, traditional IDE as secondary
+
+### Layout System
+
+- **Flexbox Layout**: Full CSS flexbox properties with nested container support
+- **Absolute Positioning**: Foundation layer beneath flexbox
+- **Responsive Design**: Portrait/landscape layouts with screen-relative constraints
+- **Docking System**: VSCode/Godot-style panes - draggable, dockable, save/restore layouts
+
+### Conversational IDE Components
+
+- **Chat Interface**: Message bubbles with inline editable code blocks
+- **Focused Editing**: Request specific code sections (functions, classes)
+- **Code Snippets**: Syntax-highlighted, editable code within chat
+- **Context Actions**: Save, run, "Open in IDE" buttons inline
+- **Version Control**: Inline diffs in chat conversation
+- **Persistent History**: Searchable, branching conversations
+
+### Traditional IDE Components
+
+- **Code Editor**: 
+  - Full rust-analyzer integration via LSP
+  - Multi-cursor (VS Studio style alt-select)
+  - Vim mode support
+  - Inline error highlights
+- **Terminal**: Real terminal connection to Termux instance
+  - Direct Claude Code interaction
+  - Full shell capabilities
+  - No PTY - actual terminal
+- **File Tree**: List/icon views with lazy loading
+- **Debugger**: Breakpoints, watches, stack traces
+
+### Input System
+
+- **Mobile**: Touch, pinch, swipe gestures with floating toolbar
+- **Desktop**: VS Code keyboard shortcuts
+- **Event Flow**: Bubbling through visual hierarchy
+- **Multi-cursor**: Alt-select for multiple line selection
+
+### Rendering Integration
+
+- **Text Rendering**: Runtime-generated SDF with caching
+- **Batching**: UI geometry provided to WebGL batcher
+- **Themes**: Dark and Light themes with per-element overrides
+- **Animations**: Built-in transitions with configurable timing
+
+### Performance Features
+
+- **Dirty Flags**: Track changed UI elements
+- **Occlusion Culling**: Skip off-screen elements
+- **Message Virtualization**: Only render visible chat messages
+- **Level-of-Detail**: Simplify complex UI when zoomed out
+
+### Terminal Integration
+
+The terminal connects directly to the Termux instance running on the phone, enabling Claude Code interaction without GPL requirements. Communication uses the Axum server to proxy terminal I/O to the browser.
+
+### Mobile-Specific Features
+
+- **Gesture Shortcuts**: Swipe between chat/IDE views
+- **Touch Targets**: Appropriately sized for mobile
+- **On-screen Keyboard**: Optimized for code input
+- **Floating Toolbar**: Quick access to common actions
+
 ## Development Notes
 
 ### Renderer Usage
@@ -197,9 +272,30 @@ renderer.end_frame()?;
 renderer.present()?;
 ```
 
+### UI System Usage
+```rust
+// Create UI element in render graph
+let chat_panel = ui.create_panel()
+    .layout(FlexLayout::column())
+    .theme(Theme::Dark);
+
+// Add inline code editor to chat
+let code_block = chat_panel.add_code_editor()
+    .language("rust")
+    .editable(true)
+    .focused_lines(100..150);
+
+// Handle conversational requests
+ui.on_message("show me the update loop", |ui, context| {
+    let code = context.find_function("update");
+    ui.show_inline_editor(code);
+});
+```
+
 ### Important Considerations
 - Always use feature flags for renderer selection
 - WebGL renderer is for browser IDE only
 - Vulkan will be primary renderer for production
 - All rendering goes through BaseRenderer trait
 - Single draw call per frame is the target
+- UI system uses core/server for all communication
