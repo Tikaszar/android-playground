@@ -76,9 +76,11 @@ plugins/        # Games and applications
 - **Chat interface** with message bubbles and inline code
 - **Code editor** with vim mode and multi-cursor support
 - **Terminal integration** with Termux connection
+- **Mobile gesture support** with multi-touch recognition
+- **Floating toolbar** for mobile-specific actions
+- **Gesture-aware UI elements** with configurable handlers
 
 🚧 **In Progress**
-- Mobile gesture support (touch, swipe, pinch)
 - Text rendering system with SDF fonts
 - WebSocket connection for terminal
 - Plugin hot-reload mechanism
@@ -90,8 +92,25 @@ plugins/        # Games and applications
 - Physics and networking systems
 - APK packaging for distribution
 
+## Key Features
+
+### Mobile-First Design
+- **Touch Gestures**: Full multi-touch support with tap, swipe, pinch, and rotation
+- **Responsive UI**: Automatic layout adaptation for portrait/landscape
+- **Battery Efficient**: Optimized for minimal CPU/GPU usage
+- **Floating Toolbar**: Context-sensitive mobile actions
+- **Touch-Friendly**: All UI elements sized for finger interaction
+
+### Development Environment
+- **Conversational IDE**: Chat-based code editing and navigation
+- **Hot Reload**: Instant plugin updates without restart
+- **Browser-Based**: Full IDE accessible from any modern browser
+- **Termux Integration**: Direct terminal access on Android
+- **Vim Mode**: Efficient text editing on mobile
+
 ## Technical Details
 
 For detailed technical information, architecture decisions, and development guidelines, see:
 - `CLAUDE.md` - AI agent development instructions
+- `CONTEXT.md` - Current development session context
 - `GEMINI.md` - Alternative AI context

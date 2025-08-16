@@ -9,6 +9,7 @@ pub mod terminal;
 pub mod chat;
 pub mod ide;
 pub mod elements;
+pub mod mobile;
 
 pub use error::{UiError, UiResult};
 pub use system::UiSystem;

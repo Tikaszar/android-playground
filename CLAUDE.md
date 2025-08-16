@@ -171,17 +171,19 @@ cargo build -p playground-rendering --features webgl
 - **Chat interface** with message bubbles and code blocks
 - **Code editor** with vim mode, syntax highlighting, multi-cursor
 - **Terminal** with input handling and Termux integration
+- **Mobile gesture support** with full multi-touch recognition
+- **Floating toolbar** for mobile-specific actions
+- **Gesture element wrapper** for adding gestures to any UI element
 
 🚧 **In Development**
-- Mobile gesture support (next priority)
 - Text rendering with SDF fonts
 - WebSocket terminal connection
 - Debugger interface
 - Hot-reload file watching
 
 📋 **Next Steps**
-- Complete gesture recognizer for touch/swipe/pinch
 - Implement LSP client for rust-analyzer
+- Complete text rendering with SDF fonts
 - Vulkan renderer for compute support
 - Physics system integration
 - Networking protocols
@@ -291,10 +293,28 @@ The terminal connects directly to the Termux instance running on the phone, enab
 
 ### Mobile-Specific Features
 
-- **Gesture Shortcuts**: Swipe between chat/IDE views
+- **Gesture Recognition**: Full multi-touch gesture system
+  - Tap, double-tap, long press detection
+  - Swipe with direction and velocity tracking
+  - Pinch-to-zoom and rotation gestures
+  - Pan/drag with momentum
+  - Fling for fast navigation
+- **Gesture Element Wrapper**: Add gestures to any UI element
+  - Thread-safe callbacks using Arc<RwLock>
+  - Chainable API for registering handlers
+  - Configurable thresholds and timings
+- **Floating Toolbar**: Mobile-optimized action bar
+  - Animated show/hide transitions
+  - Auto-hide timer support
+  - Configurable positioning
+  - Touch-friendly button sizes
+- **Docking Gestures**: Panel management via touch
+  - Swipe to switch between tabs
+  - Double-tap to maximize/restore
+  - Pinch to zoom panels
+  - Long press for context menus
 - **Touch Targets**: Appropriately sized for mobile
 - **On-screen Keyboard**: Optimized for code input
-- **Floating Toolbar**: Quick access to common actions
 
 ## Development Notes
 
@@ -343,6 +363,49 @@ chat.on_message("show me the update loop", |chat, context| {
 let result = element.handle_input(&event);
 if result.handled == EventHandled::Yes {
     // Event was handled by UI
+}
+```
+
+### Gesture System Usage
+```rust
+use playground_ui::input::{GestureRecognizer, GestureExt, GestureConfig};
+use playground_ui::mobile::{FloatingToolbar, ToolbarAction};
+
+// Add gestures to any element
+let mut button = Button::new("Click me")
+    .with_gestures()
+    .on_tap(|_| {
+        println!("Tapped!");
+        true
+    })
+    .on_long_press(|_| {
+        println!("Long pressed!");
+        true
+    });
+
+// Configure gesture recognition
+let config = GestureConfig {
+    double_tap_time: 300,
+    long_press_time: 500,
+    swipe_min_distance: 50.0,
+    ..Default::default()
+};
+
+// Create floating toolbar
+let mut toolbar = FloatingToolbar::new();
+toolbar.add_action(ToolbarAction {
+    id: "save".to_string(),
+    icon: "save".to_string(),
+    label: "Save".to_string(),
+    enabled: true,
+    callback: || save_file(),
+});
+toolbar.set_toolbar_position(ToolbarPosition::Bottom);
+
+// Handle gestures in docking system
+let mut gesture_handler = DockingGestureHandler::new();
+if gesture_handler.handle_gesture(&gesture, &mut docking, position) {
+    // Gesture was handled
 }
 ```
 
