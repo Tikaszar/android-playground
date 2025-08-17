@@ -603,10 +603,79 @@ The networking system is now fully integrated with core/ecs and ready for WebSoc
 - `systems/rendering/src/graph/pass/pass_id.rs` - Added value() accessor
 - `core/math/Cargo.toml` - New math crate configuration
 
-**Next Session Priorities:**
-1. Complete core/math crate implementation
-2. Design and implement systems/physics with core/ecs
-3. Create 2D physics engine with collision detection and dynamics
-4. Design 3D extension points for future upgrade
-5. Implement spatial partitioning (QuadTree for 2D, ready for Octree in 3D)
-6. Add continuous collision detection (CCD)
+## Current Session - 2025-08-17 (Architecture Planning)
+
+**Focus**: Planning 4-layer architecture implementation for Apps and Plugins
+
+### ✅ Architecture Planning Completed
+
+**Apps Layer Planned:**
+
+1. **apps/playground-editor (IDE Application)**
+   - Complete IDE coordinating 8 editor plugins
+   - Manages plugin lifecycle, settings, workspace
+   - Provides main UI shell and docking system
+   - Uses: editor-core, file-browser, terminal, lsp-client, debugger, chat-assistant, version-control, theme-manager
+
+2. **apps/idle-mmo-rpg (Game Application)**
+   - Complete idle MMO coordinating 10 game plugins
+   - Manages game loop, saves, networking, anti-cheat
+   - Provides main game UI shell
+   - Uses: inventory, combat, chat, crafting, quests, skills, economy, guild, progression, social
+
+**Plugins Layer Planned:**
+
+**IDE Plugins (channels 1000-1079):**
+- `editor-core`: Text editing, syntax highlighting, vim mode
+- `file-browser`: File tree, navigation, git status
+- `terminal`: Termux process spawning (NOT WebSocket)
+- `lsp-client`: Language Server Protocol, rust-analyzer
+- `debugger`: Debug adapter protocol, breakpoints
+- `chat-assistant`: Conversational UI, code context
+- `version-control`: Git operations, diff viewer
+- `theme-manager`: Themes, colors, fonts
+
+**Game Plugins (channels 1100-1199):**
+- `inventory`: Item storage, equipment, drag-drop
+- `combat`: Damage calc, skills, PvP/PvE
+- `chat`: Real-time messaging, channels
+- `crafting`: Recipes, resource combination
+- `quests`: Quest tracking, objectives
+- `skills`: Skill trees, abilities, cooldowns
+- `economy`: Currency, trading, auction house
+- `guild`: Guild management, permissions
+- `progression`: Character stats, leveling
+- `social`: Friends, parties, leaderboards
+
+### Key Architectural Decisions
+
+1. **Layer Separation Maintained**:
+   - Apps use Plugins and Systems
+   - Plugins use Systems only (never Core)
+   - Systems use Core only
+   - Exception: Plugins may implement custom Systems
+
+2. **Channel Allocation Strategy**:
+   - 1-999: Systems (UI on 10, etc.)
+   - 1000-1079: IDE plugins
+   - 1100-1199: Game plugins
+   - 1200+: Future plugins
+
+3. **Plugin Design Patterns**:
+   - All use systems/logic ECS for state
+   - All use systems/ui for interface
+   - Game plugins use NetworkedComponent
+   - IDE plugins focus on process management
+
+### Documentation Updates
+- ✅ Updated CLAUDE.md with complete Apps and Plugins architecture
+- ✅ Detailed responsibilities and Systems API usage for each plugin
+- ✅ Specified WebSocket channel allocations
+
+### Next Implementation Steps
+1. Create apps/ directory structure
+2. Move existing plugins to apps/
+3. Create new plugin modules
+4. Update Cargo.toml dependencies
+5. Implement plugin loading in Apps
+6. Test architectural layer rules
