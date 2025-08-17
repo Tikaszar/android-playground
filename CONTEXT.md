@@ -566,10 +566,47 @@ The networking system is now fully integrated with core/ecs and ready for WebSoc
 - `.cargo/config.toml` - WASM build configuration
 - `build-wasm.sh` - Build script for WASM compilation
 
+### Session Update - 2025-08-17 (Continued - Rendering & Physics)
+
+**Focus**: Integrate core/ecs into systems/rendering and design physics system
+
+**Achievements:**
+1. ✅ **Updated systems/rendering to use core/ecs internally**
+   - Created comprehensive ECS components for resource tracking (textures, buffers, shaders, pipelines)
+   - Added RenderingSystem<R> generic struct that wraps any BaseRenderer implementation
+   - Tracks all GPU resources as ECS entities with components
+   - Added frame state and capabilities tracking via ECS
+   - Fixed Handle types to be HashMap-compatible (added Hash, Eq, PartialEq derives)
+   - Maintains 100% compatibility with existing WebGL renderer
+   - System compiles successfully with all features preserved
+
+2. 🚧 **Started Physics System Design**
+   - Identified need for core/math crate for engine-wide math operations
+   - Created core/math crate structure with nalgebra for math operations
+   - Planning complete 2D physics engine with clear upgrade path to 3D
+   - Design goals:
+     - Start with robust 2D physics (Box2D-like)
+     - Architecture that elegantly extends to 3D
+     - Support for voxel physics (long-term)
+     - Shared math primitives across engine
+
+**Key Design Decisions:**
+- RenderingSystem uses generic type parameter instead of dyn trait (avoids object-safety issues)
+- All resource handles now properly implement Hash/Eq for HashMap usage
+- PassId gets public value() accessor for serialization
+- Created core/math as foundation for physics, rendering, and other systems
+
+**Files Created/Modified:**
+- `systems/rendering/src/components.rs` - 450+ lines of ECS components
+- `systems/rendering/src/system.rs` - RenderingSystem with ECS integration
+- `systems/rendering/src/resources/*/handle.rs` - Added Hash, Eq, PartialEq to all handle types
+- `systems/rendering/src/graph/pass/pass_id.rs` - Added value() accessor
+- `core/math/Cargo.toml` - New math crate configuration
+
 **Next Session Priorities:**
-1. Create systems/physics using core/ecs internally
-2. Update systems/rendering to use core/ecs for render state
-3. Implement LSP client for rust-analyzer
-4. Add hot-reload file watching system
-5. Connect terminal to actual Termux process
-6. Implement Passkey/1Password authentication
+1. Complete core/math crate implementation
+2. Design and implement systems/physics with core/ecs
+3. Create 2D physics engine with collision detection and dynamics
+4. Design 3D extension points for future upgrade
+5. Implement spatial partitioning (QuadTree for 2D, ready for Octree in 3D)
+6. Add continuous collision detection (CCD)

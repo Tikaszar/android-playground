@@ -8,4 +8,8 @@ impl PassId {
         static COUNTER: AtomicU64 = AtomicU64::new(1);
         Self(COUNTER.fetch_add(1, Ordering::Relaxed))
     }
+    
+    pub fn value(&self) -> u64 {
+        self.0
+    }
 }

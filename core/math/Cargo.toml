@@ -1,0 +1,33 @@
+[package]
+name = "playground-math"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+# Core dependencies
+serde = { workspace = true, features = ["derive"] }
+thiserror = { workspace = true }
+
+# Math libraries - we'll use nalgebra for its excellent generic math
+nalgebra = { version = "0.33", features = ["serde-serialize"] }
+approx = "0.5"  # For floating point comparisons
+num-traits = "0.2"
+
+# Optional features
+bytemuck = { version = "1.14", optional = true }  # For GPU buffer compatibility
+mint = { version = "0.5", optional = true }  # For interop with other math libraries
+
+[features]
+default = []
+gpu = ["bytemuck"]
+interop = ["mint"]
+
+[dev-dependencies]
+criterion = "0.5"  # For benchmarking
+rand = "0.8"
+
+[[bench]]
+name = "math_bench"
+harness = false

@@ -1,5 +1,5 @@
 use crate::resources::Handle;
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Pipeline;
 pub type PipelineHandle = Handle<Pipeline>;
