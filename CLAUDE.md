@@ -197,7 +197,7 @@ The entire networking layer is built on WebSockets with binary protocol for effi
   - Mirrors server channel architecture ✅
   - Binary message handling and routing ✅
   - WASM bindings for browser integration ✅
-  - Automatic reconnection with exponential backoff (pending)
+  - Automatic reconnection with exponential backoff ✅
 
 #### Channel System
 - Dynamic channel registration at runtime
@@ -232,12 +232,34 @@ struct Packet {
 - **Plugins**: Register through systems/networking, receive channels 1000+
 - **Apps**: Coordinate plugins through systems/networking
 
-### WASM Compilation Strategies
+### WebSocket Reconnection Logic
 
-Three supported compilation modes (configurable via feature flags and runtime config):
-1. **Separate**: Each System, Plugin, and App compiles to individual .wasm
-2. **Hybrid**: Each System and App compiles to .wasm
-3. **Unified**: Complete App compiles as single .wasm
+The core/client implements automatic reconnection with exponential backoff:
+- **Initial delay**: 1 second (configurable)
+- **Maximum delay**: 60 seconds (configurable)
+- **Backoff multiplier**: 1.5x (configurable)
+- **Jitter**: ±15% randomization to prevent thundering herd
+- **Max attempts**: Unlimited by default (configurable)
+- **Auto-reconnect**: Enabled by default, can be disabled
+
+Reconnection states:
+1. **Connected**: Active WebSocket connection
+2. **Disconnected**: Connection lost, preparing to reconnect
+3. **Reconnecting**: Actively attempting reconnection
+4. **Failed**: Maximum attempts reached or permanent failure
+
+### WASM Compilation
+
+Target: `wasm32-unknown-unknown` for maximum browser compatibility
+- All modern browsers supported (Chrome 57+, Firefox 52+, Safari 11+)
+- Mobile browsers: Chrome Android, Firefox Android, Safari iOS 11+
+- Build with: `cargo build -p playground-client --target wasm32-unknown-unknown --release`
+- Or use build script: `./build-wasm.sh release`
+
+In Termux, install WASM support with:
+```bash
+pkg install rust-std-wasm32-unknown-unknown
+```
 
 ## Current Status
 
@@ -282,7 +304,6 @@ Three supported compilation modes (configurable via feature flags and runtime co
 - **Networking ECS components** for connections, channels, packet queues
 
 🚧 **In Development**
-- Reconnection logic in core/client
 - Passkey/1Password authentication
 - LSP client for rust-analyzer
 - Hot-reload file watching
@@ -290,7 +311,6 @@ Three supported compilation modes (configurable via feature flags and runtime co
 - Actual Termux terminal process connection
 
 📋 **Next Steps**
-- Add reconnection logic with exponential backoff to core/client
 - Create systems/physics using core/ecs internally
 - Update systems/rendering to use core/ecs for render state
 - Integrate Passkey/1Password authentication

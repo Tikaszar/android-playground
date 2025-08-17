@@ -524,10 +524,52 @@ The networking system is now fully integrated with core/ecs and ready for WebSoc
 - `systems/ui/src/error.rs` - Added new error types for messaging
 - `systems/ui/WEBSOCKET_INTEGRATION.md` - Documentation of changes
 
+### Session Update - 2025-08-17 (Final)
+
+**Focus**: Implement WebSocket reconnection logic for core/client
+
+**Achievements:**
+1. ✅ **Implemented complete reconnection system for core/client**
+   - Created `reconnect.rs` module with exponential backoff implementation
+   - Added configurable retry parameters (initial delay, max delay, multiplier, max attempts)
+   - Implemented jitter for distributed reconnection timing
+   - Added reconnection state tracking (Connected, Disconnected, Reconnecting, Failed)
+   - Automatic reconnection on WebSocket close (except for normal closure code 1000)
+
+2. ✅ **Enhanced WebSocketClient with reconnection capabilities**
+   - Added `ReconnectManager` integration for state management
+   - Implemented reconnection callbacks (on_reconnecting, on_reconnected, on_reconnect_failed)
+   - Added `set_auto_reconnect()` to enable/disable automatic reconnection
+   - Created `ClientBuilder` for advanced configuration
+   - Maintained backward compatibility with simple constructor
+
+3. ✅ **Installed and configured WASM32 target in Termux**
+   - Successfully installed `rust-std-wasm32-unknown-unknown` package
+   - Verified installation in rust sysroot
+   - Built playground-client successfully for wasm32 target
+   - Generated 431KB WASM file (optimized release build)
+   - Created build script for easy WASM compilation
+
+**Technical Details:**
+- Exponential backoff: 1s → 1.5s → 2.25s → ... → 60s (max)
+- Default configuration: 1s initial, 60s max, 1.5x multiplier, unlimited attempts
+- Jitter: ±15% randomization to prevent thundering herd
+- Fully async implementation using `gloo-timers` for delays
+- NO unsafe code - completely safe Rust implementation
+
+**Files Created/Modified:**
+- `core/client/src/reconnect.rs` - Complete reconnection logic (150+ lines)
+- `core/client/src/connection.rs` - Enhanced with reconnection support (100+ lines added)
+- `core/client/src/lib.rs` - Added ClientBuilder and configuration APIs
+- `core/client/Cargo.toml` - Added gloo-timers dependency
+- `core/client/README.md` - Complete documentation of reconnection features
+- `.cargo/config.toml` - WASM build configuration
+- `build-wasm.sh` - Build script for WASM compilation
+
 **Next Session Priorities:**
-1. Add reconnection logic with exponential backoff to core/client
-2. Create systems/physics using core/ecs internally
-3. Update systems/rendering to use core/ecs for render state
-4. Implement LSP client for rust-analyzer
-5. Add hot-reload file watching system
-6. Connect terminal to actual Termux process
+1. Create systems/physics using core/ecs internally
+2. Update systems/rendering to use core/ecs for render state
+3. Implement LSP client for rust-analyzer
+4. Add hot-reload file watching system
+5. Connect terminal to actual Termux process
+6. Implement Passkey/1Password authentication

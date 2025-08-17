@@ -1,0 +1,10 @@
+# WebAssembly build configuration
+
+[target.wasm32-unknown-unknown]
+# Standard wasm32 config for maximum compatibility
+rustflags = []
+
+# Build aliases for convenience
+[alias]
+wasm-client = "build -p playground-client --target wasm32-unknown-unknown --release"
+wasm-client-dev = "build -p playground-client --target wasm32-unknown-unknown"

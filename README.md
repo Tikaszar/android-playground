@@ -90,13 +90,14 @@ core/           # Foundation (minimal dependencies)
 - Core infrastructure (types, plugin, server, client, android, **ecs**)
 - **Core/ECS** with async, safe, batch-only API (no unsafe code!)
 - **Core/Server** available as both binary and library with channel management
+- **Core/Client** with automatic WebSocket reconnection and exponential backoff
 - **Systems/Logic** full-featured game ECS with hybrid storage
 - **Systems/Networking** fully integrated with core/ecs for internal state
 - **Systems/UI** fully integrated with core/ecs and core/server
 - **WebSocket multiplexer** with binary protocol and channel system
 - **Channel management** (1-999 for Systems, 1000+ for Plugins)
 - **Frame-based packet batching** at 60fps with priority queues
-- **WASM client module** for browser integration
+- **WASM client module** with successful wasm32 compilation
 - BaseRenderer trait with full rendering API
 - WebGL2 renderer implementation
 - Resource management with handle recycling
@@ -124,7 +125,6 @@ core/           # Foundation (minimal dependencies)
 - **Networking ECS components** for connections, channels, packet queues
 
 🚧 **In Progress**
-- Client reconnection logic with exponential backoff
 - Authentication system (Passkey/1Password)
 - LSP client for code intelligence
 - Actual Termux terminal process connection
@@ -172,14 +172,15 @@ The project features a sophisticated two-layer ECS design:
 
 ## 📊 Project Stats
 
-- **Total Lines of Code**: ~16,000+ (including full WebSocket integration)
+- **Total Lines of Code**: ~17,000+ (including reconnection logic)
 - **Compilation Time**: < 7 seconds on modern Android devices
 - **Memory Usage**: < 50MB baseline
-- **Supported Platforms**: Android 7.0+ via Termux
+- **WASM Size**: 431KB (optimized release build)
+- **Supported Platforms**: Android 7.0+ via Termux, Browser via WASM
 - **Zero Unsafe Code**: 99.9% safe Rust (one Box::leak workaround)
 - **Architecture Layers**: 4 (Apps → Plugins → Systems → Core)
 - **ECS Integration**: 3 Systems now use core/ecs internally
-- **WebSocket Channels**: UI system on channel 10, fully integrated
+- **WebSocket Channels**: UI system on channel 10, with auto-reconnection
 
 ## 🤝 Contributing
 
