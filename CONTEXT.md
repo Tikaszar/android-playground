@@ -392,17 +392,48 @@ The architecture maintains strict layer separation with Core providing minimal p
 
 ### Session Summary - 2025-08-17
 
-**Achievements:**
+**Initial Achievements:**
 1. ✅ Implemented complete systems/logic ECS layer (~2000 lines)
 2. ✅ Added all missing dependencies to workspace
 3. ✅ Fixed all compilation errors
 4. ✅ Updated documentation across CLAUDE.md, CONTEXT.md, and README.md
 5. ✅ Maintained code quality: NO unsafe, NO Any, batch-only APIs
 
-**Ready for Next Session:**
-- Wire up systems/networking with core/server
-- Update systems/ui to use WebSocket infrastructure
-- Add reconnection logic to core/client
-- Implement LSP client for rust-analyzer
+### Continuation Session - 2025-08-17
 
-The ECS foundation is solid and ready for integration with other systems.
+**Focus**: Systems Integration with core/ecs
+
+**Additional Achievements:**
+1. ✅ **Updated systems/networking to use core/ecs internally**
+   - Implemented ECS components for connections, channels, packet queues, and stats
+   - Used core/ecs World for all internal state management
+   - Properly implemented async Component trait with serialization
+
+2. ✅ **Integrated networking with WebSocket channel system**
+   - Added channel management (1-999 for Systems, 1000+ for Plugins)
+   - Implemented packet queue with 5 priority levels
+   - Frame-based batching at 60fps
+   - Added networking types to playground-types
+
+3. ✅ **Maintained architectural integrity**
+   - Systems use core/ecs for internal state
+   - Plugins will use systems/logic for game ECS
+   - Plugins have full access to all Systems APIs
+   - Clean separation: Apps→Plugins→Systems→Core
+
+**Code Quality:**
+- NO unsafe code anywhere
+- NO std::any::Any usage
+- All async operations
+- Batch-only APIs maintained
+
+**Ready for Next Session:**
+- Update systems/ui to use core/ecs for internal state
+- Update systems/ui to use core/server for WebSocket communication
+- Add reconnection logic with exponential backoff to core/client
+- Implement LSP client for rust-analyzer in systems/ui
+- Add hot-reload file watching system
+- Create systems/physics using core/ecs internally
+- Update systems/rendering to use core/ecs for render state
+
+The networking system is now fully integrated with core/ecs and ready for WebSocket connections.

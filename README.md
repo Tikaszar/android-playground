@@ -74,9 +74,15 @@ core/           # Foundation (minimal dependencies)
 
 ### Architectural Rules
 - **Apps** use Plugins and coordinate them
-- **Plugins** use Systems ONLY (never Core directly)
-- **Systems** use Core ONLY
+- **Plugins** use ALL Systems APIs (never Core directly)
+- **Systems** use Core ONLY (including core/ecs for internal state)
 - **Exception**: Plugins may implement custom Systems internally
+
+### ECS Architecture
+- **Core/ECS**: Minimal primitives for Systems' internal state management
+- **Systems/Logic**: Full game ECS for Plugins and Apps to use
+- All Systems use core/ecs internally for state management
+- Plugins have access to all Systems including systems/logic for game ECS
 
 ## Current Implementation Status
 
@@ -84,7 +90,9 @@ core/           # Foundation (minimal dependencies)
 - Core infrastructure (types, plugin, server, client, android, **ecs**)
 - **Core/ECS** with async, safe, batch-only API (no unsafe code!)
 - **Systems/Logic** full-featured game ECS with hybrid storage
+- **Systems/Networking** fully integrated with core/ecs for internal state
 - **WebSocket multiplexer** with binary protocol and channel system
+- **Channel management** (1-999 for Systems, 1000+ for Plugins)
 - **Frame-based packet batching** at 60fps with priority queues
 - **WASM client module** for browser integration
 - BaseRenderer trait with full rendering API
@@ -110,18 +118,20 @@ core/           # Foundation (minimal dependencies)
 - **NetworkedComponent trait** for automatic replication
 - **Event system** using components as events
 - **Query caching** with builder pattern
+- **Networking ECS components** for connections, channels, packet queues
 
 🚧 **In Progress**
-- Systems integration with WebSocket infrastructure
+- Systems/ui integration with core/ecs
 - Authentication system (Passkey/1Password)
 - LSP client for code intelligence
 
 📋 **Planned**
-- Systems/networking integration
-- Reconnection logic for WebSocket client
-- Vulkan renderer
-- Physics system
+- Update remaining Systems to use core/ecs internally
+- Reconnection logic for WebSocket client with exponential backoff
+- Systems/physics using core/ecs
+- Vulkan renderer for compute support
 - APK packaging
+- Hot-reload file watching system
 
 ## Key Features
 
@@ -159,11 +169,12 @@ The project features a sophisticated two-layer ECS design:
 
 ## 📊 Project Stats
 
-- **Total Lines of Code**: ~10,000+ (including ECS)
+- **Total Lines of Code**: ~12,000+ (including full ECS and networking)
 - **Compilation Time**: < 5 seconds on modern Android devices
 - **Memory Usage**: < 50MB baseline
 - **Supported Platforms**: Android 7.0+ via Termux
 - **Zero Unsafe Code**: 100% safe Rust implementation
+- **Architecture Layers**: 4 (Apps → Plugins → Systems → Core)
 
 ## 🤝 Contributing
 

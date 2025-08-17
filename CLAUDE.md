@@ -38,10 +38,15 @@ core/           # Foundation layer (minimal dependencies)
 
 ### Architectural Rules
 1. **Apps** manage and coordinate collections of Plugins
-2. **Plugins** ONLY use Systems APIs (NEVER use Core directly)
-3. **Systems** ONLY use Core APIs
+2. **Plugins** use ALL Systems APIs (systems/logic for game ECS, systems/ui for UI, etc.)
+3. **Systems** use Core APIs only (including core/ecs for internal state)
 4. **Core** provides foundational functionality
 5. **Exception**: Plugins may implement custom Systems internally that use Core
+
+### ECS Usage Pattern
+- **Systems** use `core/ecs` for their internal state management
+- **Plugins** use `systems/logic` for game logic and ECS
+- **Plugins** also have direct access to all other Systems (ui, networking, physics, rendering)
 
 ### Plugin System
 
@@ -240,6 +245,7 @@ Three supported compilation modes (configurable via feature flags and runtime co
 - Core layer (types, plugin, server, android, client, **ecs**)
 - **Core/ECS** with async, generational IDs, and batch-only API
 - **Systems/Logic** full-featured ECS with hybrid storage and scheduler
+- **Systems/Networking** with core/ecs integration and WebSocket channel system
 - **WebSocket multiplexer** in core/server with binary protocol
 - **Channel management system** with dynamic registration
 - **Frame-based packet batching** at 60fps
@@ -270,9 +276,10 @@ Three supported compilation modes (configurable via feature flags and runtime co
 - **NetworkedComponent trait** for automatic replication
 - **Event system** with components as events
 - **Query caching** with builder pattern
+- **Networking ECS components** for connections, channels, packet queues
 
 🚧 **In Development**
-- Systems/networking integration with core/server
+- Systems/ui integration with core/ecs
 - Reconnection logic in core/client
 - Passkey/1Password authentication
 - LSP client for rust-analyzer
@@ -280,16 +287,16 @@ Three supported compilation modes (configurable via feature flags and runtime co
 - Debugger interface
 
 📋 **Next Steps**
-- Integrate systems/networking with core/server channels
-- Update systems/ui to use WebSocket infrastructure
-- Add reconnection logic to core/client
+- Update systems/ui to use core/ecs for internal state
+- Update systems/ui to use core/server for WebSocket communication
+- Add reconnection logic with exponential backoff to core/client
+- Create systems/physics using core/ecs internally
+- Update systems/rendering to use core/ecs for render state
 - Integrate Passkey/1Password authentication
 - Implement LSP client for rust-analyzer
 - Hot-reload mechanism with file watching
 - Debugger interface with breakpoints
 - Vulkan renderer for compute support
-- Physics system integration
-- Complete systems/networking for multiplayer
 
 ## UI System Design
 
