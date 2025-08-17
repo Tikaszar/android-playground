@@ -102,13 +102,13 @@ Android Playground now includes **MCP (Model Context Protocol)** support, enabli
 
 ### Quick Start
 ```bash
-# Start Android Playground
+# Start Android Playground (port 8080 for Termux)
 cargo run -p playground-server
 
-# Connect Claude Code (in another terminal)
-claude --mcp http://localhost:3000/mcp
+# LLMs auto-connect via .claude/settings.json or .gemini/settings.json
+# No command-line flags needed!
 
-# Open browser to http://localhost:3000
+# Open browser to http://localhost:8080/test/ide.html
 # Start coding through conversation!
 ```
 

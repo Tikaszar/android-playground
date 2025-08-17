@@ -443,11 +443,11 @@ pkg install rust-std-wasm32-unknown-unknown
 Android Playground includes a fully integrated MCP server that enables any LLM (Claude Code, GPT, Llama, etc.) to connect and provide development assistance through the Conversational IDE.
 
 ### Architecture
-The MCP implementation follows a unique bidirectional design:
+The MCP implementation follows a channel-based architecture respecting layer separation:
 
-1. **LLM as Code Host**: The LLM (e.g., Claude Code) has the actual codebase/files
-2. **MCP as UI Bridge**: MCP provides tools for the LLM to update the browser IDE
-3. **Conversational Interface**: Users interact through chat instead of terminal
+1. **Core/MCP**: Publishes tool calls to channel 2000, no UI knowledge
+2. **Plugins**: Listen to channel 2000, handle tool calls using Systems
+3. **Channel Flow**: LLM → MCP → Channel 2000 → Plugin → Systems → UI
 
 ### MCP Tools Available
 The MCP server provides UI-focused tools that LLMs call to update the browser:
@@ -467,23 +467,16 @@ The MCP server provides UI-focused tools that LLMs call to update the browser:
 
 1. **Start the server**:
    ```bash
-   cargo run -p playground-server
+   cargo run -p playground-server  # Runs on port 8080
    ```
 
-2. **Connect an LLM**:
-   ```bash
-   # Claude Code
-   claude --mcp http://localhost:3000/mcp
-   
-   # GPT
-   gpt --mcp-server http://localhost:3000/mcp
-   
-   # Llama
-   llama --tools-api http://localhost:3000/mcp
-   ```
+2. **LLMs connect via settings.json**:
+   - Claude Code: `.claude/settings.json`
+   - Gemini: `.gemini/settings.json`
+   - Uses mcp-bridge.js to communicate
 
 3. **Use the Conversational IDE**:
-   - Open browser to `http://localhost:3000`
+   - Open browser to `http://localhost:8080/test/ide.html`
    - Type requests in the chat interface
    - LLM processes requests and updates UI via MCP tools
 
