@@ -1,0 +1,62 @@
+{
+  "project": {
+    "name": "Android Playground",
+    "description": "Mobile-first plugin-based game engine for Android development"
+  },
+  "mcp": {
+    "enabled": true,
+    "servers": [
+      {
+        "name": "android-playground-mcp",
+        "command": "node",
+        "args": ["/data/data/com.termux/files/home/android-playground/mcp-bridge.js"],
+        "env": {
+          "MCP_SERVER_URL": "http://localhost:8080/mcp"
+        },
+        "autoStart": true
+      }
+    ]
+  },
+  "tools": {
+    "mcp": {
+      "show_file": {
+        "description": "Display file content in the browser editor",
+        "enabled": true
+      },
+      "update_editor": {
+        "description": "Update the current editor content",
+        "enabled": true
+      },
+      "show_terminal_output": {
+        "description": "Display output in the terminal",
+        "enabled": true
+      },
+      "update_file_tree": {
+        "description": "Update the file browser tree",
+        "enabled": true
+      },
+      "show_diff": {
+        "description": "Display a diff view",
+        "enabled": true
+      }
+    }
+  },
+  "development": {
+    "server": {
+      "port": 8080,
+      "host": "localhost",
+      "autoRestart": true
+    },
+    "ide": {
+      "url": "http://localhost:8080/test/ide.html",
+      "openOnStart": false
+    }
+  },
+  "build": {
+    "commands": {
+      "server": "cargo run -p playground-server",
+      "client": "cargo build -p playground-client --target wasm32-unknown-unknown",
+      "plugins": "cargo build --workspace"
+    }
+  }
+}

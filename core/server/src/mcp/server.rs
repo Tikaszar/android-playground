@@ -14,46 +14,53 @@ use std::{convert::Infallible, sync::Arc, time::Duration};
 use tokio::sync::mpsc;
 use tokio_stream::wrappers::UnboundedReceiverStream;
 use tokio_stream::StreamExt;
-use tracing::{error, info, warn, debug};
+use tracing::{info, debug};
+use serde_json::Value;
 
 use crate::{
-    channel::ChannelManager,
     packet::{Packet, Priority},
-    batcher::FrameBatcher,
     websocket::WebSocketState,
 };
 use crate::mcp::{
-    error::{McpError, McpResult},
-    protocol::{McpMessage, McpRequest, McpResponse, SseEvent, ClientInfo},
-    session::{SessionManager, SessionId},
-    ui_tools::{UiToolProvider, UiContext},
+    protocol::{McpMessage, McpRequest, SseEvent},
+    session::SessionManager,
 };
 
-/// MCP Server deeply integrated with core/server infrastructure
+/// MCP server state shared across handlers
+struct McpState {
+    session_manager: Arc<SessionManager>,
+}
+
+/// MCP Server that integrates with WebSocketState
+/// 
+/// This server provides the MCP protocol for LLM integration.
+/// It publishes tool calls to channels for plugins to handle.
+/// 
+/// Channel allocation:
+/// - 2000: MCP tool calls (from LLM to plugins)
+/// - 2001: MCP tool results (from plugins to LLM)
+/// - 2002-2999: Reserved for individual LLM sessions
 pub struct McpServer {
     session_manager: Arc<SessionManager>,
-    ui_tool_provider: Arc<UiToolProvider>,
 }
 
 impl McpServer {
     pub fn new() -> Self {
         Self {
             session_manager: Arc::new(SessionManager::new()),
-            ui_tool_provider: Arc::new(UiToolProvider::new()),
         }
     }
 
-    /// Build router that integrates with the main server's WebSocketState
-    pub fn build_router(self) -> Router<Arc<WebSocketState>> {
+    /// Create router for MCP endpoints
+    pub fn router(&self) -> Router<Arc<WebSocketState>> {
         let mcp_state = Arc::new(McpState {
-            session_manager: self.session_manager,
-            ui_tool_provider: self.ui_tool_provider,
+            session_manager: self.session_manager.clone(),
         });
 
         Router::new()
             // SSE endpoints for LLM clients to connect
             .route("/sse", get(sse_handler))
-            .route("/sse/:session_id", get(sse_handler_with_session))
+            .route("/sse/{session_id}", get(sse_handler_with_session))
             
             // HTTP endpoints for LLM responses
             .route("/message", post(handle_message))
@@ -62,9 +69,10 @@ impl McpServer {
             // Session management
             .route("/sessions", get(list_sessions))
             .route("/sessions", post(create_session))
-            .route("/sessions/:id", axum::routing::delete(end_session))
+            .route("/sessions/{id}", axum::routing::delete(end_session))
             
-            // Tool discovery - UI tools that Claude Code can call
+            // Tool discovery - returns list of available tools
+            // The actual tool list comes from plugins via channels
             .route("/tools", get(list_tools))
             
             // Health check
@@ -74,13 +82,13 @@ impl McpServer {
     }
 }
 
-#[derive(Clone)]
-struct McpState {
-    session_manager: Arc<SessionManager>,
-    ui_tool_provider: Arc<UiToolProvider>,
+impl Default for McpServer {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
-/// SSE handler - LLM clients connect here to receive prompts
+/// SSE handler for new connections
 async fn sse_handler(
     State(ws_state): State<Arc<WebSocketState>>,
     axum::extract::Extension(mcp_state): axum::extract::Extension<Arc<McpState>>,
@@ -88,9 +96,20 @@ async fn sse_handler(
     let (session_id, rx) = mcp_state.session_manager.create_session(None);
     info!("New MCP client connected: {}", session_id);
     
-    // Register this LLM session with a channel
-    let channel_name = format!("llm-{}", session_id);
+    // Allocate a channel for this LLM session (2002-2999)
+    let channel_id = allocate_llm_channel(&session_id);
+    let channel_name = format!("mcp-session-{}", session_id);
     let _ = ws_state.channel_manager.register_plugin(channel_name).await;
+    
+    // Notify plugins that a new LLM connected
+    publish_mcp_event(
+        ws_state.clone(),
+        "llm_connected",
+        serde_json::json!({
+            "session_id": session_id.clone(),
+            "channel_id": channel_id,
+        }),
+    ).await;
     
     sse_stream(session_id, rx, ws_state, mcp_state)
 }
@@ -102,41 +121,47 @@ async fn sse_handler_with_session(
     axum::extract::Extension(mcp_state): axum::extract::Extension<Arc<McpState>>,
 ) -> Sse<impl Stream<Item = Result<Event, Infallible>>> {
     let (_, rx) = mcp_state.session_manager.create_session(Some(session_id.clone()));
-    info!("MCP client reconnected with session ID: {}", session_id);
+    info!("MCP client reconnected: {}", session_id);
     
-    // Register with channel
-    let channel_name = format!("llm-{}", session_id);
+    // Allocate a channel for this LLM session
+    let channel_id = allocate_llm_channel(&session_id);
+    let channel_name = format!("mcp-session-{}", session_id);
     let _ = ws_state.channel_manager.register_plugin(channel_name).await;
+    
+    // Notify plugins that an LLM reconnected
+    publish_mcp_event(
+        ws_state.clone(),
+        "llm_reconnected",
+        serde_json::json!({
+            "session_id": session_id.clone(),
+            "channel_id": channel_id,
+        }),
+    ).await;
     
     sse_stream(session_id, rx, ws_state, mcp_state)
 }
 
-/// Create SSE stream
+/// Create SSE stream for a session
 fn sse_stream(
-    session_id: SessionId,
+    session_id: String,
     rx: mpsc::UnboundedReceiver<McpMessage>,
-    ws_state: Arc<WebSocketState>,
-    mcp_state: Arc<McpState>,
+    _ws_state: Arc<WebSocketState>,
+    _mcp_state: Arc<McpState>,
 ) -> Sse<impl Stream<Item = Result<Event, Infallible>>> {
-    // Send initial tools list (UI tools that Claude Code can call)
-    if let Some(session) = mcp_state.session_manager.get_session(&session_id) {
-        let tools_message = McpMessage::ToolsList {
-            tools: mcp_state.ui_tool_provider.list_tools(),
-        };
-        let _ = session.send_message(tools_message);
-    }
-    
-    let stream = UnboundedReceiverStream::new(rx);
-    
-    let sse_stream = stream.map(move |message| {
-        let event = SseEvent::from_message(message, session_id.clone());
-        Ok(Event::default()
-            .event(event.event)
-            .data(event.data)
-            .id(event.id.unwrap_or_default()))
-    });
-    
-    Sse::new(sse_stream).keep_alive(
+    // Convert McpMessage stream to SseEvent stream
+    let stream = UnboundedReceiverStream::new(rx)
+        .map(move |message| {
+            // Convert McpMessage to SseEvent
+            let sse_event = SseEvent::from_message(message, session_id.clone());
+            
+            // Convert to axum Event
+            Ok(Event::default()
+                .event(sse_event.event)
+                .data(sse_event.data)
+                .id(sse_event.id.unwrap_or_default()))
+        });
+
+    Sse::new(stream).keep_alive(
         KeepAlive::new()
             .interval(Duration::from_secs(30))
             .text("heartbeat"),
@@ -158,201 +183,123 @@ async fn handle_message(
         return (StatusCode::NOT_FOUND, Json(json_error("Session not found", Some(e))));
     }
     
+    // Process the message based on type
     match request.message {
-        McpMessage::Initialize { client_info, .. } => {
-            mcp_state.session_manager.update_session(session_id, |session| {
-                session.set_client_info(client_info.clone());
-            }).ok();
-            
-            // Track which LLM is connected
-            info!("LLM client initialized: {} v{}", client_info.name, client_info.version);
-            
-            // Send initialized response
-            if let Some(session) = mcp_state.session_manager.get_session(session_id) {
-                let _ = session.send_message(McpMessage::Initialized);
-            }
-            
-            (StatusCode::OK, Json(json_success("Initialized")))
-        }
-        
         McpMessage::ToolCall { id, tool, arguments } => {
-            // Execute UI tool that Claude Code is calling
-            let ws_state_clone = ws_state.clone();
-            let mcp_state_clone = mcp_state.clone();
-            let session_id_clone = session_id.clone();
-            let tool_id = id.clone();
+            // Publish tool call to channel 2000 for plugins to handle
+            publish_mcp_event(
+                ws_state.clone(),
+                "tool_call",
+                serde_json::json!({
+                    "session_id": session_id.clone(),
+                    "call_id": id,
+                    "tool": tool,
+                    "arguments": arguments,
+                }),
+            ).await;
             
-            tokio::spawn(async move {
-                execute_ui_tool(
-                    ws_state_clone, 
-                    mcp_state_clone, 
-                    session_id_clone, 
-                    tool_id, 
-                    tool, 
-                    arguments
-                ).await;
-            });
-            
-            (StatusCode::ACCEPTED, Json(json_success("Tool execution started")))
-        }
-        
+            // The actual tool execution happens in plugins
+            // They will send results back via channel 2001
+            (StatusCode::OK, Json(json_success("Tool call forwarded to plugins")))
+        },
         McpMessage::Response { id, content, tool_calls } => {
-            // Claude Code's response to a prompt - forward to chat UI
-            let tool_calls_json: Vec<serde_json::Value> = tool_calls
-                .into_iter()
-                .map(|tc| serde_json::to_value(tc).unwrap_or(serde_json::Value::Null))
-                .collect();
-            forward_response_to_ui(ws_state.clone(), id, content, tool_calls_json).await;
-            (StatusCode::OK, Json(json_success("Response forwarded to UI")))
-        }
-        
+            // LLM is responding to a prompt - forward to plugins
+            publish_mcp_event(
+                ws_state.clone(),
+                "llm_response",
+                serde_json::json!({
+                    "session_id": session_id.clone(),
+                    "response_id": id,
+                    "content": content,
+                    "tool_calls": tool_calls,
+                }),
+            ).await;
+            
+            (StatusCode::OK, Json(json_success("Response forwarded to plugins")))
+        },
         McpMessage::StreamingResponse { id, delta, done } => {
-            // Streaming response from Claude Code
-            forward_streaming_to_ui(ws_state.clone(), id, delta, done).await;
-            (StatusCode::OK, Json(json_success("Streaming response forwarded")))
-        }
-        
+            // Forward streaming response to plugins
+            publish_mcp_event(
+                ws_state.clone(),
+                "llm_streaming",
+                serde_json::json!({
+                    "session_id": session_id.clone(),
+                    "response_id": id,
+                    "delta": delta,
+                    "done": done,
+                }),
+            ).await;
+            
+            (StatusCode::OK, Json(json_success("Streaming delta forwarded")))
+        },
         _ => {
-            (StatusCode::OK, Json(json_success("Message processed")))
+            (StatusCode::BAD_REQUEST, Json(json_error("Unsupported message type", None::<String>)))
         }
     }
 }
 
-/// Handle prompts from the browser UI to send to Claude Code
+/// Handle prompt requests - send prompt to LLM(s)
 async fn handle_prompt(
     State(ws_state): State<Arc<WebSocketState>>,
     axum::extract::Extension(mcp_state): axum::extract::Extension<Arc<McpState>>,
-    Json(prompt_request): Json<PromptRequest>,
+    Json(request): Json<PromptRequest>,
 ) -> impl IntoResponse {
-    // Find the target LLM session or broadcast to all
+    let prompt_content = request.content;
+    
+    // Create a prompt message
     let prompt_message = McpMessage::Prompt {
         id: uuid::Uuid::new_v4().to_string(),
-        content: prompt_request.content,
-        context: prompt_request.context_files,
+        content: prompt_content.clone(),
+        context: request.context_files,
     };
     
-    if let Some(session_id) = prompt_request.session_id {
-        // Send to specific LLM
+    // If session_id provided, send to specific LLM
+    if let Some(session_id) = request.session_id {
+        // Get the session and send the message
         if let Some(session) = mcp_state.session_manager.get_session(&session_id) {
-            let _ = session.send_message(prompt_message);
-            (StatusCode::OK, Json(json_success("Prompt sent to LLM")))
+            if let Err(e) = session.send_message(prompt_message) {
+                return (StatusCode::INTERNAL_SERVER_ERROR, Json(json_error("Failed to send prompt", Some(e))));
+            }
+            
+            // Notify plugins that a prompt was sent
+            publish_mcp_event(
+                ws_state.clone(),
+                "prompt_sent",
+                serde_json::json!({
+                    "session_id": session_id,
+                    "content": prompt_content,
+                }),
+            ).await;
+            
+            (StatusCode::OK, Json(json_success("Prompt sent to session")))
         } else {
             (StatusCode::NOT_FOUND, Json(json_error("Session not found", None::<String>)))
         }
     } else {
-        // Broadcast to all connected LLMs
+        // Broadcast to all active LLM sessions
         mcp_state.session_manager.broadcast_to_all(prompt_message);
-        (StatusCode::OK, Json(json_success("Prompt broadcast to all LLMs")))
+        
+        // Notify plugins that a prompt was broadcast
+        publish_mcp_event(
+            ws_state.clone(),
+            "prompt_broadcast",
+            serde_json::json!({
+                "content": prompt_content,
+            }),
+        ).await;
+        
+        (StatusCode::OK, Json(json_success("Prompt broadcast to all sessions")))
     }
 }
 
-/// Execute a UI tool and send result back to LLM
-async fn execute_ui_tool(
-    ws_state: Arc<WebSocketState>,
-    mcp_state: Arc<McpState>,
-    session_id: String,
-    tool_id: String,
-    tool_name: String,
-    arguments: serde_json::Value,
-) {
-    let ui_context = UiContext {
-        channel_manager: ws_state.channel_manager.clone(),
-        batcher: ws_state.batcher.clone(),
-    };
-    
-    let result = if let Some(tool) = mcp_state.ui_tool_provider.get_tool(&tool_name) {
-        match tool.execute(arguments, &ui_context).await {
-            Ok(output) => McpMessage::ToolResult {
-                id: tool_id,
-                result: output,
-                error: None,
-            },
-            Err(e) => McpMessage::ToolResult {
-                id: tool_id,
-                result: serde_json::Value::Null,
-                error: Some(e.to_string()),
-            },
-        }
-    } else {
-        McpMessage::ToolResult {
-            id: tool_id,
-            result: serde_json::Value::Null,
-            error: Some(format!("Tool '{}' not found", tool_name)),
-        }
-    };
-    
-    if let Some(session) = mcp_state.session_manager.get_session(&session_id) {
-        let _ = session.send_message(result);
-    }
-}
-
-/// Forward Claude Code's response to the UI
-async fn forward_response_to_ui(
-    ws_state: Arc<WebSocketState>,
-    id: String,
-    content: String,
-    tool_calls: Vec<serde_json::Value>,
-) {
-    debug!("Forwarding response to UI: {}", id);
-    
-    // Send to chat-assistant channel (1050)
-    let ui_message = serde_json::json!({
-        "type": "llm_response",
-        "id": id,
-        "content": content,
-        "tool_calls": tool_calls,
-    });
-    
-    let packet = Packet::new(
-        1050, // chat-assistant channel
-        0,
-        Priority::High,
-        Bytes::from(serde_json::to_vec(&ui_message).unwrap()),
-    );
-    
-    ws_state.batcher.queue_packet(packet).await;
-}
-
-/// Forward streaming response to UI
-async fn forward_streaming_to_ui(
-    ws_state: Arc<WebSocketState>,
-    id: String,
-    delta: String,
-    done: bool,
-) {
-    debug!("Forwarding streaming response to UI: {} (done: {})", id, done);
-    
-    let ui_message = serde_json::json!({
-        "type": "llm_streaming",
-        "id": id,
-        "delta": delta,
-        "done": done,
-    });
-    
-    let packet = Packet::new(
-        1050, // chat-assistant channel
-        0,
-        Priority::High,
-        Bytes::from(serde_json::to_vec(&ui_message).unwrap()),
-    );
-    
-    ws_state.batcher.queue_packet(packet).await;
-}
-
-/// Allocate a channel for an LLM session
-fn allocate_llm_channel(session_id: &str) -> u16 {
-    // Channels 2000-2999 for LLM sessions
-    // Simple hash-based allocation
-    let hash = session_id.bytes().fold(0u32, |acc, b| acc.wrapping_add(b as u32));
-    2000 + (hash % 1000) as u16
-}
-
-/// List active sessions
+/// List all active sessions
 async fn list_sessions(
     axum::extract::Extension(mcp_state): axum::extract::Extension<Arc<McpState>>,
 ) -> impl IntoResponse {
     let sessions = mcp_state.session_manager.list_sessions();
-    Json(sessions)
+    Json(serde_json::json!({
+        "sessions": sessions
+    }))
 }
 
 /// Create a new session
@@ -365,23 +312,140 @@ async fn create_session(
     }))
 }
 
-/// End a session
+/// End a specific session
 async fn end_session(
     Path(id): Path<String>,
+    State(ws_state): State<Arc<WebSocketState>>,
     axum::extract::Extension(mcp_state): axum::extract::Extension<Arc<McpState>>,
 ) -> impl IntoResponse {
-    if mcp_state.session_manager.remove_session(&id).is_some() {
-        (StatusCode::OK, Json(json_success("Session ended")))
-    } else {
-        (StatusCode::NOT_FOUND, Json(json_error("Session not found", None::<String>)))
-    }
+    mcp_state.session_manager.remove_session(&id);
+    
+    // Notify plugins that an LLM disconnected
+    publish_mcp_event(
+        ws_state,
+        "llm_disconnected",
+        serde_json::json!({
+            "session_id": id,
+        }),
+    ).await;
+    
+    StatusCode::NO_CONTENT
 }
 
-/// List available UI tools
+/// List available tools
+/// Tools are registered by plugins via channel messages
 async fn list_tools(
-    axum::extract::Extension(mcp_state): axum::extract::Extension<Arc<McpState>>,
+    State(ws_state): State<Arc<WebSocketState>>,
 ) -> impl IntoResponse {
-    Json(mcp_state.ui_tool_provider.list_tools())
+    // Request tool list from plugins via channel
+    // For now, return a static list that plugins implement
+    let tools = vec![
+        serde_json::json!({
+            "name": "show_file",
+            "description": "Display file content in the browser editor",
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "path": {
+                        "type": "string",
+                        "description": "File path to display"
+                    },
+                    "content": {
+                        "type": "string",
+                        "description": "File content"
+                    }
+                },
+                "required": ["path", "content"]
+            }
+        }),
+        serde_json::json!({
+            "name": "update_editor",
+            "description": "Update the current editor content",
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "content": {
+                        "type": "string",
+                        "description": "New content for the editor"
+                    },
+                    "cursor_position": {
+                        "type": "object",
+                        "properties": {
+                            "line": {"type": "integer"},
+                            "column": {"type": "integer"}
+                        }
+                    }
+                },
+                "required": ["content"]
+            }
+        }),
+        serde_json::json!({
+            "name": "show_terminal_output",
+            "description": "Display output in the terminal",
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "output": {
+                        "type": "string",
+                        "description": "Terminal output to display"
+                    }
+                },
+                "required": ["output"]
+            }
+        }),
+        serde_json::json!({
+            "name": "update_file_tree",
+            "description": "Update the file browser tree",
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "path": {
+                        "type": "string",
+                        "description": "Root path for the tree"
+                    },
+                    "expanded": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "List of expanded paths"
+                    }
+                },
+                "required": ["path"]
+            }
+        }),
+        serde_json::json!({
+            "name": "show_diff",
+            "description": "Display a diff view",
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "old_content": {
+                        "type": "string",
+                        "description": "Original content"
+                    },
+                    "new_content": {
+                        "type": "string",
+                        "description": "Modified content"
+                    },
+                    "file_path": {
+                        "type": "string",
+                        "description": "File path for context"
+                    }
+                },
+                "required": ["old_content", "new_content"]
+            }
+        }),
+    ];
+    
+    // In the future, this could query plugins for their registered tools
+    publish_mcp_event(
+        ws_state,
+        "tools_requested",
+        serde_json::json!({}),
+    ).await;
+    
+    Json(serde_json::json!({
+        "tools": tools
+    }))
 }
 
 /// Health check
@@ -393,12 +457,44 @@ async fn health_check() -> impl IntoResponse {
     }))
 }
 
+/// Publish an MCP event to channel 2000 for plugins to handle
+async fn publish_mcp_event(
+    ws_state: Arc<WebSocketState>,
+    event_type: &str,
+    data: Value,
+) {
+    debug!("Publishing MCP event: {} -> {:?}", event_type, data);
+    
+    let message = serde_json::json!({
+        "type": event_type,
+        "timestamp": chrono::Utc::now().to_rfc3339(),
+        "data": data,
+    });
+    
+    let packet = Packet::new(
+        2000, // MCP events channel
+        0,
+        Priority::High,
+        Bytes::from(serde_json::to_vec(&message).unwrap()),
+    );
+    
+    ws_state.batcher.queue_packet(packet).await;
+}
+
+/// Allocate a channel for an LLM session
+fn allocate_llm_channel(session_id: &str) -> u16 {
+    // Channels 2002-2999 for individual LLM sessions
+    // Simple hash-based allocation
+    let hash = session_id.bytes().fold(0u32, |acc, b| acc.wrapping_add(b as u32));
+    2002 + (hash % 998) as u16
+}
+
 // Request types
 #[derive(serde::Deserialize)]
 struct PromptRequest {
     content: String,
     context_files: Option<Vec<String>>,
-    session_id: Option<String>, // Optional - if not provided, broadcast to all
+    session_id: Option<String>,
 }
 
 // Helper functions

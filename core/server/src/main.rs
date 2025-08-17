@@ -27,7 +27,7 @@ async fn main() -> anyhow::Result<()> {
 
     // Create MCP server
     let mcp_server = McpServer::new();
-    let mcp_router = mcp_server.build_router();
+    let mcp_router = mcp_server.router();
 
     let app = Router::new()
         .route("/", get(root))
@@ -39,11 +39,11 @@ async fn main() -> anyhow::Result<()> {
         .layer(CorsLayer::permissive())
         .with_state(ws_state);
 
-    let addr = SocketAddr::from(([127, 0, 0, 1], 3000));
+    let addr = SocketAddr::from(([127, 0, 0, 1], 8080));
     tracing::info!("Server listening on {}", addr);
-    tracing::info!("WebSocket endpoint: ws://localhost:3000/ws");
-    tracing::info!("MCP endpoint: http://localhost:3000/mcp");
-    tracing::info!("Connect LLMs with: --mcp http://localhost:3000/mcp");
+    tracing::info!("WebSocket endpoint: ws://localhost:8080/ws");
+    tracing::info!("MCP endpoint: http://localhost:8080/mcp");
+    tracing::info!("Connect LLMs with: --mcp http://localhost:8080/mcp");
     
     let listener = tokio::net::TcpListener::bind(addr).await?;
     axum::serve(listener, app).await?;

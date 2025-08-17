@@ -1,0 +1,545 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Android Playground IDE</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #1e1e1e;
+            color: #d4d4d4;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .header {
+            background: #252526;
+            padding: 10px;
+            border-bottom: 1px solid #3e3e42;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .header h1 {
+            font-size: 18px;
+            font-weight: normal;
+        }
+        
+        .status {
+            display: flex;
+            gap: 15px;
+            align-items: center;
+        }
+        
+        .status-indicator {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #ff3333;
+        }
+        
+        .status-dot.connected {
+            background: #4ec9b0;
+        }
+        
+        .main-container {
+            flex: 1;
+            display: flex;
+            overflow: hidden;
+        }
+        
+        .sidebar {
+            width: 250px;
+            background: #252526;
+            border-right: 1px solid #3e3e42;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .sidebar-header {
+            padding: 10px;
+            border-bottom: 1px solid #3e3e42;
+            font-size: 12px;
+            text-transform: uppercase;
+            color: #cccccc;
+        }
+        
+        .file-tree {
+            flex: 1;
+            overflow-y: auto;
+            padding: 10px;
+        }
+        
+        .file-item {
+            padding: 5px 10px;
+            cursor: pointer;
+            user-select: none;
+        }
+        
+        .file-item:hover {
+            background: #2a2d2e;
+        }
+        
+        .editor-container {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .tabs {
+            background: #2d2d30;
+            display: flex;
+            border-bottom: 1px solid #3e3e42;
+        }
+        
+        .tab {
+            padding: 8px 20px;
+            background: #2d2d30;
+            border-right: 1px solid #3e3e42;
+            cursor: pointer;
+            font-size: 13px;
+        }
+        
+        .tab.active {
+            background: #1e1e1e;
+        }
+        
+        .editor {
+            flex: 1;
+            padding: 20px;
+            font-family: 'Consolas', 'Courier New', monospace;
+            font-size: 14px;
+            line-height: 1.6;
+            overflow: auto;
+            white-space: pre-wrap;
+        }
+        
+        .chat-panel {
+            width: 350px;
+            background: #252526;
+            border-left: 1px solid #3e3e42;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .chat-header {
+            padding: 10px;
+            border-bottom: 1px solid #3e3e42;
+            font-weight: bold;
+        }
+        
+        .chat-messages {
+            flex: 1;
+            overflow-y: auto;
+            padding: 15px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        
+        .message {
+            padding: 10px;
+            border-radius: 8px;
+            max-width: 90%;
+        }
+        
+        .message.user {
+            background: #007acc;
+            align-self: flex-end;
+        }
+        
+        .message.assistant {
+            background: #3c3c3c;
+            align-self: flex-start;
+        }
+        
+        .message.system {
+            background: #4ec9b0;
+            color: #1e1e1e;
+            align-self: center;
+            font-size: 12px;
+        }
+        
+        .chat-input-container {
+            padding: 10px;
+            border-top: 1px solid #3e3e42;
+        }
+        
+        .chat-input {
+            width: 100%;
+            padding: 8px;
+            background: #3c3c3c;
+            border: 1px solid #5a5a5a;
+            color: #d4d4d4;
+            border-radius: 4px;
+            font-family: inherit;
+            font-size: 13px;
+        }
+        
+        .terminal-panel {
+            height: 200px;
+            background: #1e1e1e;
+            border-top: 1px solid #3e3e42;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .terminal-header {
+            padding: 5px 10px;
+            background: #2d2d30;
+            border-bottom: 1px solid #3e3e42;
+            font-size: 12px;
+        }
+        
+        .terminal-output {
+            flex: 1;
+            padding: 10px;
+            font-family: 'Consolas', 'Courier New', monospace;
+            font-size: 12px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+        }
+        
+        .mcp-status {
+            padding: 5px 10px;
+            background: #2d2d30;
+            font-size: 11px;
+            border-top: 1px solid #3e3e42;
+            display: flex;
+            justify-content: space-between;
+        }
+        
+        @media (max-width: 768px) {
+            .sidebar {
+                display: none;
+            }
+            
+            .chat-panel {
+                width: 100%;
+            }
+            
+            .main-container {
+                flex-direction: column;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🎮 Android Playground IDE</h1>
+        <div class="status">
+            <div class="status-indicator">
+                <span class="status-dot" id="ws-status"></span>
+                <span>WebSocket</span>
+            </div>
+            <div class="status-indicator">
+                <span class="status-dot" id="mcp-status"></span>
+                <span>MCP</span>
+            </div>
+        </div>
+    </div>
+    
+    <div class="main-container">
+        <div class="sidebar">
+            <div class="sidebar-header">File Explorer</div>
+            <div class="file-tree" id="file-tree">
+                <div class="file-item">📁 src/</div>
+                <div class="file-item" style="padding-left: 20px;">📄 main.rs</div>
+                <div class="file-item" style="padding-left: 20px;">📄 lib.rs</div>
+                <div class="file-item">📁 plugins/</div>
+                <div class="file-item">📁 systems/</div>
+                <div class="file-item">📁 core/</div>
+            </div>
+        </div>
+        
+        <div class="editor-container">
+            <div class="tabs">
+                <div class="tab active">main.rs</div>
+                <div class="tab">lib.rs</div>
+            </div>
+            <div class="editor" id="editor">// Welcome to Android Playground IDE
+// This is a mobile-first development environment
+
+fn main() {
+    println!("Hello from Android!");
+}</div>
+            
+            <div class="terminal-panel">
+                <div class="terminal-header">Terminal</div>
+                <div class="terminal-output" id="terminal">
+$ cargo run -p playground-server
+Server listening on 127.0.0.1:8080
+WebSocket endpoint: ws://localhost:8080/ws
+MCP endpoint: http://localhost:8080/mcp
+</div>
+            </div>
+        </div>
+        
+        <div class="chat-panel">
+            <div class="chat-header">🤖 AI Assistant (MCP)</div>
+            <div class="chat-messages" id="chat-messages">
+                <div class="message system">MCP Server Ready - Connect your LLM with: --mcp http://localhost:8080/mcp</div>
+                <div class="message assistant">Hello! I'm your AI assistant. I can help you write code, debug, and answer questions about your project.</div>
+            </div>
+            <div class="chat-input-container">
+                <input type="text" class="chat-input" id="chat-input" placeholder="Type a message or ask for help...">
+            </div>
+        </div>
+    </div>
+    
+    <div class="mcp-status">
+        <span>MCP Sessions: <span id="mcp-sessions">0</span></span>
+        <span>Channel: <span id="channel-info">Not connected</span></span>
+    </div>
+    
+    <script>
+        // WebSocket connection
+        let ws = null;
+        let reconnectTimer = null;
+        let reconnectDelay = 1000;
+        
+        function connectWebSocket() {
+            const wsStatus = document.getElementById('ws-status');
+            wsStatus.classList.remove('connected');
+            
+            ws = new WebSocket('ws://localhost:8080/ws');
+            
+            ws.onopen = () => {
+                console.log('WebSocket connected');
+                wsStatus.classList.add('connected');
+                reconnectDelay = 1000;
+                
+                // Register on channel 1050 for chat-assistant
+                const registerMsg = {
+                    type: 'register',
+                    channel: 1050,
+                    name: 'ide-client'
+                };
+                ws.send(JSON.stringify(registerMsg));
+                
+                addSystemMessage('Connected to WebSocket');
+            };
+            
+            ws.onmessage = (event) => {
+                try {
+                    const data = JSON.parse(event.data);
+                    handleMessage(data);
+                } catch (e) {
+                    console.error('Failed to parse message:', e);
+                }
+            };
+            
+            ws.onerror = (error) => {
+                console.error('WebSocket error:', error);
+                wsStatus.classList.remove('connected');
+            };
+            
+            ws.onclose = () => {
+                console.log('WebSocket disconnected');
+                wsStatus.classList.remove('connected');
+                addSystemMessage('Disconnected from WebSocket');
+                
+                // Exponential backoff reconnection
+                clearTimeout(reconnectTimer);
+                reconnectTimer = setTimeout(() => {
+                    connectWebSocket();
+                    reconnectDelay = Math.min(reconnectDelay * 1.5, 30000);
+                }, reconnectDelay);
+            };
+        }
+        
+        function handleMessage(data) {
+            switch(data.type) {
+                case 'tool_call':
+                    handleToolCall(data.data);
+                    break;
+                case 'llm_response':
+                    addAssistantMessage(data.data.content);
+                    break;
+                case 'llm_streaming':
+                    handleStreaming(data.data);
+                    break;
+                case 'llm_connected':
+                    updateMCPStatus(true);
+                    addSystemMessage(`LLM connected: ${data.data.session_id}`);
+                    break;
+                case 'llm_disconnected':
+                    updateMCPStatus(false);
+                    addSystemMessage(`LLM disconnected: ${data.data.session_id}`);
+                    break;
+            }
+        }
+        
+        function handleToolCall(data) {
+            console.log('Tool call received:', data);
+            
+            // Handle different tools
+            switch(data.tool) {
+                case 'show_file':
+                    showFile(data.arguments);
+                    break;
+                case 'update_editor':
+                    updateEditor(data.arguments);
+                    break;
+                case 'show_terminal_output':
+                    showTerminalOutput(data.arguments);
+                    break;
+                case 'update_file_tree':
+                    updateFileTree(data.arguments);
+                    break;
+                case 'show_diff':
+                    showDiff(data.arguments);
+                    break;
+            }
+            
+            // Send result back on channel 2001
+            const result = {
+                type: 'tool_result',
+                channel: 2001,
+                data: {
+                    session_id: data.session_id,
+                    call_id: data.call_id,
+                    result: { success: true }
+                }
+            };
+            
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify(result));
+            }
+        }
+        
+        function showFile(args) {
+            const editor = document.getElementById('editor');
+            editor.textContent = args.content || '// File content here';
+            addSystemMessage(`Opened file: ${args.path}`);
+        }
+        
+        function updateEditor(args) {
+            const editor = document.getElementById('editor');
+            editor.textContent = args.content;
+        }
+        
+        function showTerminalOutput(args) {
+            const terminal = document.getElementById('terminal');
+            terminal.textContent += '\n' + args.output;
+            terminal.scrollTop = terminal.scrollHeight;
+        }
+        
+        function updateFileTree(args) {
+            // Update file tree display
+            console.log('Update file tree:', args);
+        }
+        
+        function showDiff(args) {
+            // Show diff view
+            console.log('Show diff:', args);
+        }
+        
+        function handleStreaming(data) {
+            // Handle streaming responses
+            if (!data.done) {
+                // Append delta to current message
+                console.log('Streaming:', data.delta);
+            }
+        }
+        
+        function updateMCPStatus(connected) {
+            const mcpStatus = document.getElementById('mcp-status');
+            if (connected) {
+                mcpStatus.classList.add('connected');
+                document.getElementById('mcp-sessions').textContent = '1';
+            } else {
+                mcpStatus.classList.remove('connected');
+                document.getElementById('mcp-sessions').textContent = '0';
+            }
+        }
+        
+        function addSystemMessage(text) {
+            const messages = document.getElementById('chat-messages');
+            const msg = document.createElement('div');
+            msg.className = 'message system';
+            msg.textContent = text;
+            messages.appendChild(msg);
+            messages.scrollTop = messages.scrollHeight;
+        }
+        
+        function addAssistantMessage(text) {
+            const messages = document.getElementById('chat-messages');
+            const msg = document.createElement('div');
+            msg.className = 'message assistant';
+            msg.textContent = text;
+            messages.appendChild(msg);
+            messages.scrollTop = messages.scrollHeight;
+        }
+        
+        function addUserMessage(text) {
+            const messages = document.getElementById('chat-messages');
+            const msg = document.createElement('div');
+            msg.className = 'message user';
+            msg.textContent = text;
+            messages.appendChild(msg);
+            messages.scrollTop = messages.scrollHeight;
+        }
+        
+        // Chat input handling
+        document.getElementById('chat-input').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                const input = e.target;
+                const text = input.value.trim();
+                if (text) {
+                    addUserMessage(text);
+                    
+                    // Send to MCP via WebSocket
+                    if (ws && ws.readyState === WebSocket.OPEN) {
+                        const msg = {
+                            type: 'prompt',
+                            channel: 2000,
+                            data: {
+                                content: text
+                            }
+                        };
+                        ws.send(JSON.stringify(msg));
+                    }
+                    
+                    input.value = '';
+                }
+            }
+        });
+        
+        // Check MCP health
+        async function checkMCPHealth() {
+            try {
+                const response = await fetch('http://localhost:8080/mcp/health');
+                const data = await response.json();
+                if (data.status === 'healthy') {
+                    console.log('MCP server is healthy');
+                }
+            } catch (e) {
+                console.error('MCP health check failed:', e);
+            }
+        }
+        
+        // Initialize
+        connectWebSocket();
+        checkMCPHealth();
+        
+        // Periodic health check
+        setInterval(checkMCPHealth, 30000);
+    </script>
+</body>
+</html>

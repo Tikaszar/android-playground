@@ -1,0 +1,113 @@
+{
+  "name": "Android Playground",
+  "description": "Mobile-first plugin-based game engine for Android development",
+  "tools": {
+    "external": [
+      {
+        "name": "mcp_bridge",
+        "description": "Bridge to MCP server for IDE integration",
+        "command": "node",
+        "args": ["/data/data/com.termux/files/home/android-playground/mcp-bridge.js"],
+        "env": {
+          "MCP_SERVER_URL": "http://localhost:8080/mcp"
+        },
+        "tools": [
+          {
+            "name": "show_file",
+            "description": "Display file content in the browser editor",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "path": {
+                  "type": "string",
+                  "description": "File path to display"
+                },
+                "content": {
+                  "type": "string",
+                  "description": "File content"
+                }
+              },
+              "required": ["path", "content"]
+            }
+          },
+          {
+            "name": "update_editor",
+            "description": "Update the current editor content",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "content": {
+                  "type": "string",
+                  "description": "New content for the editor"
+                },
+                "cursor_position": {
+                  "type": "object",
+                  "properties": {
+                    "line": {"type": "integer"},
+                    "column": {"type": "integer"}
+                  }
+                }
+              },
+              "required": ["content"]
+            }
+          },
+          {
+            "name": "show_terminal_output",
+            "description": "Display output in the terminal",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "output": {
+                  "type": "string",
+                  "description": "Terminal output to display"
+                }
+              },
+              "required": ["output"]
+            }
+          },
+          {
+            "name": "update_file_tree",
+            "description": "Update the file browser tree",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "path": {
+                  "type": "string",
+                  "description": "Root path for the tree"
+                },
+                "expanded": {
+                  "type": "array",
+                  "items": {"type": "string"},
+                  "description": "List of expanded paths"
+                }
+              },
+              "required": ["path"]
+            }
+          },
+          {
+            "name": "show_diff",
+            "description": "Display a diff view",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "old_content": {
+                  "type": "string",
+                  "description": "Original content"
+                },
+                "new_content": {
+                  "type": "string",
+                  "description": "Modified content"
+                },
+                "file_path": {
+                  "type": "string",
+                  "description": "File path for context"
+                }
+              },
+              "required": ["old_content", "new_content"]
+            }
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -1,0 +1,37 @@
+{
+  "name": "Android Playground",
+  "description": "Mobile-first plugin-based game engine for Android development",
+  "mcp": {
+    "servers": {
+      "android-playground": {
+        "command": "node",
+        "args": ["/data/data/com.termux/files/home/android-playground/mcp-bridge.js"],
+        "env": {
+          "MCP_SERVER_URL": "http://localhost:8080/mcp"
+        }
+      }
+    }
+  },
+  "tools": {
+    "show_file": {
+      "description": "Display file content in the browser editor",
+      "endpoint": "http://localhost:8080/mcp/tools/show_file"
+    },
+    "update_editor": {
+      "description": "Update the current editor content",
+      "endpoint": "http://localhost:8080/mcp/tools/update_editor"
+    },
+    "show_terminal_output": {
+      "description": "Display output in the terminal",
+      "endpoint": "http://localhost:8080/mcp/tools/show_terminal_output"
+    },
+    "update_file_tree": {
+      "description": "Update the file browser tree",
+      "endpoint": "http://localhost:8080/mcp/tools/update_file_tree"
+    },
+    "show_diff": {
+      "description": "Display a diff view",
+      "endpoint": "http://localhost:8080/mcp/tools/show_diff"
+    }
+  }
+}
