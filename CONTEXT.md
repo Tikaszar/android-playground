@@ -4,9 +4,9 @@ This file captures the current development session context for seamless continua
 
 ## Current Session
 
-**Date**: 2025-08-16  
-**Focus**: WebSocket Implementation - core/server and core/client
-**Status**: ✅ COMPLETED - WebSocket multiplexer fully implemented and tested
+**Date**: 2025-08-17  
+**Focus**: ECS System Design and Architecture Planning
+**Status**: 🚧 IN PROGRESS - Designing two-layer ECS system
 
 ## Last Session Summary
 
@@ -246,3 +246,77 @@ The WebSocket multiplexer is fully implemented and functional. Both core/server 
 5. Performance testing and optimization
 
 The architecture is proven and working. Android/Termux compatibility confirmed.
+
+## Current Session - ECS System Design
+
+**Date**: 2025-08-17
+**Focus**: Two-layer ECS Architecture Design
+**Status**: Design phase completed, ready for implementation
+
+### ECS Design Decisions
+
+After extensive discussion with the user, the following design decisions were made:
+
+#### Two-Layer Architecture
+1. **core/ecs**: Minimal ECS primitives for Systems to use internally
+2. **systems/logic**: Full-featured game ECS for Plugins and Apps
+
+#### Key Requirements Specified by User
+
+**Core Architecture**:
+- Generational IDs (reliable, safe, no crashes)
+- Systems implement their own storage strategies
+- Runtime component registration for hot-loading
+- MUST be async and multithreaded from the core
+- Soft-fail philosophy - graceful error handling
+
+**API Design**:
+- Builder pattern for queries
+- Events as components (unified ECS approach)
+- Batch operations ONLY (no single-entity APIs)
+- Query caching with automatic invalidation
+
+**Memory Management**:
+- Global component pool with incremental growth
+- Incremental per-frame garbage collection
+- Memory warnings based on growth rate analysis
+- Component pools to prevent memory exhaustion
+
+**Networking**:
+- Built-in NetworkedComponent trait
+- Sync on dirty, batched per frame
+- Binary serialization using `bytes` crate
+- User-specified networking flow via Systems
+
+**Hot-Reload**:
+- Custom migration functions supported
+- Automatic migration in dev/debug mode
+- Strict version checking in release mode
+- Stateless systems (state in Plugins/Apps only)
+
+**System Dependencies**:
+- Type-based: `depends_on<PhysicsSystem>`
+- Retry logic: 3 attempts then halt
+- Safe mode for disabling failing systems
+
+### Implementation Plan
+
+1. Create core/ecs with async World and entity management
+2. Implement component storage traits and registration
+3. Add binary serialization with bytes
+4. Create systems/logic with hybrid archetype storage
+5. Implement builder queries with caching
+6. Add NetworkedComponent and dirty tracking
+7. Implement incremental GC system
+8. Create system scheduler with dependencies
+9. Add memory monitoring and warnings
+10. Implement hot-reload migration system
+
+### Next Steps
+
+Begin implementation of core/ecs starting with:
+- Cargo.toml with tokio, bytes, async-trait
+- Entity ID generation with generations
+- Component storage traits
+- Async World structure
+- Binary serialization

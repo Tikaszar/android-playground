@@ -29,6 +29,7 @@ systems/        # Engine components (depend on core)
 
 core/           # Foundation layer (minimal dependencies)
 ├── types       # Shared types and traits (zero dependencies)
+├── ecs         # Minimal ECS primitives for Systems to use
 ├── android     # Android JNI bindings
 ├── server      # WebSocket multiplexer and channel management
 ├── client      # Browser WASM WebSocket client
@@ -270,6 +271,7 @@ Three supported compilation modes (configurable via feature flags and runtime co
 - Debugger interface
 
 📋 **Next Steps**
+- Implement two-layer ECS system (core/ecs and systems/logic)
 - Integrate systems/networking with core/server channels
 - Update systems/ui to use WebSocket infrastructure
 - Add reconnection logic to core/client
@@ -280,7 +282,6 @@ Three supported compilation modes (configurable via feature flags and runtime co
 - Vulkan renderer for compute support
 - Physics system integration
 - Complete systems/networking for multiplayer
-- ECS implementation in logic system
 
 ## UI System Design
 
@@ -509,3 +510,122 @@ if gesture_handler.handle_gesture(&gesture, &mut docking, position) {
 - All rendering goes through BaseRenderer trait
 - Single draw call per frame is the target
 - UI system uses core/server for all communication
+
+## ECS System Design
+
+### Two-Layer Architecture
+
+The ECS system is split into two layers to provide both foundational primitives and rich game development features:
+
+#### Core/ECS (Minimal Foundation)
+- **Purpose**: Basic ECS primitives that Systems can use internally
+- **Features**:
+  - Generational entity IDs with recycling
+  - Trait-based component storage interface
+  - Simple World with add/remove/query operations
+  - Async/concurrent from the ground up with `tokio`
+  - Runtime component registration with type erasure
+  - Binary serialization using `bytes` crate
+- **Used by**: Systems for internal state management
+
+#### Systems/Logic (Full Game ECS)
+- **Purpose**: Complete game development framework
+- **Features**:
+  - Hybrid archetype storage (optimized for iteration AND insertion)
+  - Parallel system execution with dependency graph
+  - Component-based events (events ARE components)
+  - Builder pattern queries with caching
+  - NetworkedComponent trait for automatic replication
+  - Incremental GC with per-frame budget
+  - Hot-reload component migration
+  - Batch-only API for all operations
+- **Used by**: Plugins and Apps for game logic
+
+### Key Design Decisions
+
+#### Async & Multithreaded Core
+- Everything is async and supports multithreading from the start
+- Component access is async to allow I/O operations
+- System scheduling uses tokio for concurrent execution
+- Thread-safe by default with proper synchronization
+
+#### Memory Management
+- Global component pool with incremental growth
+- Incremental per-frame garbage collection
+- Memory warnings based on growth rate analysis
+- Soft-fail philosophy - Results everywhere, no panics
+
+#### Networking Integration
+- NetworkedComponent trait for automatic synchronization
+- Dirty tracking with batched updates per frame
+- Binary serialization matching WebSocket protocol
+- User-specified networking flow via Systems
+
+#### Hot-Reload Support
+- Runtime component registration for dynamic loading
+- Custom migration functions for version changes
+- Automatic migration in dev mode
+- Strict version checking in release mode
+
+#### System Architecture
+- Systems are stateless (Plugins/Apps may have state)
+- Dependency declaration using types: `depends_on<PhysicsSystem>`
+- Retry logic: Continue 3 times then halt on failure
+- Safe mode disables repeatedly failing systems
+
+### Usage Examples
+
+#### Core/ECS (Systems Internal Use)
+```rust
+// Systems use core/ecs for internal state
+let mut world = World::new();
+let entity = world.spawn_batch([
+    (Position { x: 0.0, y: 0.0 },),
+    (Velocity { x: 1.0, y: 0.0 },),
+]).await?;
+
+// Simple queries for system internals
+let positions = world.query::<&Position>().await?;
+```
+
+#### Systems/Logic (Plugin/App Use)
+```rust
+// Plugins use rich ECS API
+let mut ecs = ECS::new();
+
+// Register networked component
+ecs.register_component::<Position>()
+   .networked()
+   .migration(|old: &v1::Position| v2::Position { 
+       x: old.x, 
+       y: old.y, 
+       z: 0.0 
+   });
+
+// Builder pattern queries with caching
+let query = ecs.query()
+   .with<Position>()
+   .with<Velocity>()
+   .without<Dead>()
+   .cached()
+   .build();
+
+// Batch operations only
+ecs.spawn_batch([
+    bundle!(Position::default(), Velocity::default()),
+    bundle!(Position::new(10, 20), Enemy::new()),
+]).await?;
+
+// System with dependencies
+ecs.add_system(physics_system)
+   .depends_on<InputSystem>()
+   .runs_before<RenderSystem>();
+```
+
+### Performance Considerations
+
+- Batch operations reduce allocator pressure on mobile
+- Query caching trades memory for CPU efficiency
+- Component size warnings prevent cache thrashing
+- Incremental GC prevents frame drops
+- Hybrid storage optimizes for both iteration and insertion
