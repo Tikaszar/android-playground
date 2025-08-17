@@ -1,0 +1,32 @@
+[package]
+name = "playground-editor"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "playground-editor"
+path = "src/main.rs"
+
+[dependencies]
+# Systems - Apps can use all systems
+playground-ui = { path = "../../systems/ui" }
+playground-networking = { path = "../../systems/networking" }
+playground-logic = { path = "../../systems/logic" }
+playground-rendering = { path = "../../systems/rendering" }
+
+# Core dependencies for plugin management
+playground-plugin = { path = "../../core/plugin" }
+playground-types = { path = "../../core/types" }
+playground-server = { path = "../../core/server" }
+
+# Standard dependencies
+tokio = { workspace = true, features = ["full"] }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+dashmap = { workspace = true }
+uuid = { workspace = true, features = ["v4", "serde"] }
+anyhow = { workspace = true }

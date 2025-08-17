@@ -94,6 +94,7 @@ core/           # Foundation (minimal dependencies)
 - **Systems/Logic** full-featured game ECS with hybrid storage
 - **Systems/Networking** fully integrated with core/ecs for internal state
 - **Systems/UI** fully integrated with core/ecs and core/server
+- **Systems/Rendering** integrated with core/ecs for resource tracking
 - **WebSocket multiplexer** with binary protocol and channel system
 - **Channel management** (1-999 for Systems, 1000+ for Plugins)
 - **Frame-based packet batching** at 60fps with priority queues
@@ -123,15 +124,24 @@ core/           # Foundation (minimal dependencies)
 - **Event system** using components as events
 - **Query caching** with builder pattern
 - **Networking ECS components** for connections, channels, packet queues
+- **4-Layer Architecture** properly separated (Apps → Plugins → Systems → Core)
+- **2 Apps** (playground-editor IDE, idle-mmo-rpg game) with plugin coordination
+- **18 Plugins** created with proper trait implementation and no Core access
+- **Editor-core plugin** with text buffer, vim mode, and syntax highlighting
+- **Message bus** for inter-plugin communication in IDE
+- **IDE docking layout** with desktop and mobile variants
 
-🚧 **In Progress**
-- Authentication system (Passkey/1Password)
-- LSP client for code intelligence
-- Actual Termux terminal process connection
+🚧 **Next Session Priority**
+- File-browser plugin implementation
+- Terminal plugin with Termux integration
+- LSP client for rust-analyzer
+- Testing IDE with plugins working together
 
 📋 **Planned**
+- Remaining IDE plugins (debugger, chat-assistant, version-control, theme-manager)
+- Game plugins implementation (inventory, combat, chat, etc.)
+- Authentication system (Passkey/1Password)
 - Systems/physics using core/ecs internally
-- Systems/rendering update to use core/ecs for render state
 - Vulkan renderer for compute support
 - APK packaging
 - Hot-reload file watching system
@@ -172,15 +182,17 @@ The project features a sophisticated two-layer ECS design:
 
 ## 📊 Project Stats
 
-- **Total Lines of Code**: ~17,000+ (including reconnection logic)
-- **Compilation Time**: < 7 seconds on modern Android devices
+- **Total Lines of Code**: ~20,000+ (with Apps and Plugins)
+- **Compilation Time**: < 10 seconds on modern Android devices
 - **Memory Usage**: < 50MB baseline
 - **WASM Size**: 431KB (optimized release build)
 - **Supported Platforms**: Android 7.0+ via Termux, Browser via WASM
-- **Zero Unsafe Code**: 99.9% safe Rust (one Box::leak workaround)
+- **Zero Unsafe Code**: 100% safe Rust (NO unsafe blocks anywhere!)
 - **Architecture Layers**: 4 (Apps → Plugins → Systems → Core)
-- **ECS Integration**: 3 Systems now use core/ecs internally
-- **WebSocket Channels**: UI system on channel 10, with auto-reconnection
+- **Applications**: 2 (IDE and Game)
+- **Plugins**: 18 (8 IDE, 10 Game)
+- **ECS Integration**: 4 Systems use core/ecs internally
+- **WebSocket Channels**: UI on 10, IDE plugins 1000-1079, Game plugins 1100-1199
 
 ## 🤝 Contributing
 

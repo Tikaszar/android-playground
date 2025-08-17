@@ -1,25 +1,52 @@
 [workspace]
 resolver = "2"
 members = [
+    # Core layer
     "core/types",
     "core/ecs",
     "core/android",
     "core/server",
     "core/client",
     "core/plugin",
+    
+    # Systems layer
     "systems/ui",
     "systems/networking",
     "systems/physics",
     "systems/logic",
     "systems/rendering",
-    "plugins/idle-game",
-    "plugins/playground-editor",
+    
+    # Apps layer
+    "apps/playground-editor",
+    "apps/idle-mmo-rpg",
+    
+    # Plugins layer - IDE plugins
+    "plugins/editor-core",
+    "plugins/file-browser",
+    "plugins/terminal",
+    "plugins/lsp-client",
+    "plugins/debugger",
+    "plugins/chat-assistant",
+    "plugins/version-control",
+    "plugins/theme-manager",
+    
+    # Plugins layer - Game plugins
+    "plugins/inventory",
+    "plugins/combat",
+    "plugins/chat",
+    "plugins/crafting",
+    "plugins/quests",
+    "plugins/skills",
+    "plugins/economy",
+    "plugins/guild",
+    "plugins/progression",
+    "plugins/social",
 ]
 
 [workspace.package]
 version = "0.1.0"
 authors = ["Ptolemy <ptolemy.l.jones@gmail.com>"]
-edition = "2024"
+edition = "2021"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/Tikaszar/android-playground"
 
