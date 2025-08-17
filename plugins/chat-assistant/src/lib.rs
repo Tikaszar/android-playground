@@ -1,5 +1,6 @@
 mod plugin;
 mod chat_view;
+mod mcp_client;
 
 pub use plugin::*;
 

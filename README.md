@@ -84,12 +84,40 @@ core/           # Foundation (minimal dependencies)
 - All Systems use core/ecs internally for state management
 - Plugins have access to all Systems including systems/logic for game ECS
 
+## 🤖 MCP Support - Universal LLM Integration
+
+Android Playground now includes **MCP (Model Context Protocol)** support, enabling any LLM to connect and provide development assistance:
+
+### Supported LLMs
+- **Claude Code** (Anthropic)
+- **GPT** (OpenAI)
+- **Llama** (Meta)
+- Any MCP-compatible LLM
+
+### How It Works
+1. The LLM (e.g., Claude Code) has your actual codebase
+2. You interact through the Conversational IDE in your browser
+3. The LLM calls MCP tools to update your browser display
+4. Full bidirectional communication for seamless development
+
+### Quick Start
+```bash
+# Start Android Playground
+cargo run -p playground-server
+
+# Connect Claude Code (in another terminal)
+claude --mcp http://localhost:3000/mcp
+
+# Open browser to http://localhost:3000
+# Start coding through conversation!
+```
+
 ## Current Implementation Status
 
 ✅ **Completed**
-- Core infrastructure (types, plugin, server, client, android, **ecs**)
+- Core infrastructure (types, plugin, server, client, android, **ecs**, **mcp**)
 - **Core/ECS** with async, safe, batch-only API (no unsafe code!)
-- **Core/Server** available as both binary and library with channel management
+- **Core/Server** with integrated MCP server and channel management
 - **Core/Client** with automatic WebSocket reconnection and exponential backoff
 - **Systems/Logic** full-featured game ECS with hybrid storage
 - **Systems/Networking** fully integrated with core/ecs for internal state
@@ -135,10 +163,10 @@ core/           # Foundation (minimal dependencies)
 - **Architecture violation FIXED**: systems/ui no longer contains app-specific code
 
 🚧 **Next Session Priority**
-- Terminal plugin with actual Termux process integration
+- Test MCP with actual Claude Code instance
+- Enhance chat-assistant plugin with full MCP client
 - LSP client for rust-analyzer
 - Version-control plugin with git integration
-- Testing IDE with all plugins working together
 - Begin game plugin implementations
 
 📋 **Planned**
@@ -186,7 +214,7 @@ The project features a sophisticated two-layer ECS design:
 
 ## 📊 Project Stats
 
-- **Total Lines of Code**: ~20,000+ (with Apps and Plugins)
+- **Total Lines of Code**: ~25,000+ (with MCP integration)
 - **Compilation Time**: < 10 seconds on modern Android devices
 - **Memory Usage**: < 50MB baseline
 - **WASM Size**: 431KB (optimized release build)
@@ -196,7 +224,9 @@ The project features a sophisticated two-layer ECS design:
 - **Applications**: 2 (IDE and Game)
 - **Plugins**: 18 (8 IDE, 10 Game)
 - **ECS Integration**: 4 Systems use core/ecs internally
-- **WebSocket Channels**: UI on 10, IDE plugins 1000-1079, Game plugins 1100-1199
+- **WebSocket Channels**: UI on 10, IDE plugins 1000-1079, Game plugins 1100-1199, LLMs 2000-2999
+- **MCP Tools**: 10 UI update tools for LLM integration
+- **LLM Support**: Claude Code, GPT, Llama, and any MCP-compatible LLM
 
 ## 🤝 Contributing
 

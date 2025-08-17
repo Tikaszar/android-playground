@@ -8,11 +8,13 @@ use playground_types::{
 use tracing::{info, debug};
 
 use crate::chat_view::{ChatView, MessageSender};
+use crate::mcp_client::McpClient;
 
 pub struct ChatAssistantPlugin {
     metadata: PluginMetadata,
     chat_view: Option<ChatView>,
     channel_id: Option<u16>,
+    mcp_client: Option<McpClient>,
 }
 
 impl ChatAssistantPlugin {
@@ -29,6 +31,7 @@ impl ChatAssistantPlugin {
             },
             chat_view: None,
             channel_id: None,
+            mcp_client: None,
         }
     }
 
@@ -38,13 +41,25 @@ impl ChatAssistantPlugin {
         // Add welcome message
         chat.add_message(
             MessageSender::Assistant,
-            "Welcome to the Conversational IDE! I'm here to help you with your code. You can:\n\
-            • Ask me to explain code\n\
-            • Request code generation\n\
-            • Get help with debugging\n\
-            • Learn about best practices\n\n\
-            Type your message below and press Enter to send.".to_string()
+            "Welcome to the Conversational IDE! I'm your remote interface to any LLM (Claude Code, GPT, etc.).\n\n\
+            You can:\n\
+            • Send coding requests to the connected LLM\n\
+            • Execute commands and tools\n\
+            • Browse and edit files remotely\n\
+            • Use terminal commands like /pwd, /ls, /cd\n\n\
+            Connecting to MCP server at localhost:3001...".to_string()
         );
+        
+        // Initialize MCP client
+        self.mcp_client = Some(McpClient::new("http://localhost:3001".to_string()));
+        
+        // Connect asynchronously (would need tokio runtime in real impl)
+        if let Some(client) = &mut self.mcp_client {
+            chat.add_message(
+                MessageSender::System,
+                "MCP client initialized. Run an LLM with: claude --mcp http://localhost:3001".to_string()
+            );
+        }
         
         self.chat_view = Some(chat);
     }

@@ -357,13 +357,15 @@ cargo build -p playground-rendering --features webgl
 The entire networking layer is built on WebSockets with binary protocol for efficiency:
 
 #### Core Layer Networking (IMPLEMENTED)
-- **core/server**: WebSocket multiplexer with channel management ✅
+- **core/server**: WebSocket multiplexer with channel management and MCP server ✅
   - Channel 0: Control channel for registration and discovery ✅
   - Channels 1-999: Reserved for Systems ✅
-  - Channels 1000+: Dynamically allocated to Plugins/Apps ✅
+  - Channels 1000-1999: Dynamically allocated to Plugins/Apps ✅
+  - Channels 2000-2999: LLM sessions via MCP ✅
   - Frame-based packet batching (60fps default) ✅
   - Binary serialization using `bytes` crate ✅
   - Priority queue system (5 levels) ✅
+  - **MCP server integrated at `/mcp` endpoints** ✅
   - Passkey authentication with 1Password integration (pending)
   - Google OAuth support for external access (pending)
 
@@ -434,6 +436,62 @@ In Termux, install WASM support with:
 ```bash
 pkg install rust-std-wasm32-unknown-unknown
 ```
+
+## MCP (Model Context Protocol) Integration
+
+### Overview
+Android Playground includes a fully integrated MCP server that enables any LLM (Claude Code, GPT, Llama, etc.) to connect and provide development assistance through the Conversational IDE.
+
+### Architecture
+The MCP implementation follows a unique bidirectional design:
+
+1. **LLM as Code Host**: The LLM (e.g., Claude Code) has the actual codebase/files
+2. **MCP as UI Bridge**: MCP provides tools for the LLM to update the browser IDE
+3. **Conversational Interface**: Users interact through chat instead of terminal
+
+### MCP Tools Available
+The MCP server provides UI-focused tools that LLMs call to update the browser:
+
+- `show_file` - Display file content in the editor
+- `update_editor` - Update current editor content
+- `show_terminal_output` - Display terminal output
+- `update_file_tree` - Update the file browser
+- `show_diff` - Display a diff view
+- `show_error` - Show error messages with location
+- `update_status_bar` - Update status messages
+- `show_notification` - Display notifications
+- `open_panel` - Open specific IDE panels
+- `show_chat_message` - Display messages in conversation
+
+### Usage
+
+1. **Start the server**:
+   ```bash
+   cargo run -p playground-server
+   ```
+
+2. **Connect an LLM**:
+   ```bash
+   # Claude Code
+   claude --mcp http://localhost:3000/mcp
+   
+   # GPT
+   gpt --mcp-server http://localhost:3000/mcp
+   
+   # Llama
+   llama --tools-api http://localhost:3000/mcp
+   ```
+
+3. **Use the Conversational IDE**:
+   - Open browser to `http://localhost:3000`
+   - Type requests in the chat interface
+   - LLM processes requests and updates UI via MCP tools
+
+### Multiple LLM Support
+- Each LLM gets its own session and channel (2000-2999)
+- Can broadcast prompts to all LLMs or target specific ones
+- Sessions are tracked with activity monitoring
+- Supports concurrent connections from different LLM providers
 
 ## Current Status
 

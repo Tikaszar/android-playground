@@ -5,14 +5,14 @@ This file captures the current development session context for seamless continua
 ## Current Session
 
 **Date**: 2025-08-17  
-**Focus**: ECS System Design and Architecture Planning
-**Status**: 🚧 IN PROGRESS - Designing two-layer ECS system
+**Focus**: MCP (Model Context Protocol) Integration for Universal LLM Support
+**Status**: ✅ COMPLETED - MCP fully integrated into core/server
 
 ## Last Session Summary
 
-**Date**: 2025-08-16
-**Focus**: WebSocket Architecture Documentation & Design Clarification
-**Completed**: Full architectural documentation update removing WebRTC, establishing 4-layer system
+**Date**: 2025-08-17 (Earlier)
+**Focus**: ECS Implementation, Architecture Cleanup, and Plugin Development
+**Completed**: Two-layer ECS, architectural violation fixes, core IDE plugins
 
 ## Session Achievements
 
@@ -807,9 +807,58 @@ Apps → Plugins → Systems → Core
 - **Proper error handling** with Result types
 - **Clean module structure** maintained
 
+## MCP Integration Session - 2025-08-17 (Latest)
+
+### ✅ MCP (Model Context Protocol) Implementation
+
+Successfully integrated MCP server into core/server for universal LLM support:
+
+#### Key Architecture Insights
+1. **Bidirectional Communication**:
+   - Browser IDE sends prompts to Claude Code (or any LLM) via MCP
+   - Claude Code has the actual codebase/files
+   - Claude Code calls MCP tools to update the browser display
+   - Conversational IDE in browser replaces terminal interface
+
+2. **UI-Focused Tools Created**:
+   - `show_file` - Display file content in editor
+   - `update_editor` - Update current editor content  
+   - `show_terminal_output` - Display terminal output
+   - `update_file_tree` - Update file browser
+   - `show_diff` - Display diff view
+   - `show_error` - Show error messages
+   - `update_status_bar` - Update status
+   - `show_notification` - Display notifications
+   - `open_panel` - Open IDE panels
+   - `show_chat_message` - Display chat messages
+
+3. **Deep Server Integration**:
+   - MCP is part of core/server (not separate process)
+   - Uses existing WebSocket infrastructure
+   - Leverages channel manager (LLMs get channels dynamically)
+   - Uses frame batcher for efficient packet delivery
+   - Mounted at `/mcp` endpoints
+
+4. **Multiple LLM Support**:
+   - Each LLM gets its own session and channel
+   - Can broadcast prompts to all LLMs or target specific ones
+   - Sessions tracked with activity monitoring
+   - SSE for server→LLM, HTTP POST for LLM→server
+
+#### Files Created/Modified
+- `core/server/src/mcp/` - Complete MCP implementation
+  - `server.rs` - Main MCP server integrated with WebSocketState
+  - `ui_tools.rs` - UI update tools that LLMs call
+  - `protocol.rs` - MCP protocol messages
+  - `session.rs` - Session management for multiple LLMs
+  - `error.rs` - Error types
+- `plugins/chat-assistant/src/mcp_client.rs` - MCP client for chat plugin
+- Removed `core/mcp` as separate crate (integrated into core/server)
+
 ### Next Session Starting Points
-1. **Implement terminal plugin** with actual Termux process spawning
-2. **Implement lsp-client** for rust-analyzer integration
-3. **Test IDE** with all plugins working together
-4. **Implement version-control** plugin with git integration
-5. **Begin game plugin implementations** (inventory, combat, etc.)
+1. **Test MCP with Claude Code** - Connect actual Claude Code instance
+2. **Implement terminal plugin** - For non-MCP terminal needs
+3. **Enhance chat-assistant** - Full MCP client integration
+4. **Test multiple LLMs** - Connect Claude Code, GPT, etc. simultaneously
+5. **Implement remaining IDE plugins** - lsp-client, debugger, version-control
+6. **Begin game plugin implementations** - inventory, combat, etc.

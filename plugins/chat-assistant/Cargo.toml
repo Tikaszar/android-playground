@@ -25,3 +25,6 @@ tracing = { workspace = true }
 uuid = { workspace = true, features = ["v4", "serde"] }
 tokio = { workspace = true }
 nalgebra = { workspace = true }
+
+# MCP client
+reqwest = { version = "0.12", features = ["json"] }
