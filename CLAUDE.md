@@ -244,8 +244,10 @@ Three supported compilation modes (configurable via feature flags and runtime co
 ✅ **Implemented**
 - Core layer (types, plugin, server, android, client, **ecs**)
 - **Core/ECS** with async, generational IDs, and batch-only API
+- **Core/Server** as both binary and library with channel management
 - **Systems/Logic** full-featured ECS with hybrid storage and scheduler
 - **Systems/Networking** with core/ecs integration and WebSocket channel system
+- **Systems/UI** fully integrated with core/ecs for internal state
 - **WebSocket multiplexer** in core/server with binary protocol
 - **Channel management system** with dynamic registration
 - **Frame-based packet batching** at 60fps
@@ -279,7 +281,8 @@ Three supported compilation modes (configurable via feature flags and runtime co
 - **Networking ECS components** for connections, channels, packet queues
 
 🚧 **In Development**
-- Systems/ui integration with core/ecs
+- WebSocket message handlers for UI system
+- Terminal.rs migration to core/server channels
 - Reconnection logic in core/client
 - Passkey/1Password authentication
 - LSP client for rust-analyzer
@@ -287,8 +290,8 @@ Three supported compilation modes (configurable via feature flags and runtime co
 - Debugger interface
 
 📋 **Next Steps**
-- Update systems/ui to use core/ecs for internal state
-- Update systems/ui to use core/server for WebSocket communication
+- Implement WebSocket message handlers in systems/ui
+- Replace terminal.rs direct WebSocket usage with channels
 - Add reconnection logic with exponential backoff to core/client
 - Create systems/physics using core/ecs internally
 - Update systems/rendering to use core/ecs for render state
@@ -299,6 +302,26 @@ Three supported compilation modes (configurable via feature flags and runtime co
 - Vulkan renderer for compute support
 
 ## UI System Design
+
+### ECS-Based UI Architecture
+
+The UI system now uses core/ecs for all internal state management:
+
+**UI Components (ECS)**:
+- `UiElementComponent`: Basic element data (bounds, children, visibility)
+- `UiLayoutComponent`: Layout constraints and computed positions
+- `UiStyleComponent`: Theme, colors, borders, opacity
+- `UiDirtyComponent`: Tracks elements needing re-render
+- `UiInputComponent`: Input state, focus, hover, tab index
+- `UiWebSocketComponent`: WebSocket connection state for terminals
+- `UiTextComponent`: Text content and typography
+
+**Integration Points**:
+- UI elements are ECS entities with components
+- Uses core/ecs World for state management
+- Leverages ECS garbage collection and memory management
+- Registered on WebSocket channel 10 via core/server
+- Binary serialization for all UI components
 
 ### Conversational-First IDE
 

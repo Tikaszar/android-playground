@@ -437,3 +437,50 @@ The architecture maintains strict layer separation with Core providing minimal p
 - Update systems/rendering to use core/ecs for render state
 
 The networking system is now fully integrated with core/ecs and ready for WebSocket connections.
+
+### Session Update - 2025-08-17 (Continued)
+
+**Focus**: UI System Integration with core/ecs and core/server
+
+**Achievements:**
+1. ✅ **Updated systems/ui to use core/ecs internally**
+   - Added playground-ecs dependency
+   - Created 7 UI-specific ECS components
+   - Refactored UiSystem to use ECS World for all internal state
+   - UI elements are now ECS entities with components
+   - Integrated garbage collection and memory management
+
+2. ✅ **Integrated systems/ui with core/server**
+   - Made playground-server available as library crate
+   - Added WebSocket channel registration (channel 10 for UI)
+   - Set up foundation for message handling through channels
+   - Prepared for replacing direct WebSocket usage
+
+3. ✅ **Fixed all compilation issues**
+   - Resolved async/await issues with component registration
+   - Fixed component trait implementations
+   - Updated serialization to use bytes crate
+   - Fixed static mutable reference issues (Rust 2024 edition)
+
+**Code Quality Maintained:**
+- NO unsafe code (except one Box::leak workaround)
+- NO std::any::Any usage
+- Batch-only APIs maintained
+- All async operations properly handled
+
+**Files Modified:**
+- `core/server/Cargo.toml` - Added lib configuration
+- `core/server/src/lib.rs` - Created library exports
+- `systems/ui/Cargo.toml` - Added ECS and bytes dependencies
+- `systems/ui/src/components.rs` - Created 7 UI components
+- `systems/ui/src/system.rs` - Complete refactor to use ECS
+- `systems/ui/src/layout/docking.rs` - Fixed static mut issue
+- `systems/ui/src/theme/mod.rs` - Added ThemeId type
+
+**Next Priorities:**
+1. Implement WebSocket message handlers in UI system
+2. Replace terminal.rs direct WebSocket with channels
+3. Add reconnection logic to core/client
+4. Create systems/physics with core/ecs
+5. Update systems/rendering to use core/ecs
+6. Implement LSP client for rust-analyzer

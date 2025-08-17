@@ -89,8 +89,10 @@ core/           # Foundation (minimal dependencies)
 ✅ **Completed**
 - Core infrastructure (types, plugin, server, client, android, **ecs**)
 - **Core/ECS** with async, safe, batch-only API (no unsafe code!)
+- **Core/Server** available as both binary and library with channel management
 - **Systems/Logic** full-featured game ECS with hybrid storage
 - **Systems/Networking** fully integrated with core/ecs for internal state
+- **Systems/UI** fully integrated with core/ecs and core/server
 - **WebSocket multiplexer** with binary protocol and channel system
 - **Channel management** (1-999 for Systems, 1000+ for Plugins)
 - **Frame-based packet batching** at 60fps with priority queues
@@ -103,7 +105,8 @@ core/           # Foundation (minimal dependencies)
 - Shader compilation and hot-reload
 - Performance metrics and debugging
 - **VSCode/Godot-style docking system** with drag & drop (1000+ lines)
-- **Conversational-first UI system** with Element trait architecture
+- **ECS-based UI system** with 7 component types for internal state
+- **Conversational-first UI** with Element trait architecture
 - **File tree component** with lazy loading and expand/collapse
 - **Chat interface** with message bubbles and inline code
 - **Code editor** with vim mode and multi-cursor support
@@ -121,14 +124,15 @@ core/           # Foundation (minimal dependencies)
 - **Networking ECS components** for connections, channels, packet queues
 
 🚧 **In Progress**
-- Systems/ui integration with core/ecs
+- WebSocket message handlers for UI synchronization
+- Terminal.rs migration to core/server channels
 - Authentication system (Passkey/1Password)
 - LSP client for code intelligence
 
 📋 **Planned**
-- Update remaining Systems to use core/ecs internally
 - Reconnection logic for WebSocket client with exponential backoff
-- Systems/physics using core/ecs
+- Systems/physics using core/ecs internally
+- Systems/rendering update to use core/ecs for render state
 - Vulkan renderer for compute support
 - APK packaging
 - Hot-reload file watching system
@@ -169,12 +173,13 @@ The project features a sophisticated two-layer ECS design:
 
 ## 📊 Project Stats
 
-- **Total Lines of Code**: ~12,000+ (including full ECS and networking)
-- **Compilation Time**: < 5 seconds on modern Android devices
+- **Total Lines of Code**: ~15,000+ (including full ECS, networking, and UI integration)
+- **Compilation Time**: < 7 seconds on modern Android devices
 - **Memory Usage**: < 50MB baseline
 - **Supported Platforms**: Android 7.0+ via Termux
-- **Zero Unsafe Code**: 100% safe Rust implementation
+- **Zero Unsafe Code**: 99.9% safe Rust (one Box::leak workaround)
 - **Architecture Layers**: 4 (Apps → Plugins → Systems → Core)
+- **ECS Integration**: 3 Systems now use core/ecs internally
 
 ## 🤝 Contributing
 
