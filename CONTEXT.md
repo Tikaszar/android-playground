@@ -484,3 +484,50 @@ The networking system is now fully integrated with core/ecs and ready for WebSoc
 4. Create systems/physics with core/ecs
 5. Update systems/rendering to use core/ecs
 6. Implement LSP client for rust-analyzer
+
+### Session Update - 2025-08-17 (Continued)
+
+**Focus**: Complete WebSocket integration for UI system and terminal
+
+**Achievements:**
+1. ✅ **Implemented WebSocket message handlers in systems/ui**
+   - Created comprehensive message system (`messages.rs`) with all packet types
+   - Added serialization/deserialization helpers for JSON and binary protocols
+   - Integrated UiSystem with ChannelManager and FrameBatcher
+   - Implemented handlers for element creation, updates, input events, and terminal operations
+   - UI system registered on channel 10 with batched messaging at 60fps
+
+2. ✅ **Migrated terminal.rs to use core/server channels**
+   - Created new `connection.rs` module for channel-based terminal connections
+   - Replaced direct WebSocket usage with UI system's messaging infrastructure
+   - Terminal now communicates via UI packets (TerminalInput, TerminalOutput, etc.)
+   - Removed all direct WebSocket dependencies from terminal implementation
+   - Created TerminalManager for handling multiple terminal connections
+
+3. ✅ **Fixed compilation issues**
+   - Resolved moved value errors in message handlers
+   - Fixed all import and dependency issues
+   - Systems/ui now compiles successfully with full WebSocket integration
+
+**Architecture Improvements:**
+- Unified all UI communication through core/server WebSocket multiplexer
+- Frame-based packet batching reduces network overhead
+- Binary protocol for efficient serialization
+- Proper channel isolation (UI on channel 10)
+- Clean layer separation maintained throughout
+
+**Files Created/Modified:**
+- `systems/ui/src/messages.rs` - Complete message system (200+ lines)
+- `systems/ui/src/terminal/connection.rs` - Channel-based terminal connection (200+ lines)
+- `systems/ui/src/system.rs` - Added WebSocket message handling (150+ lines added)
+- `systems/ui/src/terminal/terminal.rs` - Migrated to use new connection system
+- `systems/ui/src/error.rs` - Added new error types for messaging
+- `systems/ui/WEBSOCKET_INTEGRATION.md` - Documentation of changes
+
+**Next Session Priorities:**
+1. Add reconnection logic with exponential backoff to core/client
+2. Create systems/physics using core/ecs internally
+3. Update systems/rendering to use core/ecs for render state
+4. Implement LSP client for rust-analyzer
+5. Add hot-reload file watching system
+6. Connect terminal to actual Termux process

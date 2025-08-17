@@ -6,12 +6,14 @@ use crate::layout::{LayoutConstraints, LayoutResult};
 use crate::rendering::RenderData;
 use crate::theme::Theme;
 use crate::error::{UiError, UiResult};
+use crate::terminal::connection::{TerminalConnection, TerminalState as ConnectionState};
+use crate::system::UiSystem;
 use nalgebra::Vector2;
 use serde::{Deserialize, Serialize};
 use std::any::Any;
 use std::collections::VecDeque;
 use std::sync::Arc;
-use tokio::sync::{RwLock, mpsc};
+use tokio::sync::RwLock;
 use uuid::Uuid;
 
 /// Terminal line with styling information
@@ -52,51 +54,8 @@ pub enum TerminalState {
     Disconnected,
 }
 
-/// Terminal connection to Termux
-pub struct TerminalConnection {
-    /// WebSocket URL for terminal connection
-    ws_url: String,
-    /// Send channel for terminal input
-    tx: mpsc::Sender<String>,
-    /// Receive channel for terminal output
-    rx: Arc<RwLock<mpsc::Receiver<String>>>,
-    /// Connection state
-    state: Arc<RwLock<TerminalState>>,
-}
-
-impl TerminalConnection {
-    pub async fn new(ws_url: String) -> UiResult<Self> {
-        let (tx, rx) = mpsc::channel(100);
-        
-        Ok(Self {
-            ws_url,
-            tx,
-            rx: Arc::new(RwLock::new(rx)),
-            state: Arc::new(RwLock::new(TerminalState::Disconnected)),
-        })
-    }
-    
-    pub async fn connect(&mut self) -> UiResult<()> {
-        // TODO: Establish WebSocket connection to Termux through Axum server
-        *self.state.write().await = TerminalState::Ready;
-        Ok(())
-    }
-    
-    pub async fn send_input(&self, input: String) -> UiResult<()> {
-        self.tx.send(input).await
-            .map_err(|e| UiError::TerminalError(format!("Failed to send terminal input: {}", e)))?;
-        Ok(())
-    }
-    
-    pub async fn receive_output(&self) -> Option<String> {
-        let mut rx = self.rx.write().await;
-        rx.recv().await
-    }
-    
-    pub async fn get_state(&self) -> TerminalState {
-        *self.state.read().await
-    }
-}
+// Terminal connection is now handled via the connection module
+// which uses core/server channels instead of direct WebSocket
 
 /// Terminal for interacting with Termux
 pub struct Terminal {
@@ -108,7 +67,7 @@ pub struct Terminal {
     scroll_offset: f32,
     history: Vec<String>,
     history_index: Option<usize>,
-    connection: Option<Arc<RwLock<TerminalConnection>>>,
+    connection: Option<Arc<TerminalConnection>>,
     prompt: String,
     is_focused: bool,
     show_cursor: bool,
@@ -134,14 +93,14 @@ impl Terminal {
         }
     }
     
-    pub async fn connect(&mut self, ws_url: String) -> UiResult<()> {
-        let mut connection = TerminalConnection::new(ws_url).await?;
-        connection.connect().await?;
-        self.connection = Some(Arc::new(RwLock::new(connection)));
+    pub async fn connect_with_system(&mut self, ui_system: Arc<RwLock<UiSystem>>) -> UiResult<()> {
+        let connection = Arc::new(TerminalConnection::new(ui_system));
+        connection.connect(None, None).await?;
+        self.connection = Some(connection);
         
         // Add connection message
         self.add_line(TerminalLine {
-            text: "Connected to Termux terminal".to_string(),
+            text: "Connected to Termux terminal via core/server channels".to_string(),
             is_input: false,
             timestamp: std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
@@ -193,8 +152,7 @@ impl Terminal {
         });
         
         // Send to Termux if connected
-        if let Some(conn) = &self.connection {
-            let connection = conn.read().await;
+        if let Some(connection) = &self.connection {
             connection.send_input(format!("{}\n", command)).await?;
         } else {
             // Fallback for when not connected

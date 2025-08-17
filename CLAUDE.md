@@ -267,7 +267,8 @@ Three supported compilation modes (configurable via feature flags and runtime co
 - **File tree component** with expand/collapse and lazy loading
 - **Chat interface** with message bubbles and code blocks
 - **Code editor** with vim mode, syntax highlighting, multi-cursor
-- **Terminal** with WebSocket connection and ANSI parsing
+- **Terminal** migrated to core/server channels (no direct WebSocket)
+- **WebSocket message handlers** for UI system (element ops, terminal, rendering)
 - **Mobile gesture support** with full multi-touch recognition (500+ lines)
 - **Floating toolbar** for mobile-specific actions (400+ lines)
 - **Gesture element wrapper** for adding gestures to any UI element (300+ lines)
@@ -281,17 +282,14 @@ Three supported compilation modes (configurable via feature flags and runtime co
 - **Networking ECS components** for connections, channels, packet queues
 
 🚧 **In Development**
-- WebSocket message handlers for UI system
-- Terminal.rs migration to core/server channels
 - Reconnection logic in core/client
 - Passkey/1Password authentication
 - LSP client for rust-analyzer
 - Hot-reload file watching
 - Debugger interface
+- Actual Termux terminal process connection
 
 📋 **Next Steps**
-- Implement WebSocket message handlers in systems/ui
-- Replace terminal.rs direct WebSocket usage with channels
 - Add reconnection logic with exponential backoff to core/client
 - Create systems/physics using core/ecs internally
 - Update systems/rendering to use core/ecs for render state
@@ -300,6 +298,7 @@ Three supported compilation modes (configurable via feature flags and runtime co
 - Hot-reload mechanism with file watching
 - Debugger interface with breakpoints
 - Vulkan renderer for compute support
+- Connect terminal to actual Termux process
 
 ## UI System Design
 

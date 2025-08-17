@@ -11,6 +11,7 @@ pub mod ide;
 pub mod elements;
 pub mod mobile;
 pub mod components;
+pub mod messages;
 
 pub use error::{UiError, UiResult};
 pub use system::UiSystem;

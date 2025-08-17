@@ -28,6 +28,12 @@ pub enum UiError {
     LockError(String),
     #[error("Serialization error: {0}")]
     SerializationError(String),
+    #[error("Deserialization error: {0}")]
+    DeserializationError(String),
+    #[error("Invalid packet type: {0}")]
+    InvalidPacketType(u16),
+    #[error("Channel error: {0}")]
+    ChannelError(String),
     #[error("Generic error: {0}")]
     Other(String),
 }

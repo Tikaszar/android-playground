@@ -7,11 +7,21 @@ use crate::layout::LayoutConstraints;
 use crate::input::InputManager;
 use crate::rendering::UiRenderer;
 use crate::theme::{ThemeManager, ThemeId};
+use crate::messages::{
+    UiPacketType, CreateElementMessage, UpdateElementMessage, InputEventMessage,
+    TerminalInputMessage, TerminalOutputMessage, TerminalConnectMessage,
+    TerminalStateMessage, RenderBatchMessage, serialize_message, deserialize_message,
+};
 use nalgebra::{Vector2, Vector4};
 use playground_ecs::{World, EntityId, ComponentRegistry};
 use playground_rendering::BaseRenderer;
 use playground_server::channel::ChannelManager;
+use playground_server::packet::{Packet, Priority};
+use playground_server::batcher::FrameBatcher;
+use bytes::Bytes;
 use std::sync::Arc;
+use std::collections::HashMap;
+use tokio::sync::RwLock;
 use uuid::Uuid;
 
 /// Simplified UI system struct using ECS for internal state management
@@ -26,6 +36,8 @@ pub struct UiSystem {
     root_entity: Option<EntityId>,
     channel_id: Option<u16>,
     channel_manager: Option<Arc<ChannelManager>>,
+    batcher: Option<Arc<FrameBatcher>>,
+    terminal_connections: Arc<RwLock<HashMap<Uuid, EntityId>>>,
     current_frame: u64,
 }
 
@@ -46,6 +58,8 @@ impl UiSystem {
             root_entity: None,
             channel_id: None,
             channel_manager: None,
+            batcher: None,
+            terminal_connections: Arc::new(RwLock::new(HashMap::new())),
             current_frame: 0,
         }
     }
@@ -180,8 +194,12 @@ impl UiSystem {
         let channel_id = channel_manager.register_system("ui".to_string(), 10)
             .map_err(|e| UiError::InitializationFailed(format!("Failed to register UI channel: {}", e)))?;
         
+        // Create frame batcher for packet batching (60fps)
+        let batcher = Arc::new(FrameBatcher::new(1024, 60));
+        
         self.channel_id = Some(channel_id);
         self.channel_manager = Some(channel_manager);
+        self.batcher = Some(batcher);
         
         Ok(())
     }
@@ -338,6 +356,160 @@ impl UiSystem {
     pub async fn memory_stats(&self) -> UiResult<playground_ecs::MemoryStats> {
         let stats = self.world.memory_stats().await;
         Ok(stats)
+    }
+    
+    /// Send a packet through the WebSocket channel
+    pub async fn send_packet(&self, packet_type: UiPacketType, payload: Bytes) -> UiResult<()> {
+        let channel_id = self.channel_id
+            .ok_or_else(|| UiError::ChannelError("UI system not registered with server".to_string()))?;
+        
+        let batcher = self.batcher.as_ref()
+            .ok_or_else(|| UiError::ChannelError("Batcher not initialized".to_string()))?;
+        
+        let packet = Packet::new(
+            channel_id,
+            packet_type as u16,
+            Priority::Medium,
+            payload,
+        );
+        
+        batcher.queue_packet(packet).await;
+        Ok(())
+    }
+    
+    /// Process incoming WebSocket message
+    pub async fn handle_message(&mut self, packet: Packet) -> UiResult<()> {
+        let packet_type = UiPacketType::try_from(packet.packet_type)?;
+        
+        match packet_type {
+            UiPacketType::CreateElement => {
+                let msg: CreateElementMessage = deserialize_message(&packet.payload)?;
+                self.handle_create_element(msg).await?;
+            }
+            UiPacketType::UpdateElement => {
+                let msg: UpdateElementMessage = deserialize_message(&packet.payload)?;
+                self.handle_update_element(msg).await?;
+            }
+            UiPacketType::InputEvent => {
+                let msg: InputEventMessage = deserialize_message(&packet.payload)?;
+                self.handle_input_event(msg).await?;
+            }
+            UiPacketType::TerminalInput => {
+                let msg: TerminalInputMessage = deserialize_message(&packet.payload)?;
+                self.handle_terminal_input(msg).await?;
+            }
+            UiPacketType::TerminalConnect => {
+                let msg: TerminalConnectMessage = deserialize_message(&packet.payload)?;
+                self.handle_terminal_connect(msg).await?;
+            }
+            _ => {
+                // Ignore unhandled packet types for now
+            }
+        }
+        
+        Ok(())
+    }
+    
+    /// Handle create element message
+    async fn handle_create_element(&mut self, msg: CreateElementMessage) -> UiResult<()> {
+        // Find parent entity if specified
+        let parent_entity = if let Some(_parent_id) = msg.parent_id {
+            // TODO: Implement UUID to EntityId mapping
+            self.root_entity
+        } else {
+            self.root_entity
+        };
+        
+        // Clone values we need to reuse
+        let element_type = msg.element_type.clone();
+        let name = msg.name.clone();
+        
+        // Create new element
+        let entity = self.create_element(
+            name,
+            element_type.clone(),
+            parent_entity,
+        ).await?;
+        
+        // Send response
+        let response = CreateElementMessage {
+            parent_id: msg.parent_id,
+            element_type,
+            name: format!("Created entity: {:?}", entity),
+            position: msg.position,
+            size: msg.size,
+        };
+        
+        let payload = serialize_message(&response)?;
+        self.send_packet(UiPacketType::ElementCreated, payload).await?;
+        
+        Ok(())
+    }
+    
+    /// Handle update element message
+    async fn handle_update_element(&mut self, _msg: UpdateElementMessage) -> UiResult<()> {
+        // TODO: Implement element updates via ECS components
+        Ok(())
+    }
+    
+    /// Handle input event message
+    async fn handle_input_event(&mut self, _msg: InputEventMessage) -> UiResult<()> {
+        // TODO: Route input events to appropriate elements
+        Ok(())
+    }
+    
+    /// Handle terminal input message
+    async fn handle_terminal_input(&mut self, msg: TerminalInputMessage) -> UiResult<()> {
+        // Forward terminal input to the terminal connection
+        let connections = self.terminal_connections.read().await;
+        if let Some(_entity_id) = connections.get(&msg.terminal_id) {
+            // TODO: Send input to actual terminal process
+            
+            // For now, echo the input back as output
+            let output = TerminalOutputMessage {
+                terminal_id: msg.terminal_id,
+                output: format!("$ {}", msg.input),
+                is_error: false,
+            };
+            
+            let payload = serialize_message(&output)?;
+            self.send_packet(UiPacketType::TerminalOutput, payload).await?;
+        }
+        
+        Ok(())
+    }
+    
+    /// Handle terminal connect message
+    async fn handle_terminal_connect(&mut self, msg: TerminalConnectMessage) -> UiResult<()> {
+        // Create a terminal entity
+        let entity = self.create_element(
+            format!("terminal-{}", msg.terminal_id),
+            "terminal".to_string(),
+            self.root_entity,
+        ).await?;
+        
+        // Store the terminal connection
+        let mut connections = self.terminal_connections.write().await;
+        connections.insert(msg.terminal_id, entity);
+        
+        // Send connection status
+        let state = TerminalStateMessage {
+            terminal_id: msg.terminal_id,
+            connected: true,
+            ready: true,
+        };
+        
+        let payload = serialize_message(&state)?;
+        self.send_packet(UiPacketType::TerminalState, payload).await?;
+        
+        Ok(())
+    }
+    
+    /// Send render batch to clients
+    pub async fn send_render_batch(&self, batch: RenderBatchMessage) -> UiResult<()> {
+        let payload = serialize_message(&batch)?;
+        self.send_packet(UiPacketType::RenderBatch, payload).await?;
+        Ok(())
     }
 }
 

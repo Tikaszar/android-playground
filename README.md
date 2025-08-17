@@ -110,12 +110,12 @@ core/           # Foundation (minimal dependencies)
 - **File tree component** with lazy loading and expand/collapse
 - **Chat interface** with message bubbles and inline code
 - **Code editor** with vim mode and multi-cursor support
-- **Terminal integration** with WebSocket-based Termux connection
+- **Terminal integration** migrated to core/server channels (no direct WebSocket)
 - **Mobile gesture support** with full multi-touch recognition (500+ lines)
 - **Floating toolbar** for mobile-specific actions (400+ lines)
 - **Gesture-aware UI elements** with configurable handlers
 - **SDF text rendering** with font atlas and layout engine (400+ lines)
-- **WebSocket terminal** with ANSI escape sequence parsing (350+ lines)
+- **WebSocket message handlers** for UI system with full packet routing
 - **Hybrid archetype/sparse storage** for optimal performance
 - **System scheduler** with parallel execution and dependencies
 - **NetworkedComponent trait** for automatic replication
@@ -124,13 +124,12 @@ core/           # Foundation (minimal dependencies)
 - **Networking ECS components** for connections, channels, packet queues
 
 🚧 **In Progress**
-- WebSocket message handlers for UI synchronization
-- Terminal.rs migration to core/server channels
+- Client reconnection logic with exponential backoff
 - Authentication system (Passkey/1Password)
 - LSP client for code intelligence
+- Actual Termux terminal process connection
 
 📋 **Planned**
-- Reconnection logic for WebSocket client with exponential backoff
 - Systems/physics using core/ecs internally
 - Systems/rendering update to use core/ecs for render state
 - Vulkan renderer for compute support
@@ -173,13 +172,14 @@ The project features a sophisticated two-layer ECS design:
 
 ## 📊 Project Stats
 
-- **Total Lines of Code**: ~15,000+ (including full ECS, networking, and UI integration)
+- **Total Lines of Code**: ~16,000+ (including full WebSocket integration)
 - **Compilation Time**: < 7 seconds on modern Android devices
 - **Memory Usage**: < 50MB baseline
 - **Supported Platforms**: Android 7.0+ via Termux
 - **Zero Unsafe Code**: 99.9% safe Rust (one Box::leak workaround)
 - **Architecture Layers**: 4 (Apps → Plugins → Systems → Core)
 - **ECS Integration**: 3 Systems now use core/ecs internally
+- **WebSocket Channels**: UI system on channel 10, fully integrated
 
 ## 🤝 Contributing
 
