@@ -91,6 +91,8 @@ cargo watch -x 'build -p idle-game'
 4. **Battery-efficient builds** - Incremental compilation and minimal rebuilds
 5. **Server-side authority** - Browser is purely a view, all logic on server
 6. **APK packaging** - Final distribution through standard Android packages
+7. **NO unsafe code** - The entire engine avoids `unsafe` blocks for reliability
+8. **NO std::any::Any** - Avoid runtime type casting, use proper serialization instead
 
 ## Rendering System Design
 
@@ -235,7 +237,8 @@ Three supported compilation modes (configurable via feature flags and runtime co
 ## Current Status
 
 ✅ **Implemented**
-- Core layer (types, plugin, server, android, client)
+- Core layer (types, plugin, server, android, client, **ecs**)
+- **Core/ECS** with async, generational IDs, and batch-only API
 - **WebSocket multiplexer** in core/server with binary protocol
 - **Channel management system** with dynamic registration
 - **Frame-based packet batching** at 60fps
@@ -263,6 +266,7 @@ Three supported compilation modes (configurable via feature flags and runtime co
 - **WebSocket terminal** with full Termux integration (350+ lines)
 
 🚧 **In Development**
+- Systems/logic full-featured ECS layer
 - Systems/networking integration with core/server
 - Reconnection logic in core/client
 - Passkey/1Password authentication
@@ -271,7 +275,7 @@ Three supported compilation modes (configurable via feature flags and runtime co
 - Debugger interface
 
 📋 **Next Steps**
-- Implement two-layer ECS system (core/ecs and systems/logic)
+- Create systems/logic with full game ECS features
 - Integrate systems/networking with core/server channels
 - Update systems/ui to use WebSocket infrastructure
 - Add reconnection logic to core/client
@@ -510,6 +514,20 @@ if gesture_handler.handle_gesture(&gesture, &mut docking, position) {
 - All rendering goes through BaseRenderer trait
 - Single draw call per frame is the target
 - UI system uses core/server for all communication
+
+## Code Quality Standards
+
+### Safety Requirements
+- **NO unsafe code**: Never use `unsafe` blocks anywhere in the codebase
+- **NO std::any::Any**: Avoid runtime type casting, use proper trait abstractions
+- **Result everywhere**: All fallible operations return Result<T, Error>
+- **Graceful degradation**: Systems should handle errors without crashing
+
+### Module Organization
+- **Clean exports**: lib.rs and mod.rs files contain ONLY module declarations and exports
+- **One type per file**: Each struct/trait gets its own file (except small related types)
+- **Batch operations**: APIs should operate on collections, not single items
+- **Async by default**: All I/O and potentially blocking operations must be async
 
 ## ECS System Design
 

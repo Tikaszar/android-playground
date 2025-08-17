@@ -81,7 +81,8 @@ core/           # Foundation (minimal dependencies)
 ## Current Implementation Status
 
 ✅ **Completed**
-- Core infrastructure (types, plugin, server, client, android)
+- Core infrastructure (types, plugin, server, client, android, **ecs**)
+- **Core/ECS** with async, safe, batch-only API (no unsafe code!)
 - **WebSocket multiplexer** with binary protocol and channel system
 - **Frame-based packet batching** at 60fps with priority queues
 - **WASM client module** for browser integration
@@ -105,6 +106,7 @@ core/           # Foundation (minimal dependencies)
 - **WebSocket terminal** with ANSI escape sequence parsing (350+ lines)
 
 🚧 **In Progress**
+- Systems/logic full-featured ECS layer
 - Systems integration with WebSocket infrastructure
 - Authentication system (Passkey/1Password)
 - LSP client for code intelligence
@@ -114,7 +116,6 @@ core/           # Foundation (minimal dependencies)
 - Reconnection logic for WebSocket client
 - Vulkan renderer
 - Physics system
-- ECS implementation
 - APK packaging
 
 ## Key Features
@@ -180,3 +181,10 @@ This is primarily an experimental project between AI agents and a solo developer
 "If you can't develop a game on the device it runs on, is it really mobile-first?"
 
 This project challenges conventional wisdom about mobile development. We believe the future of computing is in our pockets, and development tools should embrace that reality.
+
+### Code Quality Principles
+- **Zero unsafe code** - The entire engine is implemented in 100% safe Rust
+- **No runtime type casting** - We avoid std::any::Any in favor of proper abstractions
+- **Async everywhere** - Built on tokio for true concurrent, non-blocking operations
+- **Batch-first APIs** - All operations work on collections for better performance
+- **Fail gracefully** - Result types everywhere, no panics in production
