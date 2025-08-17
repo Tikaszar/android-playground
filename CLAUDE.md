@@ -36,6 +36,180 @@ core/           # Foundation layer (minimal dependencies)
 └── plugin      # Plugin trait and loading mechanism
 ```
 
+### Apps Layer Design
+
+Apps are complete products that coordinate multiple plugins. They handle the main application loop, plugin lifecycle, and provide the shell UI. Apps can use both Plugins and Systems APIs.
+
+#### apps/playground-editor (IDE Application)
+**Purpose**: Complete IDE coordinating multiple editor plugins
+**Responsibilities**:
+- Plugin lifecycle management (load/unload editor plugins)
+- IDE layout coordination (docking system configuration)
+- User preferences and settings persistence
+- Workspace/project management
+- Plugin inter-communication orchestration
+- Main UI shell and chrome
+
+**IDE Plugins Used**:
+- `editor-core`: Text editing, syntax highlighting, vim mode
+- `file-browser`: File tree, navigation, git status
+- `terminal`: Termux process management, shell integration
+- `lsp-client`: Language Server Protocol, rust-analyzer
+- `debugger`: Breakpoints, step debugging, variable inspection
+- `chat-assistant`: Conversational UI for code assistance
+- `version-control`: Git integration, diff viewer, commits
+- `theme-manager`: Themes, colors, fonts, layout presets
+
+#### apps/idle-mmo-rpg (Game Application)
+**Purpose**: Complete idle MMO game coordinating gameplay plugins
+**Responsibilities**:
+- Game loop management
+- Plugin coordination and event routing
+- Save/load game state
+- Network session management
+- Performance monitoring
+- Anti-cheat coordination
+- Main game UI shell
+
+**Game Plugins Used**:
+- `inventory`: Item storage, equipment, sorting
+- `combat`: Damage calculation, skills, PvP/PvE
+- `chat`: Real-time messaging, channels, moderation
+- `crafting`: Recipes, resource combination, queues
+- `quests`: Quest tracking, objectives, rewards
+- `skills`: Skill trees, leveling, abilities
+- `economy`: Currency, trading, auction house
+- `guild`: Guild management, permissions, events
+- `progression`: Character stats, levels, prestige
+- `social`: Friends, parties, leaderboards
+
+### Plugins Layer Design
+
+Plugins are reusable feature modules compiled as `.so` files and loaded dynamically. They use Systems APIs (never Core directly) and implement the Plugin trait for lifecycle management. Plugins register with systems/networking for channels 1000+.
+
+#### IDE-Specific Plugins
+
+**plugins/editor-core**
+- Core text editing functionality using systems/ui
+- Syntax highlighting via tree-sitter
+- Multi-cursor support with systems/logic ECS
+- Vim mode state machine
+- Registers on channels 1000-1009
+
+**plugins/file-browser**
+- File tree using systems/ui components
+- Async file operations through systems/networking
+- Git status integration
+- Registers on channels 1010-1019
+
+**plugins/terminal**
+- Termux process spawning (NOT WebSocket simulation)
+- Terminal emulation using systems/ui
+- Shell integration through core/android JNI
+- Registers on channels 1020-1029
+
+**plugins/lsp-client**
+- LSP protocol implementation using systems/networking
+- rust-analyzer process management
+- Code completion UI via systems/ui
+- Registers on channels 1030-1039
+
+**plugins/debugger**
+- Debug adapter protocol using systems/networking
+- Breakpoint management with systems/logic ECS
+- Variable inspection UI
+- Registers on channels 1040-1049
+
+**plugins/chat-assistant**
+- Conversational UI using systems/ui chat components
+- Code context extraction via systems/logic queries
+- Inline editing integration with editor-core
+- Registers on channels 1050-1059
+
+**plugins/version-control**
+- Git operations through libgit2 bindings
+- Diff rendering using systems/ui
+- Commit UI components
+- Registers on channels 1060-1069
+
+**plugins/theme-manager**
+- Theme storage using systems/logic ECS
+- Color scheme application via systems/ui
+- Font loading through systems/rendering
+- Registers on channels 1070-1079
+
+#### Game-Specific Plugins
+
+**plugins/inventory**
+- Item entities using systems/logic ECS
+- Inventory UI via systems/ui grid layout
+- Drag-drop using systems/ui gestures
+- NetworkedComponent for multiplayer sync
+- Registers on channels 1100-1109
+
+**plugins/combat**
+- Combat system using systems/logic ECS
+- Damage calculations with systems/physics
+- Animation via systems/rendering
+- NetworkedComponent for PvP
+- Registers on channels 1110-1119
+
+**plugins/chat**
+- Message routing via systems/networking
+- Chat UI using systems/ui components
+- Channel management with systems/logic ECS
+- Real-time sync via WebSocket channels
+- Registers on channels 1120-1129
+
+**plugins/crafting**
+- Recipe system using systems/logic ECS
+- Crafting UI via systems/ui
+- Resource management components
+- NetworkedComponent for server validation
+- Registers on channels 1130-1139
+
+**plugins/quests**
+- Quest state using systems/logic ECS
+- Progress tracking components
+- Quest UI via systems/ui panels
+- NetworkedComponent for server sync
+- Registers on channels 1140-1149
+
+**plugins/skills**
+- Skill tree using systems/logic ECS graph
+- Ability system with cooldowns
+- Skill UI via systems/ui tree view
+- NetworkedComponent for validation
+- Registers on channels 1150-1159
+
+**plugins/economy**
+- Currency components in systems/logic ECS
+- Trading UI via systems/ui
+- Market data using systems/networking
+- NetworkedComponent for transactions
+- Registers on channels 1160-1169
+
+**plugins/guild**
+- Guild entities in systems/logic ECS
+- Permission system components
+- Guild UI via systems/ui tabs
+- NetworkedComponent for guild sync
+- Registers on channels 1170-1179
+
+**plugins/progression**
+- Character stats in systems/logic ECS
+- Level system components
+- Progress UI via systems/ui bars
+- NetworkedComponent for validation
+- Registers on channels 1180-1189
+
+**plugins/social**
+- Friend list using systems/logic ECS
+- Party system components
+- Social UI via systems/ui lists
+- NetworkedComponent for presence
+- Registers on channels 1190-1199
+
 ### Architectural Rules
 1. **Apps** manage and coordinate collections of Plugins
 2. **Plugins** use ALL Systems APIs (systems/logic for game ECS, systems/ui for UI, etc.)
