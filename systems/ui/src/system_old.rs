@@ -1,4 +1,4 @@
-//! Simplified UI system implementation using core/ecs for internal state
+//! Main UI system implementation using core/ecs for internal state
 
 use crate::error::{UiError, UiResult};
 use crate::components::*;
@@ -8,13 +8,14 @@ use crate::input::InputManager;
 use crate::rendering::UiRenderer;
 use crate::theme::{ThemeManager, ThemeId};
 use nalgebra::{Vector2, Vector4};
-use playground_ecs::{World, EntityId, ComponentRegistry};
+use playground_ecs::{World, EntityId, ComponentRegistry, QueryBuilder};
 use playground_rendering::BaseRenderer;
 use playground_server::channel::ChannelManager;
 use std::sync::Arc;
+use tokio::sync::RwLock;
 use uuid::Uuid;
 
-/// Simplified UI system struct using ECS for internal state management
+/// Main UI system struct using ECS for internal state management
 pub struct UiSystem {
     initialized: bool,
     world: Arc<World>,
@@ -74,49 +75,26 @@ impl UiSystem {
     
     /// Register all UI components with the ECS registry
     async fn register_components(&mut self) -> UiResult<()> {
-        // Register components with the registry (async)
-        self.registry.register::<UiElementComponent>().await
+        self.registry.register::<UiElementComponent>()
             .map_err(|e| UiError::InitializationFailed(format!("Failed to register UiElementComponent: {}", e)))?;
         
-        self.registry.register::<UiLayoutComponent>().await
+        self.registry.register::<UiLayoutComponent>()
             .map_err(|e| UiError::InitializationFailed(format!("Failed to register UiLayoutComponent: {}", e)))?;
         
-        self.registry.register::<UiStyleComponent>().await
+        self.registry.register::<UiStyleComponent>()
             .map_err(|e| UiError::InitializationFailed(format!("Failed to register UiStyleComponent: {}", e)))?;
         
-        self.registry.register::<UiDirtyComponent>().await
+        self.registry.register::<UiDirtyComponent>()
             .map_err(|e| UiError::InitializationFailed(format!("Failed to register UiDirtyComponent: {}", e)))?;
         
-        self.registry.register::<UiInputComponent>().await
+        self.registry.register::<UiInputComponent>()
             .map_err(|e| UiError::InitializationFailed(format!("Failed to register UiInputComponent: {}", e)))?;
         
-        self.registry.register::<UiWebSocketComponent>().await
+        self.registry.register::<UiWebSocketComponent>()
             .map_err(|e| UiError::InitializationFailed(format!("Failed to register UiWebSocketComponent: {}", e)))?;
         
-        self.registry.register::<UiTextComponent>().await
+        self.registry.register::<UiTextComponent>()
             .map_err(|e| UiError::InitializationFailed(format!("Failed to register UiTextComponent: {}", e)))?;
-        
-        // Now register the components with the world's storage
-        self.world.register_component::<UiElementComponent>().await
-            .map_err(|e| UiError::InitializationFailed(format!("Failed to register UiElementComponent with world: {}", e)))?;
-        
-        self.world.register_component::<UiLayoutComponent>().await
-            .map_err(|e| UiError::InitializationFailed(format!("Failed to register UiLayoutComponent with world: {}", e)))?;
-        
-        self.world.register_component::<UiStyleComponent>().await
-            .map_err(|e| UiError::InitializationFailed(format!("Failed to register UiStyleComponent with world: {}", e)))?;
-        
-        self.world.register_component::<UiDirtyComponent>().await
-            .map_err(|e| UiError::InitializationFailed(format!("Failed to register UiDirtyComponent with world: {}", e)))?;
-        
-        self.world.register_component::<UiInputComponent>().await
-            .map_err(|e| UiError::InitializationFailed(format!("Failed to register UiInputComponent with world: {}", e)))?;
-        
-        self.world.register_component::<UiWebSocketComponent>().await
-            .map_err(|e| UiError::InitializationFailed(format!("Failed to register UiWebSocketComponent with world: {}", e)))?;
-        
-        self.world.register_component::<UiTextComponent>().await
-            .map_err(|e| UiError::InitializationFailed(format!("Failed to register UiTextComponent with world: {}", e)))?;
         
         Ok(())
     }
@@ -263,11 +241,39 @@ impl UiSystem {
         
         // Add to parent's children if specified
         if let Some(parent_id) = parent {
-            // For now, we'll need to implement a different approach for updating parent-child relationships
-            // since we can't easily query and modify components with the current core/ecs API
+            self.add_child(parent_id, entity).await?;
         }
         
         Ok(entity)
+    }
+    
+    /// Add a child to a parent element
+    async fn add_child(&self, parent: EntityId, child: EntityId) -> UiResult<()> {
+        // Query for parent's UiElementComponent and update children
+        let query = self.world.query::<&mut UiElementComponent>()
+            .with_entity(parent)
+            .build();
+        
+        let mut results = query.execute().await
+            .map_err(|e| UiError::Other(format!("Failed to query parent: {}", e)))?;
+        
+        if let Some((_, component)) = results.first_mut() {
+            component.children.push(child);
+        }
+        
+        // Update child's parent reference
+        let query = self.world.query::<&mut UiElementComponent>()
+            .with_entity(child)
+            .build();
+        
+        let mut results = query.execute().await
+            .map_err(|e| UiError::Other(format!("Failed to query child: {}", e)))?;
+        
+        if let Some((_, component)) = results.first_mut() {
+            component.parent = Some(parent);
+        }
+        
+        Ok(())
     }
 
     /// Perform layout for all elements
@@ -276,8 +282,68 @@ impl UiSystem {
             return Err(UiError::InitializationFailed("UI system not initialized".to_string()));
         }
         
-        // For now, simplified layout without complex queries
-        // This would need to be expanded with proper component access
+        let constraints = LayoutConstraints::new(self.screen_size);
+        
+        // Start from root and recursively layout
+        if let Some(root_id) = self.root_entity {
+            self.layout_element_recursive(root_id, &constraints).await?;
+        }
+        
+        Ok(())
+    }
+    
+    /// Recursively layout an element and its children
+    async fn layout_element_recursive(
+        &self,
+        entity: EntityId,
+        constraints: &LayoutConstraints,
+    ) -> UiResult<()> {
+        // Query for element and layout components
+        let query = self.world.query::<(&UiElementComponent, &mut UiLayoutComponent)>()
+            .with_entity(entity)
+            .build();
+        
+        let results = query.execute().await
+            .map_err(|e| UiError::Other(format!("Failed to query element for layout: {}", e)))?;
+        
+        if let Some((_, (element, layout))) = results.first() {
+            // Update layout constraints
+            layout.constraints = *constraints;
+            
+            // Compute layout (simplified for now)
+            layout.computed_size = constraints.max_size;
+            layout.computed_position = Vector2::zeros();
+            
+            // Layout children recursively
+            for child_id in element.children.clone() {
+                let child_constraints = LayoutConstraints::new(layout.computed_size);
+                self.layout_element_recursive(child_id, &child_constraints).await?;
+            }
+        }
+        
+        Ok(())
+    }
+
+    /// Mark elements as dirty for re-rendering
+    pub async fn mark_dirty(&self, entity: EntityId, layout: bool, style: bool, content: bool) -> UiResult<()> {
+        let query = self.world.query::<&mut UiDirtyComponent>()
+            .with_entity(entity)
+            .build();
+        
+        let mut results = query.execute().await
+            .map_err(|e| UiError::Other(format!("Failed to query dirty component: {}", e)))?;
+        
+        if let Some((_, dirty)) = results.first_mut() {
+            if layout {
+                dirty.layout_dirty = true;
+            }
+            if style {
+                dirty.style_dirty = true;
+            }
+            if content {
+                dirty.content_dirty = true;
+            }
+        }
         
         Ok(())
     }
@@ -290,25 +356,71 @@ impl UiSystem {
         
         self.current_frame += 1;
         
-        // Simplified rendering without complex queries
-        // This would need proper dirty element tracking
+        // Query for dirty elements
+        let query = self.world.query::<(&UiElementComponent, &UiStyleComponent, &mut UiDirtyComponent)>()
+            .build();
+        
+        let results = query.execute().await
+            .map_err(|e| UiError::Other(format!("Failed to query dirty elements: {}", e)))?;
+        
+        // Collect dirty elements for rendering
+        let mut dirty_elements = Vec::new();
+        for (entity, (element, style, dirty)) in results {
+            if dirty.layout_dirty || dirty.style_dirty || dirty.content_dirty {
+                dirty_elements.push((entity, element.clone(), style.clone()));
+                
+                // Clear dirty flags
+                dirty.layout_dirty = false;
+                dirty.style_dirty = false;
+                dirty.content_dirty = false;
+                dirty.last_render_frame = self.current_frame;
+            }
+        }
+        
+        // Render dirty elements
+        if let Some(renderer) = &mut self.renderer {
+            // renderer.render_elements(&dirty_elements, &self.theme_manager)?;
+        }
         
         Ok(())
     }
 
     /// Update the UI
-    pub async fn update(&mut self, _delta_time: f32) -> UiResult<()> {
+    pub async fn update(&mut self, delta_time: f32) -> UiResult<()> {
         if !self.initialized {
             return Err(UiError::InitializationFailed("UI system not initialized".to_string()));
         }
         
         // Run garbage collection on ECS
-        self.world.run_gc().await
+        self.world.gc().collect_incremental(&self.world).await
             .map_err(|e| UiError::Other(format!("GC failed: {}", e)))?;
         
+        // Process input events through ECS queries
+        // self.input_manager.process_events(&self.world).await?;
+        
         // Process WebSocket messages if connected
-        if let Some(_channel_id) = self.channel_id {
-            // Process messages through channel manager
+        if let Some(channel_id) = self.channel_id {
+            self.process_websocket_messages().await?;
+        }
+        
+        Ok(())
+    }
+    
+    /// Process incoming WebSocket messages from core/server
+    async fn process_websocket_messages(&self) -> UiResult<()> {
+        // Query for WebSocket components and process their messages
+        let query = self.world.query::<&mut UiWebSocketComponent>()
+            .build();
+        
+        let mut results = query.execute().await
+            .map_err(|e| UiError::Other(format!("Failed to query WebSocket components: {}", e)))?;
+        
+        for (_, ws_component) in results {
+            // Process pending messages
+            for message in ws_component.pending_messages.drain(..) {
+                // Handle message based on type
+                // This will be implemented when we integrate with core/server
+            }
         }
         
         Ok(())
@@ -336,7 +448,8 @@ impl UiSystem {
     
     /// Get memory statistics from the ECS
     pub async fn memory_stats(&self) -> UiResult<playground_ecs::MemoryStats> {
-        let stats = self.world.memory_stats().await;
+        let stats = self.world.memory_stats().await
+            .map_err(|e| UiError::Other(format!("Failed to get memory stats: {}", e)))?;
         Ok(stats)
     }
 }

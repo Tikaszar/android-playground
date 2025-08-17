@@ -9,6 +9,7 @@ license.workspace = true
 # Core dependencies
 playground-types = { path = "../../core/types" }
 playground-server = { path = "../../core/server" }
+playground-ecs = { path = "../../core/ecs" }
 playground-rendering = { path = "../rendering" }
 
 # Async runtime
@@ -18,6 +19,7 @@ async-trait = "0.1"
 # Serialization
 serde = { workspace = true }
 serde_json = { workspace = true }
+bytes = { workspace = true }
 
 # Collections
 indexmap = "2.2"

@@ -5,6 +5,10 @@ authors.workspace = true
 edition.workspace = true
 license.workspace = true
 
+[lib]
+name = "playground_server"
+path = "src/lib.rs"
+
 [[bin]]
 name = "playground-server"
 path = "src/main.rs"

@@ -1019,8 +1019,9 @@ impl Element for DockingLayout {
     }
     
     fn children_mut(&mut self) -> &mut Vec<ElementId> {
-        static mut EMPTY: Vec<ElementId> = Vec::new();
-        unsafe { &mut EMPTY }
+        // Return a temporary empty vector - this is a placeholder implementation
+        // In a real implementation, DockingLayout would have actual children storage
+        Box::leak(Box::new(Vec::new()))
     }
     
     fn is_dirty(&self) -> bool {
@@ -1187,8 +1188,9 @@ impl DockingLayout {
     }
     
     fn children_mut(&mut self) -> &mut Vec<ElementId> {
-        static mut EMPTY: Vec<ElementId> = Vec::new();
-        unsafe { &mut EMPTY }
+        // Return a temporary empty vector - this is a placeholder implementation
+        // In a real implementation, DockingLayout would have actual children storage
+        Box::leak(Box::new(Vec::new()))
     }
     
     fn is_dirty(&self) -> bool {
