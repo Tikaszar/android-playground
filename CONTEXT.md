@@ -251,7 +251,7 @@ The architecture is proven and working. Android/Termux compatibility confirmed.
 
 **Date**: 2025-08-17
 **Focus**: Two-layer ECS Architecture Implementation
-**Status**: ✅ core/ecs COMPLETED, systems/logic pending
+**Status**: ✅ BOTH core/ecs AND systems/logic COMPLETED
 
 ### ECS Design Decisions
 
@@ -338,26 +338,71 @@ After extensive discussion with the user, the following design decisions were ma
 4. **Async Everything**: Full async/await support for concurrent operations
 5. **Clean Module Structure**: lib.rs and mod.rs files only contain exports
 
-### Next Steps
+### Systems/Logic Implementation Completed
 
-1. **Create systems/logic** with full-featured ECS for Plugins/Apps:
-   - Hybrid archetype storage
-   - System scheduler with dependency graph
-   - NetworkedComponent trait implementation
-   - Event system using components
-   - Safe mode for failing systems
-   
-2. **Integration Tasks**:
-   - Wire up systems/networking with core/server
-   - Update systems/ui to use WebSocket infrastructure
-   - Add reconnection logic to core/client
+✅ **Full-Featured ECS Layer Implemented:**
+- **Hybrid Storage**: Combined archetype (for iteration) and sparse (for random access)
+- **Archetype Graph**: Fast component add/remove with cached transitions
+- **System Scheduler**: Parallel execution with dependency resolution
+- **NetworkedComponent Trait**: Automatic replication with dirty tracking
+- **Event System**: Events as components with priority queues
+- **Builder Queries**: Type-safe queries with caching support
+- **Fixed/Adaptive Schedulers**: Multiple scheduling strategies
+- **World Facade**: Clean API for Plugins and Apps
+- **Batch-Only Operations**: All operations work on collections
+- **Safe Mode**: Systems auto-disable after repeated failures
+
+### Key Features Implemented:
+1. **Entity Management**: Generational IDs with safe recycling
+2. **Component Registry**: Runtime registration with migration support
+3. **Query Cache**: Frequently used queries are cached
+4. **Dirty Tracking**: Automatic tracking for networked components
+5. **System Dependencies**: Type-based dependency declaration
+6. **Stage-Based Execution**: PreUpdate, Update, PostUpdate, etc.
+7. **Resource Management**: Global resources with type safety
+8. **Performance Metrics**: Frame timing and system profiling
+
+### Next Integration Tasks:
+1. **Wire up systems/networking** with core/server channels
+2. **Update systems/ui** to use WebSocket infrastructure  
+3. **Add reconnection logic** to core/client
+4. **Implement LSP client** for rust-analyzer
+5. **Add hot-reload** file watching
 
 ### Session Handoff
 
-Core/ecs is fully implemented and compiles successfully. The foundation is solid with:
+Both Core/ecs and Systems/logic are fully implemented and compile successfully. The two-layer ECS architecture is complete with:
+
+**Core/ECS Layer:**
 - Safe, async, batch-only operations
 - No unsafe code or Any usage
 - Complete memory management and GC
-- Ready for systems/logic layer on top
+- Foundation for Systems' internal use
 
-The architecture maintains strict layer separation with Core providing minimal primitives that Systems can build upon.
+**Systems/Logic Layer:**
+- Full-featured game ECS for Plugins/Apps
+- Hybrid storage combining archetype and sparse
+- Parallel system execution with dependencies
+- NetworkedComponent trait for replication
+- Event system using components
+- Query caching and builder pattern
+- Multiple scheduler strategies
+
+The architecture maintains strict layer separation with Core providing minimal primitives that Systems build upon, while Systems/Logic provides the rich API that Plugins and Apps need for game development.
+
+### Session Summary - 2025-08-17
+
+**Achievements:**
+1. ✅ Implemented complete systems/logic ECS layer (~2000 lines)
+2. ✅ Added all missing dependencies to workspace
+3. ✅ Fixed all compilation errors
+4. ✅ Updated documentation across CLAUDE.md, CONTEXT.md, and README.md
+5. ✅ Maintained code quality: NO unsafe, NO Any, batch-only APIs
+
+**Ready for Next Session:**
+- Wire up systems/networking with core/server
+- Update systems/ui to use WebSocket infrastructure
+- Add reconnection logic to core/client
+- Implement LSP client for rust-analyzer
+
+The ECS foundation is solid and ready for integration with other systems.

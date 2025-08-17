@@ -239,6 +239,7 @@ Three supported compilation modes (configurable via feature flags and runtime co
 ✅ **Implemented**
 - Core layer (types, plugin, server, android, client, **ecs**)
 - **Core/ECS** with async, generational IDs, and batch-only API
+- **Systems/Logic** full-featured ECS with hybrid storage and scheduler
 - **WebSocket multiplexer** in core/server with binary protocol
 - **Channel management system** with dynamic registration
 - **Frame-based packet batching** at 60fps
@@ -264,9 +265,13 @@ Three supported compilation modes (configurable via feature flags and runtime co
 - **Gesture element wrapper** for adding gestures to any UI element (300+ lines)
 - **SDF text rendering** with font atlas and layout engine (400+ lines)
 - **WebSocket terminal** with full Termux integration (350+ lines)
+- **Hybrid archetype storage** optimized for iteration and insertion
+- **System scheduler** with parallel execution and dependency graph
+- **NetworkedComponent trait** for automatic replication
+- **Event system** with components as events
+- **Query caching** with builder pattern
 
 🚧 **In Development**
-- Systems/logic full-featured ECS layer
 - Systems/networking integration with core/server
 - Reconnection logic in core/client
 - Passkey/1Password authentication
@@ -275,7 +280,6 @@ Three supported compilation modes (configurable via feature flags and runtime co
 - Debugger interface
 
 📋 **Next Steps**
-- Create systems/logic with full game ECS features
 - Integrate systems/networking with core/server channels
 - Update systems/ui to use WebSocket infrastructure
 - Add reconnection logic to core/client

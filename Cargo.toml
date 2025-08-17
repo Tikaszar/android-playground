@@ -49,3 +49,15 @@ notify = "6.1"
 
 # Math
 nalgebra = { version = "0.33", features = ["serde-serialize"] }
+
+# For ECS and networking
+bytes = "1.5"
+dashmap = "5.5"
+parking_lot = "0.12"
+indexmap = "2.1"
+petgraph = "0.6"
+fnv = "1.0"
+uuid = { version = "1.6", features = ["v4", "serde"] }
+lazy_static = "1.4"
+rayon = "1.8"
+async-trait = "0.1"

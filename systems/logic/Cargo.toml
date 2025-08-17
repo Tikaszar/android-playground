@@ -7,6 +7,18 @@ license.workspace = true
 
 [dependencies]
 playground-types = { path = "../../core/types" }
+playground-ecs = { path = "../../core/ecs" }
 serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
+tokio = { workspace = true }
+bytes = { workspace = true }
+dashmap = { workspace = true }
+parking_lot = { workspace = true }
+indexmap = { workspace = true }
+petgraph = { workspace = true }
+fnv = { workspace = true }
+uuid = { workspace = true }
+lazy_static = { workspace = true }
+rayon = { workspace = true }
+async-trait = { workspace = true }

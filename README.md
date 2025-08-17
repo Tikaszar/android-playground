@@ -83,6 +83,7 @@ core/           # Foundation (minimal dependencies)
 ✅ **Completed**
 - Core infrastructure (types, plugin, server, client, android, **ecs**)
 - **Core/ECS** with async, safe, batch-only API (no unsafe code!)
+- **Systems/Logic** full-featured game ECS with hybrid storage
 - **WebSocket multiplexer** with binary protocol and channel system
 - **Frame-based packet batching** at 60fps with priority queues
 - **WASM client module** for browser integration
@@ -104,9 +105,13 @@ core/           # Foundation (minimal dependencies)
 - **Gesture-aware UI elements** with configurable handlers
 - **SDF text rendering** with font atlas and layout engine (400+ lines)
 - **WebSocket terminal** with ANSI escape sequence parsing (350+ lines)
+- **Hybrid archetype/sparse storage** for optimal performance
+- **System scheduler** with parallel execution and dependencies
+- **NetworkedComponent trait** for automatic replication
+- **Event system** using components as events
+- **Query caching** with builder pattern
 
 🚧 **In Progress**
-- Systems/logic full-featured ECS layer
 - Systems integration with WebSocket infrastructure
 - Authentication system (Passkey/1Password)
 - LSP client for code intelligence
@@ -134,12 +139,31 @@ core/           # Foundation (minimal dependencies)
 - **Termux Integration**: Direct terminal access on Android
 - **Vim Mode**: Efficient text editing on mobile
 
+## 🎯 ECS Architecture
+
+The project features a sophisticated two-layer ECS design:
+
+### Core/ECS (Minimal Foundation)
+- Basic primitives for Systems' internal use
+- Async/concurrent with generational entity IDs
+- Runtime component registration
+- Binary serialization for networking
+
+### Systems/Logic (Full Game ECS)
+- **Hybrid Storage**: Archetype for iteration, sparse for rare components
+- **System Scheduler**: Parallel execution with dependency graphs
+- **NetworkedComponent**: Automatic replication with dirty tracking
+- **Events as Components**: Unified event system
+- **Query Caching**: Frequently used queries are cached
+- **Safe Mode**: Systems auto-disable after repeated failures
+
 ## 📊 Project Stats
 
-- **Total Lines of Code**: ~5,000+ (UI system alone)
-- **Compilation Time**: < 3 seconds on modern Android devices
+- **Total Lines of Code**: ~10,000+ (including ECS)
+- **Compilation Time**: < 5 seconds on modern Android devices
 - **Memory Usage**: < 50MB baseline
 - **Supported Platforms**: Android 7.0+ via Termux
+- **Zero Unsafe Code**: 100% safe Rust implementation
 
 ## 🤝 Contributing
 
