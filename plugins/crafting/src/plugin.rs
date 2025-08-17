@@ -1,53 +1,64 @@
-use playground_plugin::{Plugin, PluginContext};
-use playground_types::{PluginMetadata, Event};
-use uuid::Uuid;
+use playground_plugin::Plugin;
+use playground_types::{
+    PluginMetadata, PluginId, Version, Event,
+    context::Context,
+    render_context::RenderContext,
+    error::PluginError,
+};
+use tracing::info;
 
 pub struct CraftingPlugin {
-    id: Uuid,
     metadata: PluginMetadata,
+    channel_id: Option<u16>,
 }
 
 impl CraftingPlugin {
     pub fn new() -> Self {
         Self {
-            id: Uuid::new_v4(),
             metadata: PluginMetadata {
-                name: "crafting".to_string(),
-                version: "0.1.0".to_string(),
-                author: "Playground Team".to_string(),
-                description: "Crafting plugin".to_string(),
+                id: PluginId("crafting".to_string()),
+                name: "Crafting".to_string(),
+                version: Version {
+                    major: 0,
+                    minor: 1,
+                    patch: 0,
+                },
             },
+            channel_id: None,
         }
     }
 }
 
 impl Plugin for CraftingPlugin {
-    fn id(&self) -> Uuid {
-        self.id
-    }
-
     fn metadata(&self) -> &PluginMetadata {
         &self.metadata
     }
 
-    fn on_load(&mut self, _context: &mut PluginContext) -> Result<(), Box<dyn std::error::Error>> {
+    fn on_load(&mut self, _ctx: &mut Context) -> Result<(), PluginError> {
+        info!("crafting plugin loading");
+        
+        // Register with networking system for appropriate channels
+        // self.channel_id = Some(CHANNEL_BASE);
+        
+        info!("crafting plugin loaded successfully");
         Ok(())
     }
 
-    fn on_unload(&mut self, _context: &mut PluginContext) -> Result<(), Box<dyn std::error::Error>> {
-        Ok(())
+    fn on_unload(&mut self, _ctx: &mut Context) {
+        info!("crafting plugin unloading");
     }
 
-    fn update(&mut self, _context: &mut PluginContext, _delta_time: f32) -> Result<(), Box<dyn std::error::Error>> {
-        Ok(())
+    fn update(&mut self, _ctx: &mut Context, _delta_time: f32) {
+        // Update logic here
     }
 
-    fn render(&mut self, _context: &mut PluginContext) -> Result<(), Box<dyn std::error::Error>> {
-        Ok(())
+    fn render(&mut self, _ctx: &mut RenderContext) {
+        // Render logic here
     }
 
-    fn on_event(&mut self, _context: &mut PluginContext, _event: Event) -> Result<(), Box<dyn std::error::Error>> {
-        Ok(())
+    fn on_event(&mut self, _event: &Event) -> bool {
+        // Handle events, return true if handled
+        false
     }
 }
 

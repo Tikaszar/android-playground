@@ -6,8 +6,6 @@ pub mod input;
 pub mod rendering;
 pub mod theme;
 pub mod terminal;
-pub mod chat;
-pub mod ide;
 pub mod elements;
 pub mod mobile;
 pub mod components;

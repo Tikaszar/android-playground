@@ -93,7 +93,7 @@ core/           # Foundation (minimal dependencies)
 - **Core/Client** with automatic WebSocket reconnection and exponential backoff
 - **Systems/Logic** full-featured game ECS with hybrid storage
 - **Systems/Networking** fully integrated with core/ecs for internal state
-- **Systems/UI** fully integrated with core/ecs and core/server
+- **Systems/UI** fully integrated with core/ecs and core/server (NOW GENERIC ONLY!)
 - **Systems/Rendering** integrated with core/ecs for resource tracking
 - **WebSocket multiplexer** with binary protocol and channel system
 - **Channel management** (1-999 for Systems, 1000+ for Plugins)
@@ -124,18 +124,22 @@ core/           # Foundation (minimal dependencies)
 - **Event system** using components as events
 - **Query caching** with builder pattern
 - **Networking ECS components** for connections, channels, packet queues
-- **4-Layer Architecture** properly separated (Apps → Plugins → Systems → Core)
+- **4-Layer Architecture** FULLY ENFORCED (Apps → Plugins → Systems → Core)
 - **2 Apps** (playground-editor IDE, idle-mmo-rpg game) with plugin coordination
-- **18 Plugins** created with proper trait implementation and no Core access
-- **Editor-core plugin** with text buffer, vim mode, and syntax highlighting
+- **18 Plugins** ALL COMPILE with proper trait implementation and no Core access
+- **file-browser plugin** with complete FileTree UI and file operations
+- **editor-core plugin** with EditorView, TextBuffer, and full vim mode
+- **chat-assistant plugin** with ChatView for conversational IDE
 - **Message bus** for inter-plugin communication in IDE
 - **IDE docking layout** with desktop and mobile variants
+- **Architecture violation FIXED**: systems/ui no longer contains app-specific code
 
 🚧 **Next Session Priority**
-- File-browser plugin implementation
-- Terminal plugin with Termux integration
+- Terminal plugin with actual Termux process integration
 - LSP client for rust-analyzer
-- Testing IDE with plugins working together
+- Version-control plugin with git integration
+- Testing IDE with all plugins working together
+- Begin game plugin implementations
 
 📋 **Planned**
 - Remaining IDE plugins (debugger, chat-assistant, version-control, theme-manager)

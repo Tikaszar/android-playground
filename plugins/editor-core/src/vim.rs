@@ -1,4 +1,83 @@
 use serde::{Deserialize, Serialize};
+use playground_ui::input::Key;
+
+/// Vim commands that can be executed
+#[derive(Debug, Clone, PartialEq)]
+pub enum VimCommand {
+    None,
+    Move(Direction),
+    Insert,
+    Normal,
+    Visual,
+    Delete(Motion),
+    Yank(Motion),
+    Paste,
+    MoveLeft(u32),
+    MoveRight(u32),
+    MoveUp(u32),
+    MoveDown(u32),
+    MoveWordForward(u32),
+    MoveWordBackward(u32),
+    MoveWordEnd(u32),
+    MoveLineStart,
+    MoveLineEnd,
+    GoToLine(usize),
+    GoToFirstLine,
+    EnterInsertMode,
+    ExitInsertMode,
+    AppendMode,
+    OpenLineBelow,
+    OpenLineAbove,
+    EnterVisualMode,
+    EnterVisualLineMode,
+    EnterReplaceMode,
+    ExitVisualMode,
+    ExitReplaceMode,
+    EnterCommandMode,
+    ExitCommandMode,
+    DeleteChar(u32),
+    DeleteLine(u32),
+    DeleteWord(u32),
+    DeleteToLineEnd,
+    DeleteToLineStart,
+    DeleteSelection,
+    YankLine(u32),
+    YankWord(u32),
+    YankSelection,
+    ChangeLine(u32),
+    ChangeWord(u32),
+    ChangeSelection,
+    PasteAfter,
+    PasteBefore,
+    InsertChar(char),
+    ReplaceChar(char),
+    ExtendSelectionLeft,
+    ExtendSelectionRight,
+    ExtendSelectionUp,
+    ExtendSelectionDown,
+    ExecuteCommand(String),
+    Undo,
+    Redo,
+}
+
+/// Movement directions
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum Direction {
+    Up,
+    Down,
+    Left,
+    Right,
+}
+
+/// Motion types for operators
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum Motion {
+    Line,
+    Word,
+    Character,
+    ToLineEnd,
+    ToLineStart,
+}
 
 /// Vim mode states
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
@@ -39,6 +118,51 @@ impl Default for VimState {
 }
 
 impl VimState {
+    pub fn new() -> Self {
+        Self::default()
+    }
+    
+    pub fn mode(&self) -> VimMode {
+        self.mode
+    }
+    
+    pub fn set_mode(&mut self, mode: VimMode) {
+        self.mode = mode;
+    }
+    
+    pub fn set_register(&mut self, register: char, content: String) {
+        self.registers.insert(register, content);
+    }
+    
+    pub fn get_register(&self, register: char) -> Option<String> {
+        self.registers.get(&register).cloned()
+    }
+    
+    pub fn handle_normal_key(&mut self, key: Key) -> Option<VimCommand> {
+        match key {
+            Key::H => Some(VimCommand::Move(Direction::Left)),
+            Key::J => Some(VimCommand::Move(Direction::Down)),
+            Key::K => Some(VimCommand::Move(Direction::Up)),
+            Key::L => Some(VimCommand::Move(Direction::Right)),
+            Key::I => Some(VimCommand::Insert),
+            Key::V => Some(VimCommand::Visual),
+            Key::Escape => Some(VimCommand::Normal),
+            _ => None,
+        }
+    }
+    
+    pub fn handle_visual_key(&mut self, key: Key) -> Option<VimCommand> {
+        match key {
+            Key::H => Some(VimCommand::Move(Direction::Left)),
+            Key::J => Some(VimCommand::Move(Direction::Down)),
+            Key::K => Some(VimCommand::Move(Direction::Up)),
+            Key::L => Some(VimCommand::Move(Direction::Right)),
+            Key::D => Some(VimCommand::Delete(Motion::Character)),
+            Key::Y => Some(VimCommand::Yank(Motion::Character)),
+            Key::Escape => Some(VimCommand::Normal),
+            _ => None,
+        }
+    }
     /// Process a key in vim mode
     pub fn process_key(&mut self, key: char) -> VimCommand {
         match self.mode {
@@ -249,72 +373,3 @@ impl VimState {
     }
 }
 
-/// Vim commands that can be executed
-#[derive(Debug, Clone)]
-pub enum VimCommand {
-    None,
-    
-    // Movement
-    MoveLeft(u32),
-    MoveRight(u32),
-    MoveUp(u32),
-    MoveDown(u32),
-    MoveWordForward(u32),
-    MoveWordBackward(u32),
-    MoveWordEnd(u32),
-    MoveLineStart,
-    MoveLineEnd,
-    GoToLine(usize),
-    GoToFirstLine,
-    
-    // Mode changes
-    EnterInsertMode,
-    ExitInsertMode,
-    AppendMode,
-    EnterVisualMode,
-    EnterVisualLineMode,
-    ExitVisualMode,
-    EnterReplaceMode,
-    ExitReplaceMode,
-    EnterCommandMode,
-    ExitCommandMode,
-    
-    // Editing
-    InsertChar(char),
-    DeleteChar(u32),
-    DeleteLine(u32),
-    DeleteWord(u32),
-    DeleteToLineEnd,
-    DeleteToLineStart,
-    DeleteSelection,
-    ReplaceChar(char),
-    
-    // Line operations
-    OpenLineBelow,
-    OpenLineAbove,
-    
-    // Yank/Paste
-    YankLine(u32),
-    YankWord(u32),
-    YankSelection,
-    PasteAfter,
-    PasteBefore,
-    
-    // Change operations
-    ChangeLine(u32),
-    ChangeWord(u32),
-    ChangeSelection,
-    
-    // Visual mode
-    ExtendSelectionLeft,
-    ExtendSelectionRight,
-    ExtendSelectionUp,
-    ExtendSelectionDown,
-    
-    // Undo/Redo
-    Undo,
-    Redo,
-    
-    // Command execution
-    ExecuteCommand(String),
-}

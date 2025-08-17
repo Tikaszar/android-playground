@@ -28,3 +28,4 @@ tokio = { workspace = true }
 # Editor-specific dependencies
 tree-sitter = "0.20"
 tree-sitter-rust = "0.20"
+nalgebra = { workspace = true }

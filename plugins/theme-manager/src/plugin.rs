@@ -1,56 +1,67 @@
-use playground_plugin::{Plugin, PluginContext};
-use playground_types::{PluginMetadata, Event};
-use uuid::Uuid;
+use playground_plugin::Plugin;
+use playground_types::{
+    PluginMetadata, PluginId, Version, Event,
+    context::Context,
+    render_context::RenderContext,
+    error::PluginError,
+};
+use tracing::info;
 
-pub struct ThememanagerPlugin {
-    id: Uuid,
+pub struct Theme_managerPlugin {
     metadata: PluginMetadata,
+    channel_id: Option<u16>,
 }
 
-impl ThememanagerPlugin {
+impl Theme_managerPlugin {
     pub fn new() -> Self {
         Self {
-            id: Uuid::new_v4(),
             metadata: PluginMetadata {
-                name: "theme-manager".to_string(),
-                version: "0.1.0".to_string(),
-                author: "Playground Team".to_string(),
-                description: "Thememanager plugin".to_string(),
+                id: PluginId("theme-manager".to_string()),
+                name: "Theme Manager".to_string(),
+                version: Version {
+                    major: 0,
+                    minor: 1,
+                    patch: 0,
+                },
             },
+            channel_id: None,
         }
     }
 }
 
-impl Plugin for ThememanagerPlugin {
-    fn id(&self) -> Uuid {
-        self.id
-    }
-
+impl Plugin for Theme_managerPlugin {
     fn metadata(&self) -> &PluginMetadata {
         &self.metadata
     }
 
-    fn on_load(&mut self, _context: &mut PluginContext) -> Result<(), Box<dyn std::error::Error>> {
+    fn on_load(&mut self, _ctx: &mut Context) -> Result<(), PluginError> {
+        info!("theme-manager plugin loading");
+        
+        // Register with networking system for appropriate channels
+        // self.channel_id = Some(CHANNEL_BASE);
+        
+        info!("theme-manager plugin loaded successfully");
         Ok(())
     }
 
-    fn on_unload(&mut self, _context: &mut PluginContext) -> Result<(), Box<dyn std::error::Error>> {
-        Ok(())
+    fn on_unload(&mut self, _ctx: &mut Context) {
+        info!("theme-manager plugin unloading");
     }
 
-    fn update(&mut self, _context: &mut PluginContext, _delta_time: f32) -> Result<(), Box<dyn std::error::Error>> {
-        Ok(())
+    fn update(&mut self, _ctx: &mut Context, _delta_time: f32) {
+        // Update logic here
     }
 
-    fn render(&mut self, _context: &mut PluginContext) -> Result<(), Box<dyn std::error::Error>> {
-        Ok(())
+    fn render(&mut self, _ctx: &mut RenderContext) {
+        // Render logic here
     }
 
-    fn on_event(&mut self, _context: &mut PluginContext, _event: Event) -> Result<(), Box<dyn std::error::Error>> {
-        Ok(())
+    fn on_event(&mut self, _event: &Event) -> bool {
+        // Handle events, return true if handled
+        false
     }
 }
 
-pub fn create() -> ThememanagerPlugin {
-    ThememanagerPlugin::new()
+pub fn create() -> Theme_managerPlugin {
+    Theme_managerPlugin::new()
 }

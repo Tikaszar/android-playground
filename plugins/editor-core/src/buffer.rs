@@ -10,8 +10,45 @@ pub struct TextBuffer {
     pub language: String,
 }
 
+impl Default for TextBuffer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl std::fmt::Display for TextBuffer {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.get_text())
+    }
+}
+
 impl TextBuffer {
-    pub fn new(path: String, content: String) -> Self {
+    pub fn new() -> Self {
+        Self {
+            path: String::new(),
+            content: vec![String::new()],
+            version: 0,
+            modified: false,
+            language: "text".to_string(),
+        }
+    }
+    
+    pub fn from_string(content: String) -> Self {
+        let lines: Vec<String> = if content.is_empty() {
+            vec![String::new()]
+        } else {
+            content.lines().map(|s| s.to_string()).collect()
+        };
+        
+        Self {
+            path: String::new(),
+            content: lines,
+            version: 0,
+            modified: false,
+            language: "text".to_string(),
+        }
+    }
+    pub fn with_path(path: String, content: String) -> Self {
         let lines: Vec<String> = if content.is_empty() {
             vec![String::new()]
         } else {
@@ -35,8 +72,70 @@ impl TextBuffer {
     }
     
     /// Get a line by index
-    pub fn get_line(&self, line: usize) -> Option<&str> {
-        self.content.get(line).map(|s| s.as_str())
+    pub fn get_line(&self, line: usize) -> &str {
+        self.content.get(line).map(|s| s.as_str()).unwrap_or("")
+    }
+    
+    /// Get line length
+    pub fn line_length(&self, line: usize) -> usize {
+        self.content.get(line).map(|s| s.len()).unwrap_or(0)
+    }
+    
+    /// Delete a line
+    pub fn delete_line(&mut self, line: usize) {
+        if line < self.content.len() {
+            self.content.remove(line);
+            if self.content.is_empty() {
+                self.content.push(String::new());
+            }
+            self.version += 1;
+            self.modified = true;
+        }
+    }
+    
+    /// Insert a line
+    pub fn insert_line(&mut self, line: usize, content: String) {
+        if line <= self.content.len() {
+            self.content.insert(line, content);
+            self.version += 1;
+            self.modified = true;
+        }
+    }
+    
+    /// Insert a character at position
+    pub fn insert_char(&mut self, line: usize, column: usize, ch: char) {
+        if line < self.content.len() {
+            let line_content = &mut self.content[line];
+            if column <= line_content.len() {
+                line_content.insert(column, ch);
+                self.version += 1;
+                self.modified = true;
+            }
+        }
+    }
+    
+    /// Delete a character at position
+    pub fn delete_char(&mut self, line: usize, column: usize) {
+        if line < self.content.len() {
+            let line_content = &mut self.content[line];
+            if column < line_content.len() {
+                line_content.remove(column);
+                self.version += 1;
+                self.modified = true;
+            }
+        }
+    }
+    
+    /// Split a line at position
+    pub fn split_line(&mut self, line: usize, column: usize) {
+        if line < self.content.len() {
+            let current_line = self.content[line].clone();
+            let (before, after) = current_line.split_at(column.min(current_line.len()));
+            self.content[line] = before.to_string();
+            self.content.insert(line + 1, after.to_string());
+            self.version += 1;
+            self.modified = true;
+        }
     }
     
     /// Insert text at position

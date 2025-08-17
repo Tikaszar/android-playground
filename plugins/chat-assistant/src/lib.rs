@@ -1,4 +1,5 @@
 mod plugin;
+mod chat_view;
 
 pub use plugin::*;
 
