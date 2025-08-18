@@ -1,6 +1,7 @@
 use chrono::{DateTime, Utc};
 use dashmap::DashMap;
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use std::sync::Arc;
 use tokio::sync::mpsc;
 use uuid::Uuid;
@@ -66,12 +67,27 @@ impl Session {
 #[derive(Clone)]
 pub struct SessionManager {
     sessions: Arc<DashMap<SessionId, Session>>,
+    sse_senders: Arc<DashMap<SessionId, mpsc::UnboundedSender<Value>>>,
 }
 
 impl SessionManager {
     pub fn new() -> Self {
         Self {
             sessions: Arc::new(DashMap::new()),
+            sse_senders: Arc::new(DashMap::new()),
+        }
+    }
+    
+    pub fn register_sse_sender(&self, session_id: String, sender: mpsc::UnboundedSender<Value>) {
+        self.sse_senders.insert(session_id, sender);
+    }
+    
+    pub fn send_to_sse(&self, session_id: &str, message: Value) -> Result<(), String> {
+        if let Some(sender) = self.sse_senders.get(session_id) {
+            sender.send(message)
+                .map_err(|_| "Failed to send SSE message".to_string())
+        } else {
+            Err(format!("SSE sender not found for session {}", session_id))
         }
     }
 

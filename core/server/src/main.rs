@@ -13,6 +13,7 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 use tower_http::cors::CorsLayer;
 use tower_http::services::ServeDir;
+use tower_http::trace::TraceLayer;
 use tracing_subscriber;
 
 use handlers::{list_plugins, reload_plugin, root};
@@ -37,6 +38,7 @@ async fn main() -> anyhow::Result<()> {
         .nest_service("/test", ServeDir::new("."))
         .nest("/mcp", mcp_router)  // Mount MCP endpoints under /mcp
         .layer(CorsLayer::permissive())
+        .layer(TraceLayer::new_for_http())
         .with_state(ws_state);
 
     let addr = SocketAddr::from(([127, 0, 0, 1], 8080));

@@ -1,7 +1,9 @@
 pub mod error;
+pub mod jsonrpc;
 pub mod protocol;
 pub mod server;
 pub mod session;
+pub mod sse_handler;
 
 pub use error::{McpError, McpResult};
 pub use protocol::{McpMessage, McpRequest, McpResponse, ToolCall, ToolResult};

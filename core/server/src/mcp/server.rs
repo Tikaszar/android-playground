@@ -14,8 +14,8 @@ use std::{convert::Infallible, sync::Arc, time::Duration};
 use tokio::sync::mpsc;
 use tokio_stream::wrappers::UnboundedReceiverStream;
 use tokio_stream::StreamExt;
-use tracing::{info, debug};
-use serde_json::Value;
+use tracing::{info, debug, error};
+use serde_json::{json, Value};
 
 use crate::{
     packet::{Packet, Priority},
@@ -24,6 +24,8 @@ use crate::{
 use crate::mcp::{
     protocol::{McpMessage, McpRequest, SseEvent},
     session::SessionManager,
+    sse_handler,
+    jsonrpc::{JsonRpcRequest, JsonRpcResponse},
 };
 
 /// MCP server state shared across handlers
@@ -58,9 +60,9 @@ impl McpServer {
         });
 
         Router::new()
-            // SSE endpoints for LLM clients to connect
-            .route("/sse", get(sse_handler))
-            .route("/sse/{session_id}", get(sse_handler_with_session))
+            // SSE endpoints for LLM clients to connect (GET for SSE, POST for JSON-RPC)
+            .route("/sse", axum::routing::get(sse_handler).post(handle_jsonrpc_request))
+            .route("/sse/{session_id}", axum::routing::get(sse_handler_with_session).post(handle_jsonrpc_request))
             
             // HTTP endpoints for LLM responses
             .route("/message", post(handle_message))
@@ -92,80 +94,61 @@ impl Default for McpServer {
 async fn sse_handler(
     State(ws_state): State<Arc<WebSocketState>>,
     axum::extract::Extension(mcp_state): axum::extract::Extension<Arc<McpState>>,
-) -> Sse<impl Stream<Item = Result<Event, Infallible>>> {
-    let (session_id, rx) = mcp_state.session_manager.create_session(None);
-    info!("New MCP client connected: {}", session_id);
-    
-    // Allocate a channel for this LLM session (2002-2999)
-    let channel_id = allocate_llm_channel(&session_id);
-    let channel_name = format!("mcp-session-{}", session_id);
-    let _ = ws_state.channel_manager.register_plugin(channel_name).await;
-    
-    // Notify plugins that a new LLM connected
-    publish_mcp_event(
-        ws_state.clone(),
-        "llm_connected",
-        serde_json::json!({
-            "session_id": session_id.clone(),
-            "channel_id": channel_id,
-        }),
-    ).await;
-    
-    sse_stream(session_id, rx, ws_state, mcp_state)
+) -> impl IntoResponse {
+    sse_handler::handle_sse_connection(State(ws_state), mcp_state.session_manager.clone()).await
 }
 
 /// SSE handler with specific session ID
 async fn sse_handler_with_session(
-    Path(session_id): Path<String>,
+    Path(_session_id): Path<String>,
     State(ws_state): State<Arc<WebSocketState>>,
     axum::extract::Extension(mcp_state): axum::extract::Extension<Arc<McpState>>,
-) -> Sse<impl Stream<Item = Result<Event, Infallible>>> {
-    let (_, rx) = mcp_state.session_manager.create_session(Some(session_id.clone()));
-    info!("MCP client reconnected: {}", session_id);
-    
-    // Allocate a channel for this LLM session
-    let channel_id = allocate_llm_channel(&session_id);
-    let channel_name = format!("mcp-session-{}", session_id);
-    let _ = ws_state.channel_manager.register_plugin(channel_name).await;
-    
-    // Notify plugins that an LLM reconnected
-    publish_mcp_event(
-        ws_state.clone(),
-        "llm_reconnected",
-        serde_json::json!({
-            "session_id": session_id.clone(),
-            "channel_id": channel_id,
-        }),
-    ).await;
-    
-    sse_stream(session_id, rx, ws_state, mcp_state)
+) -> impl IntoResponse {
+    // For now, just create a new session - can implement reconnection logic later
+    sse_handler::handle_sse_connection(State(ws_state), mcp_state.session_manager.clone()).await
 }
 
-/// Create SSE stream for a session
-fn sse_stream(
-    session_id: String,
-    rx: mpsc::UnboundedReceiver<McpMessage>,
-    _ws_state: Arc<WebSocketState>,
-    _mcp_state: Arc<McpState>,
-) -> Sse<impl Stream<Item = Result<Event, Infallible>>> {
-    // Convert McpMessage stream to SseEvent stream
-    let stream = UnboundedReceiverStream::new(rx)
-        .map(move |message| {
-            // Convert McpMessage to SseEvent
-            let sse_event = SseEvent::from_message(message, session_id.clone());
-            
-            // Convert to axum Event
-            Ok(Event::default()
-                .event(sse_event.event)
-                .data(sse_event.data)
-                .id(sse_event.id.unwrap_or_default()))
-        });
-
-    Sse::new(stream).keep_alive(
-        KeepAlive::new()
-            .interval(Duration::from_secs(30))
-            .text("heartbeat"),
-    )
+/// Handle JSON-RPC requests from MCP clients
+async fn handle_jsonrpc_request(
+    State(ws_state): State<Arc<WebSocketState>>,
+    axum::extract::Extension(mcp_state): axum::extract::Extension<Arc<McpState>>,
+    body: String,
+) -> impl IntoResponse {
+    info!("Received POST to /mcp/sse with body: {}", body);
+    
+    // Try to parse as JSON-RPC request
+    let request: JsonRpcRequest = match serde_json::from_str(&body) {
+        Ok(req) => req,
+        Err(e) => {
+            error!("Failed to parse JSON-RPC request: {}", e);
+            return Json(JsonRpcResponse::error(
+                None,
+                -32700,
+                "Parse error".to_string(),
+                Some(json!({"error": e.to_string()}))
+            ));
+        }
+    };
+    
+    debug!("Parsed JSON-RPC request: method={}", request.method);
+    
+    // Process the request using our SSE handler's logic
+    // For now, we'll use a simple session ID - in production, this should be tracked properly
+    let session_id = "default";
+    let response = sse_handler::process_jsonrpc_request(
+        request,
+        session_id,
+        ws_state,
+        mcp_state.session_manager.clone(),
+    ).await;
+    
+    // Send response through SSE channel, not as HTTP response
+    if let Err(e) = mcp_state.session_manager.send_to_sse(session_id, json!(response)) {
+        error!("Failed to send SSE response: {}", e);
+    }
+    
+    // Return empty HTTP response (204 No Content) since we sent via SSE
+    axum::http::StatusCode::NO_CONTENT
 }
 
 /// Handle messages from LLM clients
@@ -479,14 +462,6 @@ async fn publish_mcp_event(
     );
     
     ws_state.batcher.queue_packet(packet).await;
-}
-
-/// Allocate a channel for an LLM session
-fn allocate_llm_channel(session_id: &str) -> u16 {
-    // Channels 2002-2999 for individual LLM sessions
-    // Simple hash-based allocation
-    let hash = session_id.bytes().fold(0u32, |acc, b| acc.wrapping_add(b as u32));
-    2002 + (hash % 998) as u16
 }
 
 // Request types

@@ -2,9 +2,98 @@
 
 This file captures the current development session context for seamless continuation in future sessions.
 
-## Current Session
+## Current Session - 2025-08-18
 
-**Date**: 2025-08-17  
+**Focus**: MCP SSE Authentication Fix
+**Status**: 🚧 IN PROGRESS - Fixing SSE/JSON-RPC communication
+
+### Session Objective
+Fix the "Dynamic client registration failed: HTTP 404" error when Claude Code tries to connect to our MCP server via SSE transport.
+
+### Issue Analysis
+1. **SSE Connection Works**: Claude Code successfully connects to `/mcp/sse` endpoint
+2. **Problem**: Claude Code expects bidirectional communication:
+   - GET `/mcp/sse` for SSE event stream (server → client)
+   - POST `/mcp/sse` for JSON-RPC requests (client → server)
+3. **Current Bug**: When handling POST requests, we're trying to return HTTP response instead of sending via SSE channel
+
+### Implementation Status
+
+#### ✅ Completed
+- Created JSON-RPC 2.0 structures in `mcp/jsonrpc.rs`
+- Implemented SSE handler in `mcp/sse_handler.rs` with proper JSON-RPC processing
+- Added POST handler to same `/mcp/sse` route for bidirectional communication
+- Configured `.mcp.json` with correct SSE transport format
+- Added HTTP request logging with TraceLayer for debugging
+
+#### 🚧 Current Issue
+- **Compilation Error**: Type mismatch in `handle_jsonrpc_request`
+- Trying to return `StatusCode::NO_CONTENT` but function expects `Json<JsonRpcResponse>`
+- Need to fix return type or change approach
+
+#### Code Changes This Session
+1. **Fixed `.mcp.json`**:
+   ```json
+   {
+     "mcpServers": {
+       "android-playground": {
+         "type": "sse",
+         "url": "http://localhost:8080/mcp/sse"
+       }
+     }
+   }
+   ```
+
+2. **Updated `mcp/server.rs`**:
+   - Added `.post(handle_jsonrpc_request)` to SSE route
+   - Modified `handle_jsonrpc_request` to send responses via SSE channel
+   - Added logging to debug request/response flow
+
+3. **Updated `mcp/sse_handler.rs`**:
+   - Removed initial notification (Claude doesn't expect it)
+   - Set up clean SSE stream for server-to-client events
+
+### Key Insights
+- MCP over SSE is **NOT** standard request/response
+- It's an event stream (SSE) for server→client, HTTP POST for client→server
+- Responses to POST requests should go through SSE channel, not HTTP response
+- Need proper session tracking to associate POST requests with SSE connections
+
+### Next Session Tasks
+1. **Fix Compilation Error**: 
+   - Change `handle_jsonrpc_request` return type
+   - Or create separate handler for SSE POST requests
+   
+2. **Implement Session Tracking**:
+   - Associate SSE connections with session IDs
+   - Route POST responses to correct SSE channel
+   - Consider using headers or cookies for session correlation
+
+3. **Test Full Flow**:
+   - Claude Code connects via SSE
+   - Claude POSTs `initialize` request
+   - Server sends response via SSE channel
+   - Verify tools work (`tools/list`, `tools/call`)
+
+### Files Modified
+- `/core/server/src/mcp/server.rs` - Added POST handler and SSE response routing
+- `/core/server/src/mcp/sse_handler.rs` - Removed initial notification
+- `/core/server/src/mcp/jsonrpc.rs` - JSON-RPC 2.0 protocol implementation
+- `/core/server/src/main.rs` - Added TraceLayer for HTTP logging
+- `/core/server/Cargo.toml` - Added "trace" feature to tower-http
+- `/.mcp.json` - Fixed SSE transport configuration
+
+### Debug Information
+Server logs show:
+```
+MCP SSE client connected: [uuid]
+GET /mcp/sse - 200 OK
+```
+
+But no POST requests are logged, suggesting Claude is waiting for something from SSE first or the POST is failing before our handler.
+
+## Previous Session - 2025-08-17
+
 **Focus**: MCP Architecture Refactoring & IDE Testing
 **Status**: ✅ COMPLETED - MCP refactored to channel-based messaging
 
@@ -184,7 +273,7 @@ Established complete WebSocket architecture (NO WebRTC):
 ## Git Status
 
 - Branch: main
-- Last commit: "docs: Update architecture to WebSocket-only networking with 4-layer system"
+- Last commit: "docs: Update MCP documentation for channel-based architecture"
 - Documentation fully updated
 - Implementation needs to follow
 
@@ -883,9 +972,10 @@ Successfully integrated MCP server into core/server for universal LLM support:
 - Removed `core/mcp` as separate crate (integrated into core/server)
 
 ### Next Session Starting Points
-1. **Test MCP with Claude Code** - Connect actual Claude Code instance
-2. **Implement terminal plugin** - For non-MCP terminal needs
-3. **Enhance chat-assistant** - Full MCP client integration
-4. **Test multiple LLMs** - Connect Claude Code, GPT, etc. simultaneously
-5. **Implement remaining IDE plugins** - lsp-client, debugger, version-control
-6. **Begin game plugin implementations** - inventory, combat, etc.
+1. **Fix MCP SSE Connection** - Complete the SSE/JSON-RPC implementation
+2. **Test MCP with Claude Code** - Connect actual Claude Code instance
+3. **Implement terminal plugin** - For non-MCP terminal needs
+4. **Enhance chat-assistant** - Full MCP client integration
+5. **Test multiple LLMs** - Connect Claude Code, GPT, etc. simultaneously
+6. **Implement remaining IDE plugins** - lsp-client, debugger, version-control
+7. **Begin game plugin implementations** - inventory, combat, etc.
