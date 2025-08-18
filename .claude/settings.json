@@ -1,11 +1,25 @@
 {
-  "mcpServers": {
-    "android-playground": {
-      "command": "node",
-      "args": ["/data/data/com.termux/files/home/android-playground/mcp-bridge.js"],
-      "env": {
-        "MCP_SERVER_URL": "http://localhost:8080/mcp"
-      }
-    }
-  }
+  "permissions": {
+    "allow": [
+      "Bash(git push:*)",
+      "Bash(cargo build:*)",
+      "Bash(cargo check:*)",
+      "Bash(grep:*)",
+      "Bash(cargo update:*)",
+      "Bash(git add:*)",
+      "Bash(mkdir:*)",
+      "Bash(find:*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)",
+      "Bash(mv:*)",
+      "Bash(true)",
+      "Bash(rm:*)",
+      "Bash(do)",
+      "Bash(sed:*)",
+      "Bash(done)",
+      "Bash(cp:*)"
+    ],
+    "defaultMode": "acceptEdits"
+  },
+  "enableAllProjectMcpServers": true
 }

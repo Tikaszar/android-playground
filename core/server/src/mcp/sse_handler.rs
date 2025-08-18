@@ -29,8 +29,28 @@ pub struct McpSseState {
 pub async fn handle_sse_connection(
     State(ws_state): State<Arc<WebSocketState>>,
     session_manager: Arc<SessionManager>,
-) -> Sse<impl Stream<Item = Result<Event, Infallible>>> {
-    let session_id = Uuid::new_v4().to_string();
+    headers: axum::http::HeaderMap,
+) -> impl IntoResponse {
+    // Check for Accept header
+    if let Some(accept) = headers.get("accept") {
+        let accept_str = accept.to_str().unwrap_or("");
+        if !accept_str.contains("text/event-stream") {
+            return (axum::http::StatusCode::NOT_ACCEPTABLE, "Accept header must include text/event-stream").into_response();
+        }
+    }
+    
+    // Check for existing session ID from header (for reconnection)
+    let session_id = headers
+        .get("mcp-session-id")
+        .and_then(|v| v.to_str().ok())
+        .map(|s| s.to_string())
+        .unwrap_or_else(|| {
+            // No session yet - will be created during initialize
+            let id = Uuid::new_v4().to_string();
+            info!("New SSE connection, temporary session: {}", id);
+            id
+        });
+    
     let (tx, rx) = mpsc::unbounded_channel();
     
     info!("MCP SSE client connected: {}", session_id);
@@ -38,11 +58,11 @@ pub async fn handle_sse_connection(
     // Store the sender in session manager for bidirectional communication
     session_manager.register_sse_sender(session_id.clone(), tx.clone());
     
-    // Don't send anything initially - wait for Claude to POST initialize request
+    // Don't send session ID - it will be returned in initialize response per spec
     
     // Create SSE stream with JSON-RPC 2.0 messages
     let stream = UnboundedReceiverStream::new(rx)
-        .map(move |message| {
+        .map(move |message| -> Result<Event, Infallible> {
             // Convert JSON-RPC message to SSE event
             // Compact JSON serialization to avoid newlines
             let json_string = serde_json::to_string(&message).unwrap_or_else(|_| "{}".to_string());
@@ -51,11 +71,21 @@ pub async fn handle_sse_connection(
                 .data(json_string))
         });
 
-    Sse::new(stream).keep_alive(
+    // Return SSE response with proper headers
+    let sse = Sse::new(stream).keep_alive(
         KeepAlive::new()
             .interval(Duration::from_secs(30))
-            .text("{}"),
-    )
+            .text(":"),  // Standard SSE keepalive comment (no newline)
+    );
+    
+    // Set proper headers per MCP spec
+    (
+        [
+            (axum::http::header::CONTENT_TYPE, "text/event-stream"),
+            (axum::http::header::CACHE_CONTROL, "no-cache"),
+        ],
+        sse,
+    ).into_response()
 }
 
 /// Process incoming JSON-RPC 2.0 request from SSE client
@@ -76,6 +106,12 @@ pub async fn process_jsonrpc_request(
                 "version": "0.0.0"
             }));
             
+            // Generate a proper session ID for this client
+            let new_session_id = format!("session-{}", Uuid::new_v4());
+            
+            // Update the session manager with the proper session ID
+            session_manager.update_session_id(session_id, new_session_id.clone());
+            
             let result = json!({
                 "protocolVersion": "1.0.0",
                 "serverInfo": {
@@ -94,7 +130,8 @@ pub async fn process_jsonrpc_request(
                         "listChanged": false
                     }),
                     "logging": json!({})
-                }
+                },
+                "sessionId": new_session_id
             });
             
             JsonRpcResponse::success(request.id, result)

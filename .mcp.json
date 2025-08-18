@@ -1,8 +1,11 @@
 {
   "mcpServers": {
     "android-playground": {
-      "type": "sse",
-      "url": "http://localhost:8080/mcp/sse"
+      "type": "http",
+      "url": "http://localhost:8080/mcp",
+      "headers": {
+        "Accept": "application/json, text/event-stream"
+      }
     }
   }
 }

@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::sync::Arc;
 use tokio::sync::mpsc;
+use tracing::info;
 use uuid::Uuid;
 
 use crate::mcp::protocol::{ClientInfo, McpMessage};
@@ -80,6 +81,19 @@ impl SessionManager {
     
     pub fn register_sse_sender(&self, session_id: String, sender: mpsc::UnboundedSender<Value>) {
         self.sse_senders.insert(session_id, sender);
+    }
+    
+    pub fn get_last_sse_session(&self) -> Option<String> {
+        // Get the most recently added SSE session
+        self.sse_senders.iter().next().map(|entry| entry.key().clone())
+    }
+    
+    pub fn update_session_id(&self, old_id: &str, new_id: String) {
+        // Move the SSE sender from old ID to new ID
+        if let Some((_, sender)) = self.sse_senders.remove(old_id) {
+            self.sse_senders.insert(new_id.clone(), sender);
+            info!("Updated session ID from {} to {}", old_id, new_id);
+        }
     }
     
     pub fn send_to_sse(&self, session_id: &str, message: Value) -> Result<(), String> {
