@@ -41,6 +41,9 @@ members = [
     "plugins/guild",
     "plugins/progression",
     "plugins/social",
+    
+    # Infrastructure plugins
+    "plugins/ui-framework",
 ]
 
 [workspace.package]

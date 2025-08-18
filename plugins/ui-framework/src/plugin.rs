@@ -60,7 +60,7 @@ impl Plugin for UiFrameworkPlugin {
         &self.metadata
     }
 
-    fn on_load(&mut self, context: &mut Context) -> Result<(), PluginError> {
+    fn on_load(&mut self, ctx: &mut Context) -> Result<(), PluginError> {
         info!("UI Framework Plugin loading...");
         
         // Register for channel 1200-1209
@@ -68,7 +68,7 @@ impl Plugin for UiFrameworkPlugin {
         self.channel_id = Some(channel_id);
         
         // TODO: Register with channel manager when Context provides access
-        // context.channel_manager.register(channel_id, "ui-framework")?;
+        // ctx.channel_manager.register(channel_id, "ui-framework")?;
         
         info!("UI Framework Plugin registered on channel {}", channel_id);
         
@@ -79,7 +79,7 @@ impl Plugin for UiFrameworkPlugin {
         Ok(())
     }
 
-    fn on_unload(&mut self, _context: &mut Context) -> Result<(), PluginError> {
+    fn on_unload(&mut self, _ctx: &mut Context) {
         info!("UI Framework Plugin unloading...");
         
         // Cleanup resources
@@ -87,40 +87,36 @@ impl Plugin for UiFrameworkPlugin {
             debug!("Unregistering from channel {}", channel_id);
             // TODO: Unregister from channel manager
         }
-        
-        Ok(())
     }
 
-    fn update(&mut self, context: &mut Context, _delta_time: f32) -> Result<(), PluginError> {
+    fn update(&mut self, _ctx: &mut Context, _delta_time: f32) {
         // Process any pending UI updates
         // This is called every frame
         
         // Check for MCP messages on our channel
-        if let Some(channel_id) = self.channel_id {
+        if let Some(_channel_id) = self.channel_id {
             // TODO: Read messages from channel when Context provides access
-            // let messages = context.channel_manager.read_channel(channel_id)?;
+            // let messages = ctx.channel_manager.read_channel(channel_id)?;
             // for message in messages {
             //     self.mcp_handler.handle_message(message)?;
             // }
         }
-        
-        Ok(())
     }
 
-    fn render(&mut self, _context: &mut RenderContext) -> Result<(), PluginError> {
+    fn render(&mut self, _ctx: &mut RenderContext) {
         // UI Framework doesn't render directly - it sends commands to browser
-        Ok(())
     }
 
-    fn on_event(&mut self, _context: &mut Context, event: Event) -> Result<bool, PluginError> {
-        match event {
-            Event::Custom(data) => {
-                // Handle custom events from other plugins or MCP
-                debug!("Received custom event: {:?}", data);
-                // TODO: Parse and handle the event
-                Ok(true)
-            }
-            _ => Ok(false),
+    fn on_event(&mut self, event: &Event) -> bool {
+        // Handle events from other plugins or MCP
+        debug!("Received event: {} with data: {:?}", event.id, event.data);
+        
+        // Check if this is an MCP event
+        if event.id.starts_with("mcp:") {
+            // TODO: Parse and handle MCP events
+            true
+        } else {
+            false
         }
     }
 }

@@ -20,7 +20,7 @@ serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 tokio = { version = "1.42", features = ["full"] }
 tracing = "0.1"
-uuid = { version = "5.1", features = ["v4", "serde"] }
+uuid = { version = "1.5", features = ["v4", "serde"] }
 bytes = "1.5"
-dashmap = "6.1"
+dashmap = "5.5"
 chrono = { version = "0.4", features = ["serde"] }
