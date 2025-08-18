@@ -12,8 +12,10 @@ playground-types = { path = "../../core/types" }
 playground-ui = { path = "../../systems/ui" }
 playground-logic = { path = "../../systems/logic" }
 playground-networking = { path = "../../systems/networking" }
+playground-rendering = { path = "../../systems/rendering" }
 
 anyhow = "1.0"
+async-trait = "0.1"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 tokio = { version = "1.42", features = ["full"] }
@@ -21,3 +23,4 @@ tracing = "0.1"
 uuid = { version = "5.1", features = ["v4", "serde"] }
 bytes = "1.5"
 dashmap = "6.1"
+chrono = { version = "0.4", features = ["serde"] }

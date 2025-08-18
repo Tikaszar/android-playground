@@ -223,9 +223,9 @@ Plugins are reusable feature modules compiled as `.so` files and loaded dynamica
 - **ECS Components** (using systems/logic):
   - ChannelComponent: Chat channels (Direct, Group, System)
   - MessageComponent: Chat messages with inline components
-  - InlineEditor: Expandable code editors in bubbles
-  - InlineFileBrowser: File navigation in chat
-  - InlineTerminal: Terminal sessions in chat
+  - InlineEditor: Expandable code editors in bubbles with vim mode
+  - InlineFileBrowser: File navigation in chat with git status
+  - InlineTerminal: Terminal sessions in chat with Termux integration
   - AgentComponent: LLM agent state and permissions
   - TaskQueueComponent: Orchestrator task assignments
 - **Bubble States**:
@@ -236,6 +236,13 @@ Plugins are reusable feature modules compiled as `.so` files and loaded dynamica
   - Receives MCP tool calls via systems/networking
   - Updates browser via WebSocket channel 10
   - Manages agent context switching via MCP execute_command tool
+- **Implementation Plan**:
+  - Phase 1: Core chat infrastructure with ECS components
+  - Phase 2: Inline components (Editor, Browser, Terminal)
+  - Phase 3: MCP tool handlers and channel registration
+  - Phase 4: Agent orchestration with task queue
+  - Phase 5: Browser UI with Discord-like theme
+  - Phase 6: Testing and optimization
 
 ### Architectural Rules
 1. **Apps** manage and coordinate collections of Plugins

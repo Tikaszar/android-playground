@@ -140,26 +140,89 @@ Design a Conversational IDE with Discord-style chat interface and multi-agent or
    - Creates new conversation at 35-50% context usage
    - Preserves memory across context resets
 
-### Next Session Implementation Tasks
-1. **Implement Core Chat Infrastructure**:
-   - Channel management system
-   - Message components with ECS
-   - Server-side persistence
-   
-2. **Create Inline Components**:
-   - InlineEditor with vim mode
-   - InlineFileBrowser with tree view
-   - InlineTerminal with shell integration
-   
-3. **Wire Up MCP Tools**:
-   - Route tools to create chat bubbles
-   - Implement execute_command for context switching
-   - Add agent status management
-   
-4. **Build Task Queue**:
-   - Server-side queue management
-   - Agent availability tracking
-   - Automatic context switching
+### UI Framework Plugin Implementation Plan
+
+#### Phase 1: Core Infrastructure (First Priority)
+**ECS Components** (`plugins/ui-framework/src/components.rs`):
+- `ChannelComponent`: Discord-style channels (Direct/Group/System)
+- `MessageComponent`: Chat messages with bubble states
+- `InlineEditor`: Code editing in bubbles with vim mode
+- `InlineFileBrowser`: File navigation in chat
+- `InlineTerminal`: Shell sessions in chat
+- `AgentComponent`: LLM agent state and permissions
+- `TaskQueueComponent`: Task assignments and tracking
+
+**Key Systems**:
+- Channel management with participant tracking
+- Message routing and persistence
+- Bubble state management (Collapsed/Compressed/Expanded)
+
+#### Phase 2: Inline Components
+**InlineEditor** features:
+- Integration with editor-core plugin
+- Vim mode support from existing implementation
+- Syntax highlighting via tree-sitter
+- Diff view for changes
+
+**InlineFileBrowser** features:
+- Tree view with expand/collapse
+- Git status indicators
+- Context menu actions
+
+**InlineTerminal** features:
+- Direct Termux process connection
+- ANSI color support
+- Command history
+
+#### Phase 3: MCP Integration
+**Tool Handlers** (`plugins/ui-framework/src/mcp_handlers.rs`):
+- `show_file` → Create editor bubble
+- `update_editor` → Update editor content
+- `show_terminal_output` → Create terminal bubble
+- `execute_command` → Context switching for agents
+- Register on channels 1200-1209
+- Forward results via channel 1201
+
+#### Phase 4: Agent Orchestration
+**Task Queue System**:
+- Pending/Active/Completed task tracking
+- Agent assignment logic
+- Automatic context switching via git worktrees
+
+**Agent Management**:
+- Status tracking (Busy/Idle/Waiting)
+- Worktree management per agent
+- Context file handling (CONTEXT.md, GOALS_*.md)
+
+#### Phase 5: Browser UI
+**HTML/CSS** (`test/conversational-ide.html`):
+- Discord-like dark theme
+- Chat container with message bubbles
+- Inline component rendering
+- Channel list sidebar
+
+**JavaScript Client** (`test/conversational-ide.js`):
+- WebSocket connection to channel 10
+- Message rendering with inline components
+- Bubble state toggling
+- Event handling
+
+### Implementation Order
+1. Week 1: Core chat infrastructure with ECS
+2. Week 2: Inline components (Editor, Browser, Terminal)
+3. Week 3: MCP integration and tool handlers
+4. Week 4: Agent orchestration system
+5. Week 5: Browser UI implementation
+6. Week 6: Testing and optimization
+
+### Success Criteria
+- Discord-style chat interface functional
+- Multiple LLMs can collaborate
+- Inline components fully working
+- Context switching seamless
+- Task queue distributes work properly
+- < 100ms UI update latency
+- NO unsafe code maintained
 
 ### Files Modified
 - `/core/server/src/mcp/server.rs` - Added POST handler and SSE response routing
