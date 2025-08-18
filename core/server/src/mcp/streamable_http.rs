@@ -89,7 +89,17 @@ async fn handle_get(
     let (tx, rx) = mpsc::unbounded_channel::<Value>();
     
     // Register the sender
-    session_manager.register_sse_sender(session_id.clone(), tx);
+    session_manager.register_sse_sender(session_id.clone(), tx.clone());
+
+    // Send initial "endpoint-ready" message per streamable-http spec
+    // This tells the client that the SSE connection is established and ready
+    info!("  Sending endpoint-ready message");
+    let ready_msg = json!({
+        "type": "endpoint-ready"
+    });
+    if let Err(e) = tx.send(ready_msg) {
+        error!("  Failed to send endpoint-ready: {}", e);
+    }
 
     // Create SSE stream
     let stream = UnboundedReceiverStream::new(rx)
@@ -196,8 +206,28 @@ async fn handle_post(
             }));
             info!("  Client info: {:?}", client_info);
             
+            // Send MCP connected status to the browser
+            let connected_event = json!({
+                "type": "llm_connected",
+                "data": {
+                    "session_id": &new_session_id,
+                    "client_info": client_info.clone()
+                }
+            });
+            
+            let payload = serde_json::to_vec(&connected_event).unwrap_or_default();
+            let packet = crate::packet::Packet {
+                channel_id: 1050,
+                packet_type: 2, // Status update type
+                priority: crate::packet::Priority::High,
+                payload: bytes::Bytes::from(payload),
+            };
+            
+            ws_state.batcher.queue_packet(packet).await;
+            info!("  MCP connected status sent to channel 1050");
+            
             JsonRpcResponse::success(request.id, json!({
-                "protocolVersion": "1.0.0",
+                "protocolVersion": "2025-06-18",
                 "serverInfo": {
                     "name": "android-playground",
                     "version": "0.1.0"
@@ -228,9 +258,31 @@ async fn handle_post(
         "tools/call" => {
             let params = request.params.unwrap_or(json!({}));
             let tool_name = params.get("name").and_then(|v| v.as_str()).unwrap_or("");
-            let _arguments = params.get("arguments").cloned().unwrap_or(json!({}));
+            let arguments = params.get("arguments").cloned().unwrap_or(json!({}));
             
-            // TODO: Forward to plugins via channels
+            info!("  Forwarding tool call '{}' to channel 2000", tool_name);
+            
+            // Forward tool call to plugins via channel 2000
+            let tool_call_event = json!({
+                "type": "tool_call",
+                "session_id": session_id.as_deref().unwrap_or("unknown"),
+                "tool": tool_name,
+                "arguments": arguments,
+            });
+            
+            // Create a packet for channel 1050 (chat-assistant channel)
+            let payload = serde_json::to_vec(&tool_call_event).unwrap_or_default();
+            let packet = crate::packet::Packet {
+                channel_id: 1050,
+                packet_type: 1, // Tool call type
+                priority: crate::packet::Priority::High,
+                payload: bytes::Bytes::from(payload),
+            };
+            
+            // Queue the packet to be sent
+            ws_state.batcher.queue_packet(packet).await;
+            info!("  Tool call queued for channel 1050");
+            
             JsonRpcResponse::success(request.id, json!({
                 "content": [{
                     "type": "text",

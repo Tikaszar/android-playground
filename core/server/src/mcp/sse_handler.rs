@@ -113,7 +113,7 @@ pub async fn process_jsonrpc_request(
             session_manager.update_session_id(session_id, new_session_id.clone());
             
             let result = json!({
-                "protocolVersion": "1.0.0",
+                "protocolVersion": "2025-06-18",
                 "serverInfo": {
                     "name": "android-playground",
                     "version": "0.1.0"
