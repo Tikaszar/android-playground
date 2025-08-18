@@ -212,22 +212,30 @@ Plugins are reusable feature modules compiled as `.so` files and loaded dynamica
 
 #### Special Infrastructure Plugins
 
-**plugins/ui-framework** (NEW)
-- **Purpose**: Bridge between MCP tools and browser UI
+**plugins/ui-framework** (CONVERSATIONAL IDE CORE)
+- **Purpose**: Discord-style Conversational IDE with multi-agent orchestration
 - **Responsibilities**:
   - Listen for MCP tool calls on channel 1200-1209
-  - Manage IDE-wide UI state using systems/logic ECS
-  - Coordinate UI updates from all other plugins
-  - Send rendering commands to browser via systems/ui
-- **ECS Components**:
-  - PanelComponent: Panel state (open/closed, position, size)
-  - LayoutComponent: Docking layout configuration
-  - FocusComponent: Currently focused panel/element
-  - TabComponent: Tab management within panels
+  - Manage chat channels (group/DM) for multi-LLM collaboration
+  - Coordinate inline UI components (editors, browsers, terminals in chat)
+  - Server-side bubble state management and persistence
+  - Agent orchestration and task queue management
+- **ECS Components** (using systems/logic):
+  - ChannelComponent: Chat channels (Direct, Group, System)
+  - MessageComponent: Chat messages with inline components
+  - InlineEditor: Expandable code editors in bubbles
+  - InlineFileBrowser: File navigation in chat
+  - InlineTerminal: Terminal sessions in chat
+  - AgentComponent: LLM agent state and permissions
+  - TaskQueueComponent: Orchestrator task assignments
+- **Bubble States**:
+  - Collapsed: Title + timestamp only
+  - Compressed: Relevant lines/content (MCP-specified)
+  - Expanded: Full content with scrolling
 - **Integration**:
   - Receives MCP tool calls via systems/networking
   - Updates browser via WebSocket channel 10
-  - Routes plugin UI updates to appropriate panels
+  - Manages agent context switching via MCP execute_command tool
 
 ### Architectural Rules
 1. **Apps** manage and coordinate collections of Plugins
@@ -478,16 +486,26 @@ The MCP implementation follows a channel-based architecture respecting layer sep
 ### MCP Tools Available
 The MCP server provides UI-focused tools that LLMs call to update the browser:
 
-- `show_file` - Display file content in the editor
+**UI Display Tools:**
+- `show_file` - Display file content in inline editor bubble
 - `update_editor` - Update current editor content
-- `show_terminal_output` - Display terminal output
-- `update_file_tree` - Update the file browser
-- `show_diff` - Display a diff view
-- `show_error` - Show error messages with location
-- `update_status_bar` - Update status messages
+- `show_terminal_output` - Display terminal output in bubble
+- `update_file_tree` - Show file browser in chat
+- `show_diff` - Display diff view bubble
+- `show_error` - Show error messages inline
+- `update_status_bar` - Update conversation status
 - `show_notification` - Display notifications
-- `open_panel` - Open specific IDE panels
-- `show_chat_message` - Display messages in conversation
+- `show_chat_message` - Add messages to conversation
+
+**Agent Control Tools:**
+- `execute_command` - Execute shell commands (context switching)
+- `set_status` - Set agent status (Busy/Idle/Waiting)
+- `update_context` - Update orchestrator context files
+- `git_worktree_add` - Create agent worktree
+- `git_worktree_remove` - Clean up worktree
+- `git_commit` - Commit agent changes
+- `write_file` - Write context/task files
+- `read_file` - Read context/task files
 
 ### Usage
 
@@ -506,11 +524,33 @@ The MCP server provides UI-focused tools that LLMs call to update the browser:
    - Type requests in the chat interface
    - LLM processes requests and updates UI via MCP tools
 
-### Multiple LLM Support
-- Each LLM gets its own session and channel (2000-2999)
-- Can broadcast prompts to all LLMs or target specific ones
-- Sessions are tracked with activity monitoring
-- Supports concurrent connections from different LLM providers
+### Multi-Agent Orchestration System
+
+**Agent Types:**
+- **Orchestrator**: Manages tasks, assigns work, monitors progress
+- **Worker**: Executes assigned tasks in specific worktrees
+- **Human**: Ultimate authority, can override all decisions
+
+**Agent Management:**
+- Each agent = Git worktree + conversation personality
+- Single LLM instance switches contexts via `claude --continue`
+- Orchestrator maintains context files (CONTEXT.md, GOALS_*.md)
+- Task queue managed by server, assigned by orchestrator
+- Agents mark status: Busy/Idle/Waiting
+
+**Context Switching:**
+```bash
+# Via MCP execute_command tool
+cd ../worker-api && claude --continue  # Switch to worker role
+cd ../orchestrator && claude --continue  # Back to orchestrator
+```
+
+**Communication:**
+- Discord-style channels (#general, @claude-code, etc.)
+- Group chats for collaboration
+- DMs for individual task assignment
+- All conversations visible to human (no private channels)
+- Server-side persistence of all messages
 
 ## Current Status
 

@@ -4,11 +4,11 @@ This file captures the current development session context for seamless continua
 
 ## Current Session - 2025-12-18
 
-**Focus**: UI Framework Plugin Architecture & MCP Integration
-**Status**: 🚧 IN PROGRESS - Designing UI Framework plugin with proper Systems integration
+**Focus**: UI Framework Plugin Architecture & Multi-Agent Orchestration Design
+**Status**: ✅ DESIGN COMPLETE - Ready for implementation
 
 ### Session Objective
-Create a UI Framework plugin that bridges MCP tools to the browser UI, following proper architectural rules.
+Design a Conversational IDE with Discord-style chat interface and multi-agent orchestration system.
 
 ### Architectural Insights Discovered
 
@@ -91,21 +91,75 @@ Create a UI Framework plugin that bridges MCP tools to the browser UI, following
 - Responses to POST requests should go through SSE channel, not HTTP response
 - Need proper session tracking to associate POST requests with SSE connections
 
-### Next Session Tasks
-1. **Fix Compilation Error**: 
-   - Change `handle_jsonrpc_request` return type
-   - Or create separate handler for SSE POST requests
-   
-2. **Implement Session Tracking**:
-   - Associate SSE connections with session IDs
-   - Route POST responses to correct SSE channel
-   - Consider using headers or cookies for session correlation
+### Session Achievements - UI Framework Design
 
-3. **Test Full Flow**:
-   - Claude Code connects via SSE
-   - Claude POSTs `initialize` request
-   - Server sends response via SSE channel
-   - Verify tools work (`tools/list`, `tools/call`)
+#### ✅ Conversational IDE Architecture Designed
+1. **Discord-Style Chat System**:
+   - Multiple channels (group chats, DMs, system)
+   - Everything happens in chat bubbles (code editing, file browsing, terminal)
+   - Three bubble states: Collapsed, Compressed (relevant), Expanded
+   - Server-side persistence of all conversations
+   - Independent from traditional IDE (both exist side-by-side)
+
+2. **Inline Components**:
+   - InlineEditor: Full code editing in chat bubbles
+   - InlineFileBrowser: Navigate files within chat
+   - InlineTerminal: Run commands in chat
+   - InlineDiff: View changes in chat
+   - All components expandable/collapsible
+
+3. **UI Layout**:
+   ```
+   [Main Top Bar]
+   [Conversation Top Bar: Expand/Collapse/Compress All | #channel-name | Actions]
+   [Left Sidebar: Users & Conversations]
+   [Center: Chat View with Bubbles]
+   [Right Sidebar: IDE Tools (Terminal, etc)]
+   ```
+
+#### ✅ Multi-Agent Orchestration System Designed
+1. **Agent Architecture**:
+   - Orchestrator: Manages tasks, assigns work, monitors progress
+   - Workers: Execute tasks in git worktrees
+   - Human: Ultimate authority, all conversations visible
+   
+2. **Context Switching via Git Worktrees**:
+   - Each agent = worktree + conversation
+   - Switch: `cd ../worker-1 && claude --continue`
+   - MCP `execute_command` tool handles switching
+   - Single LLM instance, multiple personalities
+
+3. **Task Queue System**:
+   - Server manages task queue
+   - Orchestrator assigns tasks to agents
+   - Agents mark status: Busy/Idle/Waiting
+   - When idle, server switches agent to next task
+
+4. **Orchestrator Context Management**:
+   - Maintains context files (CONTEXT.md, GOALS_*.md, DESIGN.md)
+   - Creates new conversation at 35-50% context usage
+   - Preserves memory across context resets
+
+### Next Session Implementation Tasks
+1. **Implement Core Chat Infrastructure**:
+   - Channel management system
+   - Message components with ECS
+   - Server-side persistence
+   
+2. **Create Inline Components**:
+   - InlineEditor with vim mode
+   - InlineFileBrowser with tree view
+   - InlineTerminal with shell integration
+   
+3. **Wire Up MCP Tools**:
+   - Route tools to create chat bubbles
+   - Implement execute_command for context switching
+   - Add agent status management
+   
+4. **Build Task Queue**:
+   - Server-side queue management
+   - Agent availability tracking
+   - Automatic context switching
 
 ### Files Modified
 - `/core/server/src/mcp/server.rs` - Added POST handler and SSE response routing
