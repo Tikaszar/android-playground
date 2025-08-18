@@ -2,34 +2,66 @@
 
 This file captures the current development session context for seamless continuation in future sessions.
 
-## Current Session - 2025-08-18
+## Current Session - 2025-12-18
 
-**Focus**: MCP SSE Authentication Fix
-**Status**: 🚧 IN PROGRESS - Fixing SSE/JSON-RPC communication
+**Focus**: UI Framework Plugin Architecture & MCP Integration
+**Status**: 🚧 IN PROGRESS - Designing UI Framework plugin with proper Systems integration
 
 ### Session Objective
-Fix the "Dynamic client registration failed: HTTP 404" error when Claude Code tries to connect to our MCP server via SSE transport.
+Create a UI Framework plugin that bridges MCP tools to the browser UI, following proper architectural rules.
 
-### Issue Analysis
-1. **SSE Connection Works**: Claude Code successfully connects to `/mcp/sse` endpoint
-2. **Problem**: Claude Code expects bidirectional communication:
-   - GET `/mcp/sse` for SSE event stream (server → client)
-   - POST `/mcp/sse` for JSON-RPC requests (client → server)
-3. **Current Bug**: When handling POST requests, we're trying to return HTTP response instead of sending via SSE channel
+### Architectural Insights Discovered
 
-### Implementation Status
+#### MCP Implementation Status (from git history review)
+1. **✅ FIXED**: MCP server is now fully functional!
+   - Streamable-HTTP transport implemented (commit 8ef9697)
+   - Protocol version updated to `2025-06-18` (latest official)
+   - Added critical `endpoint-ready` message on SSE connection
+   - Session management with temp → permanent ID migration
+   - Tool calls forwarded to channel 1050 (chat-assistant)
 
-#### ✅ Completed
-- Created JSON-RPC 2.0 structures in `mcp/jsonrpc.rs`
-- Implemented SSE handler in `mcp/sse_handler.rs` with proper JSON-RPC processing
-- Added POST handler to same `/mcp/sse` route for bidirectional communication
-- Configured `.mcp.json` with correct SSE transport format
-- Added HTTP request logging with TraceLayer for debugging
+2. **Working MCP Flow**:
+   - GET `/mcp` → SSE stream for server→client events
+   - POST `/mcp` → JSON-RPC requests from client
+   - Responses sent via SSE channel when Accept: text/event-stream
+   - Tools like `show_file`, `update_editor` etc. are functional
 
-#### 🚧 Current Issue
-- **Compilation Error**: Type mismatch in `handle_jsonrpc_request`
-- Trying to return `StatusCode::NO_CONTENT` but function expects `Json<JsonRpcResponse>`
-- Need to fix return type or change approach
+#### Critical Architecture Gap Identified
+1. **Problem**: MCP tools send to channel 1050 (chat-assistant) but chat-assistant doesn't control the browser UI
+2. **Solution**: Need a dedicated **UI Framework Plugin** that:
+   - Listens for MCP tool calls on its own channel (1200-1209)
+   - Manages browser UI state for the entire IDE
+   - Coordinates UI updates from all plugins
+   - Sends rendering commands to browser via WebSocket
+
+### Architectural Decisions Made
+
+#### MCP Integration into Systems Layer
+- **MCP should be in systems/networking**, not just in core/server
+- Plugins need access to MCP through Systems APIs
+- This maintains architectural integrity: Plugins → Systems → Core
+
+#### UI Framework Plugin Design
+- Must use **systems/logic ECS** for all state management
+- Uses **systems/networking** for WebSocket and MCP communication
+- Uses **systems/ui** for generic UI components
+- NO direct Core access (follows architectural rules)
+
+### Implementation Plan
+
+1. **Integrate MCP into systems/networking**:
+   - Create MCP client interface in systems/networking
+   - Expose MCP tool registration and handling
+   - Maintain channel-based architecture
+
+2. **Create UI Framework Plugin with ECS**:
+   - Define ECS components for panels, layout, focus state
+   - Use systems/logic for all state management
+   - Register on channels 1200-1209
+
+3. **Update MCP forwarding**:
+   - Change from channel 1050 to 1200 for UI updates
+   - Route different tools to appropriate handlers
 
 #### Code Changes This Session
 1. **Fixed `.mcp.json`**:

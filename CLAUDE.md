@@ -210,6 +210,25 @@ Plugins are reusable feature modules compiled as `.so` files and loaded dynamica
 - NetworkedComponent for presence
 - Registers on channels 1190-1199
 
+#### Special Infrastructure Plugins
+
+**plugins/ui-framework** (NEW)
+- **Purpose**: Bridge between MCP tools and browser UI
+- **Responsibilities**:
+  - Listen for MCP tool calls on channel 1200-1209
+  - Manage IDE-wide UI state using systems/logic ECS
+  - Coordinate UI updates from all other plugins
+  - Send rendering commands to browser via systems/ui
+- **ECS Components**:
+  - PanelComponent: Panel state (open/closed, position, size)
+  - LayoutComponent: Docking layout configuration
+  - FocusComponent: Currently focused panel/element
+  - TabComponent: Tab management within panels
+- **Integration**:
+  - Receives MCP tool calls via systems/networking
+  - Updates browser via WebSocket channel 10
+  - Routes plugin UI updates to appropriate panels
+
 ### Architectural Rules
 1. **Apps** manage and coordinate collections of Plugins
 2. **Plugins** use ALL Systems APIs (systems/logic for game ECS, systems/ui for UI, etc.)
@@ -445,9 +464,16 @@ Android Playground includes a fully integrated MCP server that enables any LLM (
 ### Architecture
 The MCP implementation follows a channel-based architecture respecting layer separation:
 
-1. **Core/MCP**: Publishes tool calls to channel 2000, no UI knowledge
-2. **Plugins**: Listen to channel 2000, handle tool calls using Systems
-3. **Channel Flow**: LLM → MCP → Channel 2000 → Plugin → Systems → UI
+1. **Core/Server**: Handles MCP protocol at `/mcp` endpoint (Streamable-HTTP transport)
+2. **Systems/Networking**: Provides MCP client interface for Plugins to use
+3. **UI Framework Plugin**: Listens on channel 1200 for MCP tool calls
+4. **Channel Flow**: LLM → Core/Server → Channel 1200 → UI Framework Plugin → Browser
+
+### Implementation Details
+- **Transport**: Streamable-HTTP (SSE for server→client, POST for client→server)  
+- **Protocol Version**: 2025-06-18 (latest official MCP version)
+- **Session Management**: Automatic temp→permanent session ID migration
+- **Tool Forwarding**: MCP tools route to channel 1200 for UI Framework Plugin
 
 ### MCP Tools Available
 The MCP server provides UI-focused tools that LLMs call to update the browser:
