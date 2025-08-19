@@ -1,6 +1,6 @@
 use crate::component::Component;
 use crate::entity::Entity;
-use parking_lot::RwLock;
+use tokio::sync::RwLock;
 use std::any::TypeId;
 use std::collections::VecDeque;
 use std::sync::Arc;
@@ -68,8 +68,8 @@ impl EventSystem {
     }
     
     /// Send an event to the system
-    pub fn send<E: Event + Clone + 'static>(&self, entity: Entity, event: E) {
-        let mut queues = self.queues.write();
+    pub async fn send<E: Event + Clone + 'static>(&self, entity: Entity, event: E) {
+        let mut queues = self.queues.write().await;
         let queue = queues
             .entry(TypeId::of::<E>())
             .or_insert_with(|| Box::new(EventQueue::<E>::new()));
@@ -80,8 +80,8 @@ impl EventSystem {
     }
     
     /// Send multiple events in a batch
-    pub fn send_batch<E: Event + Clone + 'static>(&self, events: Vec<(Entity, E)>) {
-        let mut queues = self.queues.write();
+    pub async fn send_batch<E: Event + Clone + 'static>(&self, events: Vec<(Entity, E)>) {
+        let mut queues = self.queues.write().await;
         let queue = queues
             .entry(TypeId::of::<E>())
             .or_insert_with(|| Box::new(EventQueue::<E>::new()));
@@ -94,14 +94,14 @@ impl EventSystem {
     }
     
     /// Create an event reader for a specific event type
-    pub fn reader<E: Event + 'static>(&self) -> EventReader {
+    pub async fn reader<E: Event + 'static>(&self) -> EventReader {
         let reader = EventReader {
             event_type: TypeId::of::<E>(),
             last_read: Arc::new(RwLock::new(0)),
         };
         
         self.readers
-            .write()
+            .write().await
             .entry(TypeId::of::<E>())
             .or_insert_with(Vec::new)
             .push(reader.clone());
@@ -110,8 +110,8 @@ impl EventSystem {
     }
     
     /// Process all events for this frame
-    pub fn process_events(&self) {
-        let mut queues = self.queues.write();
+    pub async fn process_events(&self) {
+        let mut queues = self.queues.write().await;
         
         // Sort by priority
         let mut sorted_events: Vec<_> = queues.iter_mut().collect();
@@ -128,8 +128,8 @@ impl EventSystem {
     }
     
     /// Clear all non-persistent events
-    pub fn clear_frame_events(&self) {
-        let mut queues = self.queues.write();
+    pub async fn clear_frame_events(&self) {
+        let mut queues = self.queues.write().await;
         for queue in queues.values_mut() {
             // Clear non-persistent events
             // Real implementation would handle this per type
@@ -146,8 +146,8 @@ pub struct EventReader {
 
 impl EventReader {
     /// Read all new events since last read
-    pub fn read<E: Event + Clone + 'static>(&self, event_system: &EventSystem) -> Vec<(Entity, E)> {
-        let queues = event_system.queues.read();
+    pub async fn read<E: Event + Clone + 'static>(&self, event_system: &EventSystem) -> Vec<(Entity, E)> {
+        let queues = event_system.queues.read().await;
         
         if let Some(queue) = queues.get(&self.event_type) {
             if let Some(typed_queue) = queue.downcast_ref::<EventQueue<E>>() {
@@ -160,8 +160,8 @@ impl EventReader {
     }
     
     /// Check if there are unread events
-    pub fn has_events(&self, event_system: &EventSystem) -> bool {
-        let queues = event_system.queues.read();
+    pub async fn has_events(&self, event_system: &EventSystem) -> bool {
+        let queues = event_system.queues.read().await;
         
         if let Some(queue) = queues.get(&self.event_type) {
             // Check if queue has events

@@ -2,6 +2,8 @@
 
 Full-featured game ECS that Apps and Plugins use, which also initializes and provides access to all other engine systems.
 
+⚠️ **CRITICAL**: This crate uses ONLY `tokio::sync::RwLock`. Never use `parking_lot::RwLock` as it causes Send trait issues with async/await.
+
 ## Overview
 
 Systems/Logic is the **game-level ECS** that Apps and Plugins use for their game logic. As part of its initialization, it also creates and registers all other engine systems (Networking, UI, Rendering, Physics), making them available to Apps and Plugins through a unified interface.
@@ -21,6 +23,8 @@ Systems/Logic is the **game-level ECS** that Apps and Plugins use for their game
 - Hot-reload support with migrations
 - Batch-only API for mobile efficiency
 - **SystemsManager**: Provides access to all initialized engine systems
+- **Fully Async**: All public APIs are async for proper tokio integration
+- **Thread-Safe**: Uses Arc<tokio::sync::RwLock<>> throughout
 
 ## Architecture Role
 
@@ -90,9 +94,16 @@ struct PowerUp { type: PowerUpType }
 
 ### System Execution
 ```rust
-// Define system with dependencies
-fn physics_system(world: &mut World) -> Result<()> {
-    // System logic
+// Define system with dependencies - must be async!
+async fn physics_system(world: &mut World) -> Result<()> {
+    // System logic with async operations
+    let query = world.query()
+        .with_component(Position::component_id());
+    
+    // Note: Most operations are async
+    for entity in query.iter().await {
+        // Process entity
+    }
 }
 
 // Register with dependencies

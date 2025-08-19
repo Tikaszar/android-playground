@@ -210,17 +210,35 @@ This file documents key architectural decisions, why they were made, and how the
 
 ## Threading Model
 
-### Arc<RwLock<>> Pattern
-**Decision**: Use Arc<RwLock<>> consistently for shared state
+### tokio::sync::RwLock ONLY
+**Decision**: Use ONLY tokio::sync::RwLock, NEVER parking_lot::RwLock
 
 **Why**:
-- Thread-safe by default
-- Read-heavy workloads benefit from RwLock
-- Arc enables safe sharing across threads
-- Standard pattern reduces cognitive load
+- parking_lot RwLock guards don't implement Send trait
+- This causes compilation failures with tokio::spawn
+- tokio::sync::RwLock is designed for async contexts
+- Guards can be held across await points safely
 
-**Alternative Considered**: DashMap
-**Rejected Because**: Async borrow issues, less control
+**Alternative Rejected**: parking_lot::RwLock
+**Why Rejected**: 
+- GuardNoSend marker type prevents Send across threads
+- Incompatible with async/await patterns
+- Causes "cannot be sent between threads safely" errors
+
+**Migration Pattern**:
+```rust
+// OLD - WRONG
+use parking_lot::RwLock;
+let lock = RwLock::new(data);
+let guard = lock.read(); // or write()
+
+// NEW - CORRECT  
+use tokio::sync::RwLock;
+let lock = RwLock::new(data);
+let guard = lock.read().await; // or write().await
+```
+
+**Impact**: All functions using RwLock must be async
 
 ## Plugin System
 

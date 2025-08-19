@@ -1,6 +1,6 @@
 use crate::error::LogicResult;
 use bytes::{Bytes, BytesMut};
-use parking_lot::RwLock;
+use tokio::sync::RwLock;
 use serde::{Deserialize, Serialize};
 use std::any::TypeId;
 use std::collections::HashMap;
@@ -99,9 +99,9 @@ impl ComponentRegistry {
         }
     }
     
-    pub fn register(&self, info: ComponentInfo) -> LogicResult<()> {
-        let mut components = self.components.write();
-        let mut by_name = self.by_name.write();
+    pub async fn register(&self, info: ComponentInfo) -> LogicResult<()> {
+        let mut components = self.components.write().await;
+        let mut by_name = self.by_name.write().await;
         
         components.insert(info.type_id, info.clone());
         by_name.insert(info.type_name.clone(), info.type_id);
@@ -109,29 +109,29 @@ impl ComponentRegistry {
         Ok(())
     }
     
-    pub fn get(&self, type_id: TypeId) -> Option<ComponentInfo> {
-        self.components.read().get(&type_id).cloned()
+    pub async fn get(&self, type_id: TypeId) -> Option<ComponentInfo> {
+        self.components.read().await.get(&type_id).cloned()
     }
     
-    pub fn get_by_name(&self, name: &str) -> Option<ComponentInfo> {
-        let by_name = self.by_name.read();
+    pub async fn get_by_name(&self, name: &str) -> Option<ComponentInfo> {
+        let by_name = self.by_name.read().await;
         if let Some(type_id) = by_name.get(name) {
-            self.components.read().get(type_id).cloned()
+            self.components.read().await.get(type_id).cloned()
         } else {
             None
         }
     }
     
-    pub fn is_networked(&self, type_id: TypeId) -> bool {
+    pub async fn is_networked(&self, type_id: TypeId) -> bool {
         self.components
-            .read()
+            .read().await
             .get(&type_id)
             .map(|info| info.networked)
             .unwrap_or(false)
     }
     
-    pub fn migrate(&self, type_id: TypeId, old_data: &[u8]) -> LogicResult<Vec<u8>> {
-        let components = self.components.read();
+    pub async fn migrate(&self, type_id: TypeId, old_data: &[u8]) -> LogicResult<Vec<u8>> {
+        let components = self.components.read().await;
         let info = components
             .get(&type_id)
             .ok_or_else(|| crate::error::LogicError::ComponentNotRegistered(format!("{:?}", type_id)))?;
@@ -160,18 +160,18 @@ impl DirtyTracker {
         }
     }
     
-    pub fn mark_dirty(&self, entity: crate::entity::Entity, component_type: TypeId) {
-        self.dirty_entities.write().insert(entity);
+    pub async fn mark_dirty(&self, entity: crate::entity::Entity, component_type: TypeId) {
+        self.dirty_entities.write().await.insert(entity);
         self.dirty_components
-            .write()
+            .write().await
             .entry(entity)
             .or_insert_with(FnvHashSet::default)
             .insert(component_type);
     }
     
-    pub fn get_dirty_batch(&self, max_count: usize) -> Vec<(crate::entity::Entity, Vec<TypeId>)> {
-        let mut dirty_entities = self.dirty_entities.write();
-        let mut dirty_components = self.dirty_components.write();
+    pub async fn get_dirty_batch(&self, max_count: usize) -> Vec<(crate::entity::Entity, Vec<TypeId>)> {
+        let mut dirty_entities = self.dirty_entities.write().await;
+        let mut dirty_components = self.dirty_components.write().await;
         
         let mut batch = Vec::new();
         let entities: Vec<_> = dirty_entities.iter().take(max_count).copied().collect();
@@ -186,8 +186,8 @@ impl DirtyTracker {
         batch
     }
     
-    pub fn clear(&self) {
-        self.dirty_entities.write().clear();
-        self.dirty_components.write().clear();
+    pub async fn clear(&self) {
+        self.dirty_entities.write().await.clear();
+        self.dirty_components.write().await.clear();
     }
 }

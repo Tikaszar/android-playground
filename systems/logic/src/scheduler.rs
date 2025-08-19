@@ -1,7 +1,7 @@
 use crate::error::LogicResult;
 use crate::system::{Stage, SystemExecutor};
 use crate::world::World;
-use parking_lot::RwLock;
+use tokio::sync::RwLock;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
@@ -43,26 +43,27 @@ impl Scheduler {
         &self.executor
     }
     
-    pub fn pause(&self) {
-        *self.paused.write() = true;
+    pub async fn pause(&self) {
+        *self.paused.write().await = true;
     }
     
-    pub fn resume(&self) {
-        *self.paused.write() = false;
+    pub async fn resume(&self) {
+        *self.paused.write().await = false;
     }
     
-    pub fn is_paused(&self) -> bool {
-        *self.paused.read()
+    pub async fn is_paused(&self) -> bool {
+        *self.paused.read().await
     }
     
     /// Run one frame of systems
     pub async fn run_frame(&self, world: &World, delta_time: f32) -> LogicResult<()> {
-        if self.is_paused() {
+        if self.is_paused().await {
             return Ok(());
         }
         
         let frame_start = Instant::now();
-        let mut metrics = self.metrics.write();
+        // Collect stage timings without holding the lock
+        let mut stage_timings = Vec::new();
         
         // Run stages in order
         let stages = [
@@ -88,33 +89,43 @@ impl Scheduler {
             self.executor.run_stage(stage, world, delta_time).await?;
             
             let stage_time = stage_start.elapsed();
-            *metrics.stage_times.entry(stage).or_insert(Duration::ZERO) += stage_time;
+            stage_timings.push((stage, stage_time));
         }
         
-        // Update metrics
+        // Update metrics after all stages are done
         let frame_time = frame_start.elapsed();
-        metrics.frame_count += 1;
-        metrics.total_time += frame_time;
         
-        if metrics.frame_count == 1 {
-            metrics.slowest_frame = frame_time;
-            metrics.fastest_frame = frame_time;
-        } else {
-            metrics.slowest_frame = metrics.slowest_frame.max(frame_time);
-            metrics.fastest_frame = metrics.fastest_frame.min(frame_time);
+        {
+            let mut metrics = self.metrics.write().await;
+            
+            // Update stage times
+            for (stage, stage_time) in stage_timings {
+                *metrics.stage_times.entry(stage).or_insert(Duration::ZERO) += stage_time;
+            }
+            
+            metrics.frame_count += 1;
+            metrics.total_time += frame_time;
+            
+            if metrics.frame_count == 1 {
+                metrics.slowest_frame = frame_time;
+                metrics.fastest_frame = frame_time;
+            } else {
+                metrics.slowest_frame = metrics.slowest_frame.max(frame_time);
+                metrics.fastest_frame = metrics.fastest_frame.min(frame_time);
+            }
         }
         
         Ok(())
     }
     
     /// Get current metrics
-    pub fn metrics(&self) -> SchedulerMetrics {
-        self.metrics.read().clone()
+    pub async fn metrics(&self) -> SchedulerMetrics {
+        self.metrics.read().await.clone()
     }
     
     /// Reset metrics
-    pub fn reset_metrics(&self) {
-        *self.metrics.write() = SchedulerMetrics::default();
+    pub async fn reset_metrics(&self) {
+        *self.metrics.write().await = SchedulerMetrics::default();
     }
 }
 
@@ -150,7 +161,7 @@ impl FixedScheduler {
     }
     
     pub async fn run_frame(&self, world: &World, frame_time: Duration) -> LogicResult<()> {
-        let mut accumulator = self.accumulator.write();
+        let mut accumulator = self.accumulator.write().await;
         *accumulator += frame_time;
         
         let mut steps = 0;
@@ -185,7 +196,7 @@ impl AdaptiveScheduler {
     }
     
     pub async fn run_frame(&self, world: &World, delta_time: f32) -> LogicResult<()> {
-        let scaled_delta = delta_time * *self.time_scale.read();
+        let scaled_delta = delta_time * *self.time_scale.read().await;
         
         let frame_start = Instant::now();
         self.base.run_frame(world, scaled_delta).await?;
@@ -196,11 +207,11 @@ impl AdaptiveScheduler {
             let target_frame_time = Duration::from_secs_f32(1.0 / self.target_fps);
             if frame_time > target_frame_time * 2 {
                 // Running too slow, reduce time scale
-                let mut scale = self.time_scale.write();
+                let mut scale = self.time_scale.write().await;
                 *scale = (*scale * 0.95).max(0.1);
             } else if frame_time < target_frame_time / 2 {
                 // Running too fast, increase time scale
-                let mut scale = self.time_scale.write();
+                let mut scale = self.time_scale.write().await;
                 *scale = (*scale * 1.05).min(2.0);
             }
         }
@@ -208,11 +219,11 @@ impl AdaptiveScheduler {
         Ok(())
     }
     
-    pub fn set_time_scale(&self, scale: f32) {
-        *self.time_scale.write() = scale.clamp(0.1, 10.0);
+    pub async fn set_time_scale(&self, scale: f32) {
+        *self.time_scale.write().await = scale.clamp(0.1, 10.0);
     }
     
-    pub fn time_scale(&self) -> f32 {
-        *self.time_scale.read()
+    pub async fn time_scale(&self) -> f32 {
+        *self.time_scale.read().await
     }
 }

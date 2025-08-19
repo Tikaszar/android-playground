@@ -1,5 +1,5 @@
 use crate::error::LogicResult;
-use parking_lot::RwLock;
+use tokio::sync::RwLock;
 use std::sync::Arc;
 use uuid::Uuid;
 
@@ -63,15 +63,15 @@ impl EntityManager {
         }
     }
     
-    pub fn create(&self) -> Entity {
-        let mut recycled = self.recycled.write();
+    pub async fn create(&self) -> Entity {
+        let mut recycled = self.recycled.write().await;
         let id = if let Some(id) = recycled.pop() {
             id
         } else {
             Uuid::new_v4()
         };
         
-        let mut generations = self.generations.write();
+        let mut generations = self.generations.write().await;
         let generation = generations.entry(id).or_insert(0);
         *generation = generation.wrapping_add(1);
         
@@ -80,31 +80,31 @@ impl EntityManager {
             generation: *generation,
         };
         
-        self.alive.write().insert(entity);
+        self.alive.write().await.insert(entity);
         entity
     }
     
-    pub fn create_batch(&self, count: usize) -> Vec<Entity> {
+    pub async fn create_batch(&self, count: usize) -> Vec<Entity> {
         let mut entities = Vec::with_capacity(count);
         for _ in 0..count {
-            entities.push(self.create());
+            entities.push(self.create().await);
         }
         entities
     }
     
-    pub fn destroy(&self, entity: Entity) -> LogicResult<()> {
-        let mut alive = self.alive.write();
+    pub async fn destroy(&self, entity: Entity) -> LogicResult<()> {
+        let mut alive = self.alive.write().await;
         if !alive.remove(&entity) {
             return Err(crate::error::LogicError::EntityNotFound(entity.id));
         }
         
-        self.recycled.write().push(entity.id);
+        self.recycled.write().await.push(entity.id);
         Ok(())
     }
     
-    pub fn destroy_batch(&self, entities: &[Entity]) -> LogicResult<()> {
-        let mut alive = self.alive.write();
-        let mut recycled = self.recycled.write();
+    pub async fn destroy_batch(&self, entities: &[Entity]) -> LogicResult<()> {
+        let mut alive = self.alive.write().await;
+        let mut recycled = self.recycled.write().await;
         
         for entity in entities {
             if !alive.remove(entity) {
@@ -116,17 +116,17 @@ impl EntityManager {
         Ok(())
     }
     
-    pub fn is_alive(&self, entity: Entity) -> bool {
-        self.alive.read().contains(&entity)
+    pub async fn is_alive(&self, entity: Entity) -> bool {
+        self.alive.read().await.contains(&entity)
     }
     
-    pub fn count(&self) -> usize {
-        self.alive.read().len()
+    pub async fn count(&self) -> usize {
+        self.alive.read().await.len()
     }
     
-    pub fn clear(&self) {
-        let mut alive = self.alive.write();
-        let mut recycled = self.recycled.write();
+    pub async fn clear(&self) {
+        let mut alive = self.alive.write().await;
+        let mut recycled = self.recycled.write().await;
         
         for entity in alive.iter() {
             recycled.push(entity.id);

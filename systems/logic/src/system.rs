@@ -1,6 +1,6 @@
 use crate::error::LogicResult;
 use crate::world::World;
-use parking_lot::RwLock;
+use tokio::sync::RwLock;
 use std::any::TypeId;
 use std::sync::Arc;
 use tokio::task::JoinHandle;
@@ -153,9 +153,9 @@ impl SystemExecutor {
         }
     }
     
-    pub fn add_system(&self, stage: Stage, system: SystemInstance) {
-        self.stages.write().entry(stage).or_insert_with(Vec::new).push(system);
-        self.rebuild_execution_order();
+    pub async fn add_system(&self, stage: Stage, system: SystemInstance) {
+        self.stages.write().await.entry(stage).or_insert_with(Vec::new).push(system);
+        self.rebuild_execution_order().await;
     }
     
     /// Register a System (used by World::register_system)
@@ -175,12 +175,12 @@ impl SystemExecutor {
             last_error: None,
         };
         
-        self.add_system(Stage::Update, instance);
+        self.add_system(Stage::Update, instance).await;
         Ok(())
     }
     
-    fn rebuild_execution_order(&self) {
-        let stages = self.stages.read();
+    async fn rebuild_execution_order(&self) {
+        let stages = self.stages.read().await;
         let mut order = Vec::new();
         
         for (stage, systems) in stages.iter() {
@@ -193,7 +193,7 @@ impl SystemExecutor {
             }
         }
         
-        *self.execution_order.write() = order;
+        *self.execution_order.write().await = order;
     }
     
     fn build_dependency_graph(&self, systems: &[SystemInstance]) -> Vec<Vec<usize>> {
@@ -252,14 +252,14 @@ impl SystemExecutor {
     }
     
     pub async fn run_stage(&self, stage: Stage, world: &World, delta_time: f32) -> LogicResult<()> {
-        let order = self.execution_order.read();
+        let order = self.execution_order.read().await;
         
         for (exec_stage, system_indices) in order.iter() {
             if *exec_stage != stage {
                 continue;
             }
             
-            let mut stages = self.stages.write();
+            let mut stages = self.stages.write().await;
             let systems = stages.get_mut(&stage).unwrap();
             
             // Group systems by parallelism

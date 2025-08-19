@@ -1,7 +1,7 @@
 use crate::entity::Entity;
 use crate::storage::HybridStorage;
 use fnv::FnvHashMap;
-use parking_lot::RwLock;
+use tokio::sync::RwLock;
 use std::any::TypeId;
 use std::marker::PhantomData;
 use std::sync::Arc;
@@ -66,10 +66,10 @@ pub struct Query<'a> {
 }
 
 impl<'a> Query<'a> {
-    pub fn iter(&self) -> QueryIter<'a> {
+    pub async fn iter(&self) -> QueryIter<'a> {
         // If cached, try to get from cache
         if let Some(cache_id) = self.cache_id {
-            if let Some(cached_entities) = QUERY_CACHE.get(cache_id) {
+            if let Some(cached_entities) = QUERY_CACHE.get(cache_id).await {
                 return QueryIter {
                     entities: cached_entities,
                     current: 0,
@@ -82,7 +82,7 @@ impl<'a> Query<'a> {
         let mut entities = Vec::new();
         
         // Get all entities from archetype storage
-        for entity in self.storage.iter_archetype_entities() {
+        for entity in self.storage.iter_archetype_entities().await {
             if self.matches_entity(entity) {
                 entities.push(entity);
             }
@@ -90,7 +90,7 @@ impl<'a> Query<'a> {
         
         // Cache if requested
         if let Some(cache_id) = self.cache_id {
-            QUERY_CACHE.insert(cache_id, entities.clone());
+            QUERY_CACHE.insert(cache_id, entities.clone()).await;
         }
         
         QueryIter {
@@ -100,21 +100,21 @@ impl<'a> Query<'a> {
         }
     }
     
-    pub fn for_each<F>(&self, mut f: F)
+    pub async fn for_each<F>(&self, mut f: F)
     where
         F: FnMut(Entity),
     {
-        for entity in self.iter() {
+        for entity in self.iter().await {
             f(entity);
         }
     }
     
-    pub fn par_for_each<F>(&self, f: F)
+    pub async fn par_for_each<F>(&self, f: F)
     where
         F: Fn(Entity) + Send + Sync,
     {
         use rayon::prelude::*;
-        let entities: Vec<_> = self.iter().collect();
+        let entities: Vec<_> = self.iter().await.collect();
         entities.par_iter().for_each(|&entity| f(entity));
     }
     
@@ -178,20 +178,20 @@ impl QueryCache {
         }
     }
     
-    fn get(&self, id: u64) -> Option<Vec<Entity>> {
-        self.cache.read().get(&id).cloned()
+    async fn get(&self, id: u64) -> Option<Vec<Entity>> {
+        self.cache.read().await.get(&id).cloned()
     }
     
-    fn insert(&self, id: u64, entities: Vec<Entity>) {
-        self.cache.write().insert(id, entities);
+    async fn insert(&self, id: u64, entities: Vec<Entity>) {
+        self.cache.write().await.insert(id, entities);
     }
     
-    fn invalidate(&self, id: u64) {
-        self.cache.write().remove(&id);
+    async fn invalidate(&self, id: u64) {
+        self.cache.write().await.remove(&id);
     }
     
-    fn clear(&self) {
-        self.cache.write().clear();
+    async fn clear(&self) {
+        self.cache.write().await.clear();
     }
 }
 

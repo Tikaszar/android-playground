@@ -112,12 +112,13 @@ core/           # Foundation layer
 
 ## 📊 Project Stats
 
-- **Lines of Code**: ~35,000+
+- **Lines of Code**: ~40,000+
 - **Packages**: 30+ (4 apps, 18 plugins, 6 systems, 6 core)
 - **Zero Unsafe Code**: 100% safe Rust
 - **WASM Size**: 431KB optimized
-- **Compilation**: < 20s on modern Android
+- **Compilation**: < 30s on modern Android
 - **Memory**: < 50MB baseline
+- **Build Status**: ✅ **FULLY COMPILING**
 - **WebSocket Channels**: 
   - UI: 10
   - IDE Plugins: 1000-1079
@@ -154,7 +155,8 @@ cargo test --workspace
 2. Systems use core/ecs for internal state
 3. Plugins use systems/logic for game ECS
 4. No turbofish syntax - use `.with_component(ComponentId)`
-5. Arc<RwLock<>> for thread safety throughout
+5. **ONLY tokio::sync::RwLock** - Never use parking_lot (Send issues)
+6. All async functions must properly propagate with .await
 
 ## 🤝 Contributing
 

@@ -8,11 +8,12 @@ This file contains critical memory for Claude Code when working with this reposi
 - **NO turbofish** - Use `.with_component(ComponentId)` instead of `::<T>`
 - **NO TODOs** - Complete all implementations fully
 - **NO incomplete code** - Everything must compile and work
-- **Arc<RwLock<>>** - Use consistently for thread safety
+- **tokio::sync::RwLock ONLY** - NEVER use parking_lot::RwLock (Send issues)
 - **Result everywhere** - All fallible operations return Result<T, Error>
 - **Async by default** - All I/O must be async
 - **Batch operations** - APIs operate on collections, not singles
 - **NO dangling imports** - Remove unused imports immediately
+- **Async propagates** - If a function uses .await, it must be async
 
 ## #architecture-rules
 - Apps → Plugins → Systems → Core (STRICT LAYERING)
@@ -35,16 +36,13 @@ This file contains critical memory for Claude Code when working with this reposi
 - systems/logic is SPECIAL - initializes all other systems
 
 ## #current-violations
-1. UI Framework Plugin incomplete implementation ❌
-   - Missing McpHandler methods
-   - Missing UiState persistence methods
-   - Missing Orchestrator update methods
+None! All architecture violations fixed ✅
 
 ## #immediate-goals
-1. Complete UI Framework Plugin implementation
-2. Get playground-apps-editor fully compiling
-3. Test MCP integration with Claude Code
-4. Verify UI Framework Plugin receives channel 1200 messages
+1. Test running application ✅ COMPILES!
+2. Verify MCP integration with Claude Code
+3. Test browser connection at http://localhost:8080/playground-editor/
+4. Implement actual UI Framework Plugin functionality
 
 ## #architecture-fixed
 ✅ Plugins ARE Systems - no separate Plugin trait
@@ -98,22 +96,26 @@ http://localhost:8080/mcp
 ## #implementation-status
 ✅ **Complete**:
 - Core infrastructure (all 6 modules)
-- Systems (all 5 with ECS integration)
+- Systems (all 5 with ECS integration) 
 - 18 plugins created with structure
 - WebSocket multiplexer with binary protocol
 - MCP server with tool system
 - UI Framework Plugin (3000+ lines)
+- Package naming (all standardized)
+- ECS Query API (no turbofish)
+- Plugin async traits (all async)
+- Build system (FULLY COMPILING!)
+- All RwLock converted to tokio::sync
+- 100+ functions made async
 
-🟡 **Partial**:
-- Package naming (done but build issues)
-- ECS Query API (no turbofish done)
-- Plugin async traits (done)
-- Build system (many fixes, some remaining)
+🟡 **Needs Testing**:
+- MCP-LLM connection
+- Browser WebSocket connection
+- UI Framework Plugin functionality
 
-🔴 **Needs Work**:
-- Architecture violations (5 identified)
-- Full compilation of all packages
-- MCP-LLM connection testing
+🔴 **Not Started**:
+- Actual game logic implementation
+- Production deployment
 
 ## #workflow
 1. Read CONTEXT.md for current state

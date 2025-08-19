@@ -2,7 +2,7 @@ use crate::archetype::ArchetypeGraph;
 use crate::entity::Entity;
 use crate::error::LogicResult;
 use fnv::FnvHashMap;
-use parking_lot::RwLock;
+use tokio::sync::RwLock;
 use std::any::TypeId;
 use std::sync::Arc;
 
@@ -41,7 +41,7 @@ impl HybridStorage {
         }
     }
     
-    pub fn spawn_entity(&self, entity: Entity, components: Vec<(TypeId, Box<dyn std::any::Any + Send + Sync>)>) -> LogicResult<()> {
+    pub async fn spawn_entity(&self, entity: Entity, components: Vec<(TypeId, Box<dyn std::any::Any + Send + Sync>)>) -> LogicResult<()> {
         // Separate dense and sparse components
         let mut dense_types = Vec::new();
         let mut dense_components = Vec::new();
@@ -58,11 +58,11 @@ impl HybridStorage {
         
         // Add to archetype storage
         if !dense_types.is_empty() {
-            let archetype_storage = self.archetype_graph.get_or_create_archetype(dense_types.clone());
-            let archetype_id = archetype_storage.read().archetype.id;
-            archetype_storage.write().add_entity(entity, dense_components)?;
+            let archetype_storage = self.archetype_graph.get_or_create_archetype(dense_types.clone()).await;
+            let archetype_id = archetype_storage.read().await.archetype.id;
+            archetype_storage.write().await.add_entity(entity, dense_components)?;
             
-            self.entity_locations.write().insert(entity, EntityLocation {
+            self.entity_locations.write().await.insert(entity, EntityLocation {
                 archetype_id,
                 in_sparse: false,
             });
@@ -70,7 +70,7 @@ impl HybridStorage {
         
         // Add sparse components
         if !sparse_components_list.is_empty() {
-            let mut sparse = self.sparse_components.write();
+            let mut sparse = self.sparse_components.write().await;
             for (type_id, component) in sparse_components_list {
                 sparse
                     .entry(type_id)
@@ -83,7 +83,7 @@ impl HybridStorage {
             
             // Update location if not in archetype
             if dense_types.is_empty() {
-                self.entity_locations.write().insert(entity, EntityLocation {
+                self.entity_locations.write().await.insert(entity, EntityLocation {
                     archetype_id: 0,
                     in_sparse: true,
                 });
@@ -93,34 +93,34 @@ impl HybridStorage {
         Ok(())
     }
     
-    pub fn despawn_entity(&self, entity: Entity) -> LogicResult<()> {
-        let locations = self.entity_locations.read();
+    pub async fn despawn_entity(&self, entity: Entity) -> LogicResult<()> {
+        let locations = self.entity_locations.read().await;
         let location = locations
             .get(&entity)
             .ok_or(crate::error::LogicError::EntityNotFound(entity.id))?;
         
         // Remove from archetype
         if location.archetype_id != 0 {
-            if let Some(archetype) = self.archetype_graph.get_archetype(location.archetype_id) {
-                archetype.write().remove_entity(entity)?;
+            if let Some(archetype) = self.archetype_graph.get_archetype(location.archetype_id).await {
+                archetype.write().await.remove_entity(entity)?;
             }
         }
         
         // Remove from sparse storage
         if location.in_sparse {
-            let mut sparse = self.sparse_components.write();
+            let mut sparse = self.sparse_components.write().await;
             for storage in sparse.values_mut() {
                 storage.components.remove(&entity);
             }
         }
         
         drop(locations);
-        self.entity_locations.write().remove(&entity);
+        self.entity_locations.write().await.remove(&entity);
         
         Ok(())
     }
     
-    pub fn add_component<T: 'static + Send + Sync>(
+    pub async fn add_component<T: 'static + Send + Sync>(
         &self,
         entity: Entity,
         component: T,
@@ -130,7 +130,7 @@ impl HybridStorage {
         // Check if should use sparse
         if self.should_use_sparse(type_id) {
             self.sparse_components
-                .write()
+                .write().await
                 .entry(type_id)
                 .or_insert_with(|| SparseStorage {
                     components: FnvHashMap::default(),
@@ -142,7 +142,7 @@ impl HybridStorage {
         
         // Move entity to new archetype
         let location = {
-            let locations = self.entity_locations.read();
+            let locations = self.entity_locations.read().await;
             locations
                 .get(&entity)
                 .ok_or(crate::error::LogicError::EntityNotFound(entity.id))?
@@ -155,9 +155,9 @@ impl HybridStorage {
             type_id,
             true,
             Some(Box::new(component)),
-        )?;
+        ).await?;
         
-        self.entity_locations.write().insert(entity, EntityLocation {
+        self.entity_locations.write().await.insert(entity, EntityLocation {
             archetype_id: new_archetype_id,
             in_sparse: location.in_sparse,
         });
@@ -165,11 +165,11 @@ impl HybridStorage {
         Ok(())
     }
     
-    pub fn remove_component<T: 'static>(&self, entity: Entity) -> LogicResult<()> {
+    pub async fn remove_component<T: 'static>(&self, entity: Entity) -> LogicResult<()> {
         let type_id = TypeId::of::<T>();
         
         // Check sparse storage first
-        if let Some(storage) = self.sparse_components.write().get_mut(&type_id) {
+        if let Some(storage) = self.sparse_components.write().await.get_mut(&type_id) {
             if storage.components.remove(&entity).is_some() {
                 return Ok(());
             }
@@ -177,7 +177,7 @@ impl HybridStorage {
         
         // Remove from archetype
         let location = {
-            let locations = self.entity_locations.read();
+            let locations = self.entity_locations.read().await;
             locations
                 .get(&entity)
                 .ok_or(crate::error::LogicError::EntityNotFound(entity.id))?
@@ -190,9 +190,9 @@ impl HybridStorage {
             type_id,
             false,
             None,
-        )?;
+        ).await?;
         
-        self.entity_locations.write().insert(entity, EntityLocation {
+        self.entity_locations.write().await.insert(entity, EntityLocation {
             archetype_id: new_archetype_id,
             in_sparse: location.in_sparse,
         });
@@ -200,8 +200,8 @@ impl HybridStorage {
         Ok(())
     }
     
-    pub fn has_component<T: 'static>(&self, entity: Entity) -> bool {
-        let locations = self.entity_locations.read();
+    pub async fn has_component<T: 'static>(&self, entity: Entity) -> bool {
+        let locations = self.entity_locations.read().await;
         let Some(location) = locations.get(&entity) else {
             return false;
         };
@@ -209,7 +209,7 @@ impl HybridStorage {
         let type_id = TypeId::of::<T>();
         
         // Check sparse storage
-        if let Some(storage) = self.sparse_components.read().get(&type_id) {
+        if let Some(storage) = self.sparse_components.read().await.get(&type_id) {
             if storage.components.contains_key(&entity) {
                 return true;
             }
@@ -217,8 +217,8 @@ impl HybridStorage {
         
         // Check archetype storage
         if location.archetype_id != 0 {
-            if let Some(archetype) = self.archetype_graph.get_archetype(location.archetype_id) {
-                if archetype.read().archetype.has_component(type_id) {
+            if let Some(archetype) = self.archetype_graph.get_archetype(location.archetype_id).await {
+                if archetype.read().await.archetype.has_component(type_id) {
                     return true;
                 }
             }
@@ -232,10 +232,10 @@ impl HybridStorage {
         false // For now, use archetype for everything
     }
     
-    pub fn iter_archetype_entities(&self) -> Vec<Entity> {
+    pub async fn iter_archetype_entities(&self) -> Vec<Entity> {
         let mut entities = Vec::new();
-        for archetype in self.archetype_graph.all_archetypes() {
-            entities.extend_from_slice(archetype.read().entities());
+        for archetype in self.archetype_graph.all_archetypes().await {
+            entities.extend_from_slice(archetype.read().await.entities());
         }
         entities
     }
@@ -251,11 +251,11 @@ pub struct StorageStats {
 }
 
 impl HybridStorage {
-    pub fn stats(&self) -> StorageStats {
-        let archetypes = self.archetype_graph.all_archetypes();
-        let entity_count = self.entity_locations.read().len();
+    pub async fn stats(&self) -> StorageStats {
+        let archetypes = self.archetype_graph.all_archetypes().await;
+        let entity_count = self.entity_locations.read().await.len();
         let sparse_component_count: usize = self.sparse_components
-            .read()
+            .read().await
             .values()
             .map(|s| s.components.len())
             .sum();

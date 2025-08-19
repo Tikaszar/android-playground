@@ -7,7 +7,7 @@ use std::sync::Arc;
 use tokio::sync::RwLock;
 use tracing::info;
 
-use playground_systems_logic::{World, System, SystemsManager};
+use playground_systems_logic::{World, SystemsManager};
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -55,8 +55,11 @@ async fn main() -> Result<()> {
             interval.tick().await;
             
             // Run all registered Systems
-            let mut world_lock = world_for_update.write().await;
-            world_lock.run_systems(0.016).await;
+            // Use a block to ensure the lock is dropped before the next iteration
+            {
+                let mut world_lock = world_for_update.write().await;
+                let _ = world_lock.run_systems(0.016).await;
+            }
         }
     });
     

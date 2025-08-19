@@ -1,7 +1,7 @@
 use crate::entity::Entity;
 use crate::error::LogicResult;
 use fnv::FnvHashMap;
-use parking_lot::RwLock;
+use tokio::sync::RwLock;
 use std::any::TypeId;
 use std::sync::Arc;
 
@@ -159,30 +159,30 @@ impl ArchetypeGraph {
         }
     }
     
-    pub fn get_or_create_archetype(&self, component_types: Vec<TypeId>) -> Arc<RwLock<ArchetypeStorage>> {
+    pub async fn get_or_create_archetype(&self, component_types: Vec<TypeId>) -> Arc<RwLock<ArchetypeStorage>> {
         let archetype = Archetype::new(component_types);
         let id = archetype.id();
         
-        let mut archetypes = self.archetypes.write();
+        let mut archetypes = self.archetypes.write().await;
         archetypes
             .entry(id)
             .or_insert_with(|| Arc::new(RwLock::new(ArchetypeStorage::new(archetype))))
             .clone()
     }
     
-    pub fn get_archetype(&self, id: u64) -> Option<Arc<RwLock<ArchetypeStorage>>> {
-        self.archetypes.read().get(&id).cloned()
+    pub async fn get_archetype(&self, id: u64) -> Option<Arc<RwLock<ArchetypeStorage>>> {
+        self.archetypes.read().await.get(&id).cloned()
     }
     
-    pub fn find_transition(&self, from: u64, component_type: TypeId, is_add: bool) -> Option<u64> {
-        self.edges.read().get(&(from, component_type, is_add)).copied()
+    pub async fn find_transition(&self, from: u64, component_type: TypeId, is_add: bool) -> Option<u64> {
+        self.edges.read().await.get(&(from, component_type, is_add)).copied()
     }
     
-    pub fn add_transition(&self, from: u64, component_type: TypeId, is_add: bool, to: u64) {
-        self.edges.write().insert((from, component_type, is_add), to);
+    pub async fn add_transition(&self, from: u64, component_type: TypeId, is_add: bool, to: u64) {
+        self.edges.write().await.insert((from, component_type, is_add), to);
     }
     
-    pub fn move_entity(
+    pub async fn move_entity(
         &self,
         entity: Entity,
         from_archetype: u64,
@@ -191,11 +191,11 @@ impl ArchetypeGraph {
         new_component: Option<Box<dyn std::any::Any + Send + Sync>>,
     ) -> LogicResult<u64> {
         // Get source archetype
-        let from = self.get_archetype(from_archetype)
+        let from = self.get_archetype(from_archetype).await
             .ok_or(crate::error::LogicError::ArchetypeNotFound(from_archetype))?;
         
         // Calculate destination archetype
-        let mut component_types: Vec<_> = from.read().archetype.component_types().to_vec();
+        let mut component_types: Vec<_> = from.read().await.archetype.component_types().to_vec();
         if is_add {
             if !component_types.contains(&component_type) {
                 component_types.push(component_type);
@@ -207,10 +207,10 @@ impl ArchetypeGraph {
         // Get or create destination archetype
         let to_archetype = Archetype::new(component_types.clone());
         let to_id = to_archetype.id();
-        let to = self.get_or_create_archetype(component_types);
+        let to = self.get_or_create_archetype(component_types).await;
         
         // Move entity and components
-        let mut from_write = from.write();
+        let mut from_write = from.write().await;
         let mut components = from_write.remove_entity(entity)?;
         
         // Add or remove component
@@ -223,16 +223,16 @@ impl ArchetypeGraph {
             // Note: This is simplified, real implementation would track component positions
         }
         
-        let mut to_write = to.write();
+        let mut to_write = to.write().await;
         to_write.add_entity(entity, components)?;
         
         // Cache transition
-        self.add_transition(from_archetype, component_type, is_add, to_id);
+        self.add_transition(from_archetype, component_type, is_add, to_id).await;
         
         Ok(to_id)
     }
     
-    pub fn all_archetypes(&self) -> Vec<Arc<RwLock<ArchetypeStorage>>> {
-        self.archetypes.read().values().cloned().collect()
+    pub async fn all_archetypes(&self) -> Vec<Arc<RwLock<ArchetypeStorage>>> {
+        self.archetypes.read().await.values().cloned().collect()
     }
 }

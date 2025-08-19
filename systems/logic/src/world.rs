@@ -6,7 +6,7 @@ use crate::query::QueryBuilder;
 use crate::scheduler::Scheduler;
 use crate::storage::HybridStorage;
 use crate::system::{SystemRegistration, Stage};
-use parking_lot::RwLock;
+use tokio::sync::RwLock;
 use tokio::sync::RwLock as AsyncRwLock;
 use std::any::TypeId;
 use std::sync::Arc;
@@ -44,66 +44,66 @@ impl World {
     }
     
     /// Spawn entities in batch
-    pub fn spawn_batch(&self, count: usize) -> Vec<Entity> {
-        let entities = self.entities.create_batch(count);
+    pub async fn spawn_batch(&self, count: usize) -> Vec<Entity> {
+        let entities = self.entities.create_batch(count).await;
         
         // Send spawn events
         for entity in &entities {
             self.events.send(
                 *entity,
                 crate::event::EntitySpawned { entity: *entity },
-            );
+            ).await;
         }
         
         entities
     }
     
     /// Spawn entity with components
-    pub fn spawn_with<F>(&self, builder: F) -> LogicResult<Entity>
+    pub async fn spawn_with<F>(&self, builder: F) -> LogicResult<Entity>
     where
         F: FnOnce() -> Vec<(TypeId, Box<dyn std::any::Any + Send + Sync>)>,
     {
-        let entity = self.entities.create();
+        let entity = self.entities.create().await;
         let components = builder();
         
-        self.storage.spawn_entity(entity, components)?;
+        self.storage.spawn_entity(entity, components).await?;
         
         self.events.send(
             entity,
             crate::event::EntitySpawned { entity },
-        );
+        ).await;
         
         Ok(entity)
     }
     
     /// Despawn entities in batch
-    pub fn despawn_batch(&self, entities: &[Entity]) -> LogicResult<()> {
+    pub async fn despawn_batch(&self, entities: &[Entity]) -> LogicResult<()> {
         for entity in entities {
-            self.storage.despawn_entity(*entity)?;
-            self.entities.destroy(*entity)?;
+            self.storage.despawn_entity(*entity).await?;
+            self.entities.destroy(*entity).await?;
             
             self.events.send(
                 *entity,
                 crate::event::EntityDespawned { entity: *entity },
-            );
+            ).await;
         }
         
         Ok(())
     }
     
     /// Add component to entity
-    pub fn add_component<T: 'static + Send + Sync>(
+    pub async fn add_component<T: 'static + Send + Sync>(
         &self,
         entity: Entity,
         component: T,
     ) -> LogicResult<()> {
         let type_id = TypeId::of::<T>();
         
-        self.storage.add_component(entity, component)?;
+        self.storage.add_component(entity, component).await?;
         
         // Track if networked
-        if self.components.is_networked(type_id) {
-            self.dirty_tracker.mark_dirty(entity, type_id);
+        if self.components.is_networked(type_id).await {
+            self.dirty_tracker.mark_dirty(entity, type_id).await;
         }
         
         self.events.send(
@@ -112,16 +112,16 @@ impl World {
                 entity,
                 component_type: type_id,
             },
-        );
+        ).await;
         
         Ok(())
     }
     
     /// Remove component from entity
-    pub fn remove_component<T: 'static>(&self, entity: Entity) -> LogicResult<()> {
+    pub async fn remove_component<T: 'static>(&self, entity: Entity) -> LogicResult<()> {
         let type_id = TypeId::of::<T>();
         
-        self.storage.remove_component::<T>(entity)?;
+        self.storage.remove_component::<T>(entity).await?;
         
         self.events.send(
             entity,
@@ -129,14 +129,14 @@ impl World {
                 entity,
                 component_type: type_id,
             },
-        );
+        ).await;
         
         Ok(())
     }
     
     /// Check if entity has component
-    pub fn has_component<T: 'static>(&self, entity: Entity) -> bool {
-        self.storage.has_component::<T>(entity)
+    pub async fn has_component<T: 'static>(&self, entity: Entity) -> bool {
+        self.storage.has_component::<T>(entity).await
     }
     
     /// Create a query builder
@@ -156,27 +156,27 @@ impl World {
     }
     
     /// Insert a global resource
-    pub fn insert_resource<R: 'static + Send + Sync>(&self, resource: R) {
+    pub async fn insert_resource<R: 'static + Send + Sync>(&self, resource: R) {
         self.resources
-            .write()
+            .write().await
             .insert(TypeId::of::<R>(), Box::new(resource));
     }
     
     /// Check if a global resource exists
-    pub fn has_resource<R: 'static>(&self) -> bool {
-        self.resources.read().contains_key(&TypeId::of::<R>())
+    pub async fn has_resource<R: 'static>(&self) -> bool {
+        self.resources.read().await.contains_key(&TypeId::of::<R>())
     }
     
     /// Run one frame of the world
     pub async fn update(&self, delta_time: f32) -> LogicResult<()> {
         // Process events from last frame
-        self.events.process_events();
+        self.events.process_events().await;
         
         // Run systems
         self.scheduler.run_frame(self, delta_time).await?;
         
         // Clear frame events
-        self.events.clear_frame_events();
+        self.events.clear_frame_events().await;
         
         // Incremental GC
         self.run_incremental_gc().await?;
@@ -185,25 +185,25 @@ impl World {
     }
     
     /// Get dirty entities for networking
-    pub fn get_dirty_entities(&self, max_count: usize) -> Vec<(Entity, Vec<TypeId>)> {
-        self.dirty_tracker.get_dirty_batch(max_count)
+    pub async fn get_dirty_entities(&self, max_count: usize) -> Vec<(Entity, Vec<TypeId>)> {
+        self.dirty_tracker.get_dirty_batch(max_count).await
     }
     
     /// Clear all entities and components
-    pub fn clear(&self) {
-        self.entities.clear();
+    pub async fn clear(&self) {
+        self.entities.clear().await;
         // Storage clear would go here
-        self.dirty_tracker.clear();
+        self.dirty_tracker.clear().await;
     }
     
     /// Get entity count
-    pub fn entity_count(&self) -> usize {
-        self.entities.count()
+    pub async fn entity_count(&self) -> usize {
+        self.entities.count().await
     }
     
     /// Check if entity is alive
-    pub fn is_alive(&self, entity: Entity) -> bool {
-        self.entities.is_alive(entity)
+    pub async fn is_alive(&self, entity: Entity) -> bool {
+        self.entities.is_alive(entity).await
     }
     
     /// Run incremental garbage collection
@@ -294,14 +294,14 @@ impl EntitySpawner {
         self
     }
     
-    pub fn spawn(self) -> LogicResult<Entity> {
-        self.world.spawn_with(|| self.components)
+    pub async fn spawn(self) -> LogicResult<Entity> {
+        self.world.spawn_with(|| self.components).await
     }
     
-    pub fn spawn_batch(self, count: usize) -> LogicResult<Vec<Entity>> {
+    pub async fn spawn_batch(self, count: usize) -> LogicResult<Vec<Entity>> {
         // For batch spawning, we can only use the base entity without components
         // since components can't be cloned
-        Ok(self.world.spawn_batch(count))
+        Ok(self.world.spawn_batch(count).await)
     }
 }
 

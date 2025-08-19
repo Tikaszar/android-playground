@@ -2,9 +2,9 @@
 
 This file tracks the detailed history of development sessions, including achievements, bug fixes, and implementation progress.
 
-## Session: 2025-08-19 - Major Architecture Refactoring
+## Session: 2025-08-19 - Major Architecture Refactoring & Async Overhaul
 
-### Completed
+### Morning: Architecture Refactoring
 1. **Plugin Architecture Completely Redesigned**
    - Removed core/plugin package entirely
    - Plugins now implement systems/logic::System trait
@@ -22,35 +22,54 @@ This file tracks the detailed history of development sessions, including achieve
    - All packages now use workspace version (0.8)
    - Fixed tower-http version mismatch
 
-4. **SystemsManager Updates**
-   - Now takes World reference in constructor
-   - Fixed async constructor pattern
-   - Removed deprecated register_plugin_channels method
-   - Added networking() and ui() accessors
+### Afternoon: Massive Async/Await Refactoring
+1. **RwLock Migration (CRITICAL FIX)**
+   - Replaced ALL `parking_lot::RwLock` with `tokio::sync::RwLock`
+   - Fixed Send trait issues - parking_lot guards aren't Send across await
+   - This was causing compilation failures in tokio::spawn
 
-5. **World ECS Updates**
-   - Added register_plugin_system() for plugin registration
-   - Added run_systems() for frame updates
-   - SystemExecutor now has register() method
+2. **Async Function Propagation**
+   - Made 100+ functions async in systems/logic
+   - Created automation scripts:
+     - `fix-rwlock-await.sh` - Added .await to all RwLock calls
+     - `fix-async.py` - Made functions containing .await async
+   - Fixed 69 initial async/await errors, then 35 more, then final 5
 
-### Architecture Changes
-- Apps → systems/logic → all systems → core (ENFORCED)
-- Plugins can ONLY access Systems through systems/logic
-- Core never knows about Plugins
-- Systems never know about Plugins (just Systems)
+3. **Files Modified in systems/logic**:
+   - scheduler.rs - All methods made async
+   - system.rs - Executor methods async
+   - world.rs - Most public APIs async
+   - entity.rs - All CRUD operations async
+   - storage.rs - All storage operations async
+   - component.rs - Registry methods async
+   - archetype.rs - Graph operations async
+   - event.rs - Event system async
+   - query.rs - Query execution async
+
+### Key Learning: Async Propagation Pattern
+When converting from sync to async RwLock:
+1. Change `use parking_lot::RwLock` to `use tokio::sync::RwLock`
+2. Add `.await` to all `.read()` and `.write()` calls
+3. Make containing functions `async`
+4. Propagate async up the call chain
+5. Fix all callers to use `.await`
+
+### Build Status Evolution
+- Start: 1 error (Send trait in main.rs)
+- After RwLock change: 69 errors
+- After first script: 35 errors  
+- After second script: 19 errors
+- After manual fixes: 5 errors
+- **Final: 0 errors - FULLY COMPILING!**
 
 ### Bug Fixes
-- **Issue**: Apps directly using core/server
-  - **Fix**: NetworkingSystem starts server internally
-- **Issue**: Plugin trait in wrong layer (Core)
-  - **Fix**: Plugins implement systems/logic::System
-- **Issue**: Axum version conflict
-  - **Fix**: All using workspace version 0.8
-
-### Remaining Issues
-- UI Framework Plugin incomplete (missing methods)
-- McpHandler, UiState, Orchestrator need implementation
-- Need to complete business logic for UI Framework
+- **Issue**: `*mut ()` cannot be sent between threads safely
+  - **Root Cause**: parking_lot::RwLock guards don't implement Send
+  - **Fix**: Use tokio::sync::RwLock throughout
+- **Issue**: Hundreds of "await only in async" errors
+  - **Fix**: Systematic async function conversion
+- **Issue**: Manual fixes would take hours
+  - **Fix**: Created automation scripts for batch changes
 
 ## Session: Package Standardization & Build Fixes
 
