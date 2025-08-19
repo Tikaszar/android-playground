@@ -2,324 +2,213 @@
 
 A mobile-first, plugin-based game engine designed for development entirely on Android devices using Termux. Built collaboratively by AI agents and human developers for rapid prototyping and experimentation.
 
-## 🚀 Project Vision
-
-Android Playground is an ambitious experiment in mobile-native game development. We're building a complete game engine and IDE that runs entirely on your phone, no desktop required. This repository serves as both a playground for AI agents to explore game engine architecture and a practical tool for mobile developers.
-
-### Why This Matters
-- **True Mobile Development**: Code, compile, and play - all on your Android device
-- **AI-Driven Evolution**: Each session brings architectural improvements from AI collaboration
-- **Battery-First Design**: Every system optimized for mobile constraints
-- **Touch-Native IDE**: Not a port, but built from scratch for fingers
-
-## Getting Started
+## 🚀 Quick Start
 
 ### Prerequisites
+- [Termux](https://termux.com/) on Android
+- Rust toolchain: `pkg install rust`
+- For WASM builds: `pkg install rust-std-wasm32-unknown-unknown`
 
-- [Termux](https://termux.com/) for terminal environment on Android
-- [Rust](https://rustup.rs/) for building the engine and plugins
-- Web browser for the development IDE
-
-### Building the Project
+### Building & Running
 
 ```bash
 # Clone the repository
 git clone https://github.com/Tikaszar/android-playground.git
 cd android-playground
 
-# Build and run - just ONE command:
-cargo run -p playground-apps-editor
-```
-
-### Running the Conversational IDE
-
-```bash
-# ONE command to run everything:
+# Run the Conversational IDE (ONE COMMAND!)
 cargo run -p playground-apps-editor
 
-# Then open your browser to:
+# Open browser to:
 http://localhost:8080/playground-editor/
 ```
 
-This single command starts everything:
-- Core server with WebSocket and static file serving on port 8080
-- All engine systems (networking, ui, rendering) via systems/logic
-- UI Framework Plugin handling all mobile UI rendering
-- MCP endpoint for AI agents at `/mcp`
+That's it! This single command starts:
+- Core server with WebSocket and MCP on port 8080
+- All engine systems (networking, ui, rendering, logic)
+- UI Framework Plugin for browser rendering
+- Mobile-optimized IDE interface
 
-### Connecting AI Agents (Claude Code, GPT, etc.)
+### Connecting AI Agents
 
-AI agents connect via MCP (Model Context Protocol) to the core server:
+AI agents (Claude Code, GPT, etc.) connect via MCP:
 
-```bash
-# The MCP endpoint is available at:
-http://localhost:8080/mcp
-
-# Configure your AI tool (e.g., Claude Code) to connect to this endpoint
+**Claude Code**: Create `.claude/settings.json`:
+```json
+{
+  "mcpServers": {
+    "android-playground": {
+      "type": "sse",
+      "url": "http://localhost:8080/mcp"
+    }
+  }
+}
 ```
 
-## Architecture
+## 🏗️ Architecture
 
 ### 4-Layer System
-- **Apps**: Complete products (IDE, games) that coordinate plugins
-- **Plugins**: Reusable feature modules that use systems
-- **Systems**: Engine components that provide core functionality
-- **Core**: Foundation layer with minimal dependencies
-
-### Layer Structure
 ```
-apps/           # Complete products
+apps/           # Complete products (IDE, games)
 ├── playground-editor  # Browser-based IDE
-└── idle-mmo-rpg      # Production game (planned)
+└── idle-mmo-rpg      # Future MMO game
 
-plugins/        # Feature modules
-├── inventory   # Inventory management
-├── combat      # Combat mechanics
-├── chat        # Real-time chat
-└── editor-core # Core editor features
+plugins/        # Reusable feature modules
+├── ui-framework      # Conversational IDE core
+├── editor-core       # Text editing, vim mode
+├── file-browser      # File navigation
+├── terminal          # Termux integration
+├── inventory         # Game inventory system
+├── combat            # Combat mechanics
+└── chat              # Real-time messaging
 
 systems/        # Engine components
-├── rendering   # Multi-backend renderer with BaseRenderer trait
-├── ui          # UI framework with persistent graph
-├── networking  # WebSocket-based multiplayer and IPC
-├── physics     # 2D/3D physics simulation
-└── logic       # ECS, state machines
+├── logic       # ECS and system initialization
+├── networking  # WebSocket channels
+├── ui          # UI framework
+├── rendering   # WebGL/Vulkan renderer
+└── physics     # 2D/3D physics (planned)
 
-core/           # Foundation (minimal dependencies)
-├── types       # Shared types and traits
-├── android     # Android JNI bindings
-├── server      # WebSocket multiplexer and channel management
-├── client      # Browser WASM WebSocket client
-└── plugin      # Plugin trait and loading
+core/           # Foundation layer
+├── types       # Shared types
+├── ecs         # Minimal ECS for Systems
+├── server      # WebSocket + MCP server
+├── client      # WASM browser client
+└── plugin      # Plugin system
 ```
 
-### Architectural Rules
-- **Apps** create systems/logic which initializes ALL other systems
-- **Plugins** use Systems APIs provided by the App (never create systems)
-- **Systems** use Core ONLY (including core/ecs for internal state)
-- **Systems/Logic** is special - it creates core/ecs and initializes all systems
-- **Exception**: Plugins may implement custom Systems internally
+### Key Design Principles
+- **Mobile-First**: Designed for touch, optimized for battery
+- **Hot-Reload**: Change plugins without restart
+- **Server Authority**: Browser is pure view, logic on server
+- **NO unsafe code**: 100% safe Rust
+- **Async Everything**: Built on tokio
+- **ECS Architecture**: Two-layer design (core/ecs + systems/logic)
 
-### ECS Architecture
-- **Core/ECS**: Minimal primitives for Systems' internal state management
-- **Systems/Logic**: Full game ECS that also initializes all other systems
-- **Initialization Flow**: App → systems/logic → all other systems
-- All Systems use core/ecs internally for state management
-- Plugins receive systems from the App, never create their own
+## 🎯 Features
 
-## 🤖 MCP Support - Universal LLM Integration
+### Conversational IDE
+- **Discord-Style Chat**: Channels, DMs, multi-agent collaboration
+- **Inline Components**: Edit code, browse files, run terminals in chat
+- **Bubble States**: Collapsed/Compressed/Expanded views
+- **MCP Integration**: Any LLM can connect and assist
+- **Mobile Touch**: Full gesture support with floating toolbar
 
-Android Playground now includes **MCP (Model Context Protocol)** support, enabling any LLM to connect and provide development assistance:
+### Engine Capabilities
+- **WebSocket Networking**: Binary protocol, 60fps batching
+- **Channel System**: 1-999 for Systems, 1000+ for Plugins
+- **ECS Framework**: Hybrid storage, parallel execution
+- **WebGL Renderer**: Single draw call batching
+- **Plugin System**: Dynamic loading with hot-reload
+- **WASM Support**: Browser client with reconnection
 
-### Supported LLMs
-- **Claude Code** (Anthropic)
-- **GPT** (OpenAI)
-- **Llama** (Meta)
-- Any MCP-compatible LLM
-
-### How It Works
-1. The LLM (e.g., Claude Code) has your actual codebase
-2. You interact through the Conversational IDE in your browser
-3. The LLM calls MCP tools to update your browser display
-4. Full bidirectional communication for seamless development
-
-### Quick Start
-```bash
-# Start Android Playground (port 8080 for Termux)
-cargo run -p playground-apps-editor
-
-# LLMs auto-connect via .claude/settings.json or .gemini/settings.json
-# No command-line flags needed!
-
-# Open browser to http://localhost:8080/playground-editor/
-# Start coding through conversation!
-```
-
-## Current Implementation Status
-
-⚠️ **In Progress (Package Standardization & ECS - 2025-12-21)**
-- **Package Naming** - All packages renamed to match directory structure
-- **ECS Query API** - Turbofish syntax removed, cleaner API
-- **Build Partially Fixed** - Many issues resolved, some remaining
-- **Known Issue**: playground-apps-editor not fully compiling yet
-
-✅ **Completed (MCP Tool System - 2025-12-20)**
-- **MCP Test Tools**: ping, echo, get_status, list_channels execute directly
-- **Dynamic Tool Registration**: Plugins/Apps can register MCP tools at runtime
-- **Tool Forwarding**: Registered tools forward to handler channels
-- **Arc<RwLock<>> Pattern**: Consistent thread-safe access throughout
-- **Control Channel Messages**: Packet types 100/101 for tool registration
-
-✅ **Completed (Phase 1 Update - 2025-12-18)**
-- Core infrastructure (types, plugin, server, client, android, **ecs**, **mcp**)
-- **Core/ECS** with async, safe, batch-only API (no unsafe code!)
-- **Core/Server** with integrated MCP server and channel management
-- **Core/Client** with automatic WebSocket reconnection and exponential backoff
-- **Systems/Logic** full-featured game ECS with hybrid storage
-- **Systems/Networking** fully integrated with core/ecs for internal state
-- **Systems/UI** fully integrated with core/ecs and core/server (NOW GENERIC ONLY!)
-- **Systems/Rendering** integrated with core/ecs for resource tracking
-- **WebSocket multiplexer** with binary protocol and channel system
-- **Channel management** (1-999 for Systems, 1000+ for Plugins)
-- **Frame-based packet batching** at 60fps with priority queues
-- **WASM client module** with successful wasm32 compilation
-- BaseRenderer trait with full rendering API
-- WebGL2 renderer implementation
-- Resource management with handle recycling
-- Render graph system with passes
-- State caching and batching
-- Shader compilation and hot-reload
-- Performance metrics and debugging
-- **VSCode/Godot-style docking system** with drag & drop (1000+ lines)
-- **ECS-based UI system** with 7 component types for internal state
-- **Conversational-first UI** with Element trait architecture
-- **File tree component** with lazy loading and expand/collapse
-- **Chat interface** with message bubbles and inline code
-- **Code editor** with vim mode and multi-cursor support
-- **Terminal integration** migrated to core/server channels (no direct WebSocket)
-- **Mobile gesture support** with full multi-touch recognition (500+ lines)
-- **Floating toolbar** for mobile-specific actions (400+ lines)
-- **Gesture-aware UI elements** with configurable handlers
-- **SDF text rendering** with font atlas and layout engine (400+ lines)
-- **WebSocket message handlers** for UI system with full packet routing
-- **Hybrid archetype/sparse storage** for optimal performance
-- **System scheduler** with parallel execution and dependencies
-- **NetworkedComponent trait** for automatic replication
-- **Event system** using components as events
-- **Query caching** with builder pattern
-- **Networking ECS components** for connections, channels, packet queues
-- **4-Layer Architecture** FULLY ENFORCED (Apps → Plugins → Systems → Core)
-- **2 Apps** (playground-editor IDE, idle-mmo-rpg game) with plugin coordination
-- **18 Plugins** ALL COMPILE with proper trait implementation and no Core access
-- **file-browser plugin** with complete FileTree UI and file operations
-- **editor-core plugin** with EditorView, TextBuffer, and full vim mode
-- **chat-assistant plugin** with ChatView for conversational IDE
-- **Message bus** for inter-plugin communication in IDE
-- **IDE docking layout** with desktop and mobile variants
-- **Architecture violation FIXED**: systems/ui no longer contains app-specific code
-- **UI Framework Plugin PHASE 2 COMPLETE** (3000+ lines):
-  - ✅ Discord-style channel management with persistence
-  - ✅ Message system with bubble states (Collapsed/Compressed/Expanded)
-  - ✅ Inline components (Editor, FileBrowser, Terminal, Diff)
-  - ✅ Agent orchestration with task queue
-  - ✅ MCP tool handlers for all UI operations
-  - ✅ WebSocket integration on channels 1200-1209
-  - ✅ Complete browser UI (HTML/JS) for Conversational IDE
-  - ✅ MCP server forwarding tool calls to channel 1200
-  - ✅ Test infrastructure with mcp-test.html
-
-🚧 **Next Session Priority**
-- Test end-to-end MCP flow with actual Claude Code instance
-- Implement context switching via git worktrees
-- Add real file I/O to inline components
-- Implement conversation persistence to disk
-- Create agent orchestration logic
-
-📋 **Planned**
-- Remaining IDE plugins (debugger, chat-assistant, version-control, theme-manager)
-- Game plugins implementation (inventory, combat, chat, etc.)
-- Authentication system (Passkey/1Password)
-- Systems/physics using core/ecs internally
-- Vulkan renderer for compute support
-- APK packaging
-- Hot-reload file watching system
-
-## Key Features
-
-### Mobile-First Design
-- **Touch Gestures**: Full multi-touch support with tap, swipe, pinch, and rotation
-- **Responsive UI**: Automatic layout adaptation for portrait/landscape
-- **Battery Efficient**: Optimized for minimal CPU/GPU usage
-- **Floating Toolbar**: Context-sensitive mobile actions
-- **Touch-Friendly**: All UI elements sized for finger interaction
-
-### Development Environment
-- **Conversational IDE**: Chat-based code editing and navigation
-- **Hot Reload**: Instant plugin updates without restart
-- **Browser-Based**: Full IDE accessible from any modern browser
-- **Termux Integration**: Direct terminal access on Android
-- **Vim Mode**: Efficient text editing on mobile
-
-## 🎯 ECS Architecture
-
-The project features a sophisticated two-layer ECS design:
-
-### Core/ECS (Minimal Foundation)
-- Basic primitives for Systems' internal use
-- Async/concurrent with generational entity IDs
-- Runtime component registration
-- Binary serialization for networking
-
-### Systems/Logic (Full Game ECS)
-- **Hybrid Storage**: Archetype for iteration, sparse for rare components
-- **System Scheduler**: Parallel execution with dependency graphs
-- **NetworkedComponent**: Automatic replication with dirty tracking
-- **Events as Components**: Unified event system
-- **Query Caching**: Frequently used queries are cached
-- **Safe Mode**: Systems auto-disable after repeated failures
+### Development Tools
+- **Vim Mode**: Full vim emulation in editor
+- **Syntax Highlighting**: Tree-sitter integration
+- **File Browser**: Git status, lazy loading
+- **Terminal**: Direct Termux process connection
+- **Docking System**: VSCode-style panels
+- **Multi-Cursor**: Alt-select editing
 
 ## 📊 Project Stats
 
-- **Total Lines of Code**: ~30,000+ (with UI Framework Plugin Phase 2)
-- **Compilation Time**: < 20 seconds on modern Android devices
-- **Memory Usage**: < 50MB baseline
-- **WASM Size**: 431KB (optimized release build)
-- **Supported Platforms**: Android 7.0+ via Termux, Browser via WASM
-- **Zero Unsafe Code**: 100% safe Rust (NO unsafe blocks anywhere!)
-- **Architecture Layers**: 4 (Apps → Plugins → Systems → Core)
-- **Applications**: 2 (IDE and Game)
-- **Plugins**: 19 (8 IDE, 10 Game, 1 UI Framework)
-- **ECS Integration**: 4 Systems use core/ecs internally
-- **WebSocket Channels**: UI on 10, IDE plugins 1000-1079, Game plugins 1100-1199, UI Framework 1200-1209, LLMs 2000-2999
-- **MCP Tools**: 10 UI update tools for LLM integration
-- **LLM Support**: Claude Code, GPT, Llama, and any MCP-compatible LLM
-- **UI Framework**: 3000+ lines (Phase 2 complete with browser UI)
-- **Browser UI**: Discord-style IDE with inline components and bubble states
+- **Lines of Code**: ~35,000+
+- **Packages**: 30+ (4 apps, 18 plugins, 6 systems, 6 core)
+- **Zero Unsafe Code**: 100% safe Rust
+- **WASM Size**: 431KB optimized
+- **Compilation**: < 20s on modern Android
+- **Memory**: < 50MB baseline
+- **WebSocket Channels**: 
+  - UI: 10
+  - IDE Plugins: 1000-1079
+  - Game Plugins: 1100-1199
+  - UI Framework: 1200-1209
+  - LLM Sessions: 2000-2999
+
+## 🛠️ Development
+
+### Building Individual Components
+```bash
+# Build everything
+cargo build --workspace
+
+# Build specific plugin
+cargo build -p playground-plugins-inventory
+
+# Build WASM client
+cargo build -p playground-core-client --target wasm32-unknown-unknown --release
+
+# Run tests
+cargo test --workspace
+```
+
+### Project Structure
+- **Package Naming**: `playground-{layer}-{name}`
+  - Core: `playground-core-*`
+  - Systems: `playground-systems-*`
+  - Plugins: `playground-plugins-*`
+  - Apps: `playground-apps-*`
+
+### Architecture Rules
+1. Apps → Plugins → Systems → Core (strict layering)
+2. Systems use core/ecs for internal state
+3. Plugins use systems/logic for game ECS
+4. No turbofish syntax - use `.with_component(ComponentId)`
+5. Arc<RwLock<>> for thread safety throughout
 
 ## 🤝 Contributing
 
-This is primarily an experimental project between AI agents and a solo developer. Each AI session builds upon the last, documented in `CONTEXT.md`. If you're an AI agent reading this:
+This is an experimental project between AI agents and developers. Each session builds on the last:
 
-1. Start by reading `CLAUDE.md` for project guidelines
-2. Check `CONTEXT.md` for the latest session state
-3. Build incrementally - we value working code and perfect architecture
-4. Document your changes thoroughly for the next agent
-5. Ensure Code Compiles - The code must work and compile for a feature to be considered implemented. You may use multiple sessions to achieve this.
-6. Plan The Feature - Always formulate a plan and TODO list for a feature based on the designs and User instructions
+1. Read `CLAUDE.md` for architecture and rules
+2. Check `CONTEXT.md` for current session state
+3. Follow the architectural guidelines strictly
+4. Complete implementations fully (no TODOs)
+5. Update documentation for next session
+
+### For AI Agents
+- Start with CLAUDE.md and CONTEXT.md
+- Use TodoWrite to plan tasks
+- Mark todos completed immediately
+- Maintain architectural integrity
+- Document changes thoroughly
 
 ## 📚 Documentation
 
-- `CLAUDE.md` - Primary AI agent development instructions
-- `CONTEXT.md` - Rolling session context and handoff notes
-- `GEMINI.md` - Alternative AI agent context (for diversity in approaches)
+- `CLAUDE.md` - Architecture, rules, and AI agent guidance
+- `CONTEXT.md` - Current session state and handoff notes
+- Wiki - Coming soon with detailed guides
 
-## 🎯 Roadmap
+## 🎮 Roadmap
 
-### Immediate (Next Session)
-- LSP client for code intelligence
-- Hot-reload file watching system
-- Debugger interface implementation
+### Current Focus
+- Fix architecture violations
+- Complete build system
+- Test MCP integration
 
-### Short Term (2-3 Sessions)
-- Complete WebSocket networking
+### Next Up
+- Terminal plugin with real Termux
+- LSP client for rust-analyzer
+- Hot-reload file watching
+- Debugger interface
+
+### Future
+- Complete game plugins
+- APK packaging
 - Vulkan renderer
-- Physics system integration
-
-### Long Term Vision
-- Full APK packaging
-- Play Store distribution
-- Plugin marketplace
-- Cloud compilation service
+- Physics system
+- App store distribution
 
 ## 💡 Philosophy
 
-"If you can't develop a game on the device it runs on, is it really mobile-first?"
+> "If you can't develop a game on the device it runs on, is it really mobile-first?"
 
-This project challenges conventional wisdom about mobile development. We believe the future of computing is in our pockets, and development tools should embrace that reality.
+This project challenges conventional mobile development. We believe the future is in our pockets, and development tools should embrace that reality.
 
-### Code Quality Principles
-- **Zero unsafe code** - The entire engine is implemented in 100% safe Rust
-- **No runtime type casting** - We avoid std::any::Any in favor of proper abstractions
-- **Async everywhere** - Built on tokio for true concurrent, non-blocking operations
-- **Batch-first APIs** - All operations work on collections for better performance
-- **Fail gracefully** - Result types everywhere, no panics in production
+## 📄 License
+
+This project is currently private and experimental. License details will be added when the project reaches production readiness.
+
+---
+
+Built with ❤️ by humans and AI in collaboration
