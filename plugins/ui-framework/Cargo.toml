@@ -6,9 +6,6 @@ edition = "2021"
 [lib]
 crate-type = ["dylib", "rlib"]
 
-[[bin]]
-name = "playground-plugins-ui-framework"
-path = "src/main.rs"
 
 [dependencies]
 tracing-subscriber = { workspace = true }

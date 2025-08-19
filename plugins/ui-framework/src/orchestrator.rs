@@ -407,6 +407,58 @@ impl Orchestrator {
     }
 
     // ========================================================================
+    // Update Processing
+    // ========================================================================
+
+    pub async fn process_pending_updates(&mut self, _delta_time: f32) -> Result<()> {
+        // Process any pending task assignments
+        if let Some((agent_id, task)) = self.assign_next_task().await? {
+            tracing::info!("Auto-assigned task {:?} to agent {:?}", task.id, agent_id);
+        }
+        
+        // Check for timed-out tasks
+        let queue = self.task_queue.read().await;
+        let now = chrono::Utc::now();
+        
+        for task in queue.get_in_progress_tasks() {
+            if let Some(assigned_at) = task.assigned_at {
+                let duration = now.signed_duration_since(assigned_at);
+                if duration.num_hours() > 1 {
+                    tracing::warn!("Task {:?} has been in progress for over 1 hour", task.id);
+                    
+                    // Send reminder notification
+                    if let Some(channel) = self.system_channel {
+                        self.message_system
+                            .send_system_notification(
+                                channel,
+                                format!("⏰ Task '{}' has been running for {} minutes", 
+                                    task.title, 
+                                    duration.num_minutes()
+                                ),
+                            )
+                            .await?;
+                    }
+                }
+            }
+        }
+        
+        // Process any pending messages from workers
+        let agents = self.channel_manager.read().await.list_agents();
+        for agent in agents {
+            if matches!(agent.agent_type, AgentType::Worker) {
+                // Check if worker needs attention
+                let time_since_active = now.signed_duration_since(agent.last_active);
+                if time_since_active.num_minutes() > 30 && matches!(agent.status, AgentStatus::Busy) {
+                    tracing::debug!("Worker {:?} hasn't updated in {} minutes", 
+                        agent.id, time_since_active.num_minutes());
+                }
+            }
+        }
+        
+        Ok(())
+    }
+
+    // ========================================================================
     // Run Loop
     // ========================================================================
 

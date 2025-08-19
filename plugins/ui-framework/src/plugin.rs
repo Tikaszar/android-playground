@@ -43,17 +43,21 @@ impl UiFrameworkPlugin {
                     ui_state_clone.read().await.channel_manager.clone()
                 })
             }),
-            panel_manager.clone(),
-            browser_bridge.clone(),
+            tokio::task::block_in_place(|| {
+                tokio::runtime::Handle::current().block_on(async {
+                    ui_state_clone.read().await.message_system.clone()
+                })
+            }),
         )));
         
         // Create MCP handler with references to all components
-        let mcp_handler = Arc::new(McpHandler::new(
-            panel_manager.clone(),
-            orchestrator.clone(),
-            browser_bridge.clone(),
+        let mut mcp_handler = McpHandler::new(
             ui_state.clone(),
-        ));
+            browser_bridge.clone(),
+            panel_manager.clone(),
+        );
+        mcp_handler.set_orchestrator(orchestrator.clone());
+        let mcp_handler = Arc::new(mcp_handler);
         
         Self {
             panel_manager,
@@ -205,7 +209,21 @@ impl UiFrameworkPlugin {
                 if let Some(msg_type) = msg.get("type").and_then(|v| v.as_str()) {
                     match msg_type {
                         "mcp_tool_call" => {
-                            self.mcp_handler.handle_tool_call(msg).await;
+                            if let (Some(tool_name), Some(params)) = (
+                                msg.get("tool_name").and_then(|v| v.as_str()),
+                                msg.get("params")
+                            ) {
+                                match self.mcp_handler.handle_tool_call(tool_name, params.clone()).await {
+                                    Ok(result) => {
+                                        debug!("Tool call succeeded: {:?}", result);
+                                    }
+                                    Err(e) => {
+                                        error!("Tool call failed: {}", e);
+                                    }
+                                }
+                            } else {
+                                error!("Invalid mcp_tool_call message: missing tool_name or params");
+                            }
                         }
                         "panel_update" => {
                             let mut pm = self.panel_manager.write().await;
@@ -213,7 +231,9 @@ impl UiFrameworkPlugin {
                         }
                         "chat_message" => {
                             let mut ui_state = self.ui_state.write().await;
-                            ui_state.handle_chat_message(msg).await;
+                            if let Err(e) = ui_state.handle_chat_message(msg).await {
+                                error!("Failed to handle chat message: {}", e);
+                            }
                         }
                         _ => {
                             debug!("Unknown message type: {}", msg_type);

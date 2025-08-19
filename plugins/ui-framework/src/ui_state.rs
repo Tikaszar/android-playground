@@ -2,6 +2,7 @@ use crate::components::*;
 use crate::channel_manager::ChannelManager;
 use crate::message_system::MessageSystem;
 use anyhow::Result;
+use serde_json;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use uuid::Uuid;
@@ -255,6 +256,89 @@ impl UiState {
             .update_agent_status(agent_id, AgentStatus::Idle)
             .await?;
         
+        Ok(())
+    }
+
+    // ========================================================================
+    // Message Handling
+    // ========================================================================
+
+    pub async fn handle_chat_message(&mut self, msg: serde_json::Value) -> Result<()> {
+        // Extract message fields
+        let channel_id = msg.get("channel_id")
+            .and_then(|v| v.as_str())
+            .and_then(|s| Uuid::parse_str(s).ok());
+        
+        let content = msg.get("content")
+            .and_then(|v| v.as_str())
+            .unwrap_or("");
+        
+        let author_id = msg.get("author_id")
+            .and_then(|v| v.as_str())
+            .and_then(|s| Uuid::parse_str(s).ok())
+            .map(AgentId)
+            .unwrap_or(AgentId(Uuid::nil()));
+        
+        // Send message to the appropriate channel
+        if let Some(channel_id) = channel_id {
+            self.message_system
+                .send_text_message(channel_id, author_id, content.to_string())
+                .await?;
+            
+            tracing::debug!("Handled chat message in channel {:?}", channel_id);
+        } else if let Some(channel_id) = self.active_channel {
+            // If no channel specified, use active channel
+            self.message_system
+                .send_text_message(channel_id, author_id, content.to_string())
+                .await?;
+            
+            tracing::debug!("Handled chat message in active channel {:?}", channel_id);
+        } else {
+            tracing::warn!("No channel specified for chat message and no active channel");
+        }
+        
+        Ok(())
+    }
+
+    // ========================================================================
+    // Persistence Operations
+    // ========================================================================
+
+    pub async fn save_state(&self) -> Result<()> {
+        // Save current UI state to disk
+        let persistence_path = std::path::PathBuf::from("/data/data/com.termux/files/home/.android-playground/conversations");
+        
+        // Create directory if it doesn't exist
+        tokio::fs::create_dir_all(&persistence_path).await?;
+        
+        // Save channels
+        let channels = self.channel_manager.read().await.list_channels();
+        let channels_json = serde_json::to_string_pretty(&channels)?;
+        let channels_path = persistence_path.join("channels.json");
+        tokio::fs::write(channels_path, channels_json).await?;
+        
+        // Save agents
+        let agents = self.channel_manager.read().await.list_agents();
+        let agents_json = serde_json::to_string_pretty(&agents)?;
+        let agents_path = persistence_path.join("agents.json");
+        tokio::fs::write(agents_path, agents_json).await?;
+        
+        // Save task queue
+        let tasks_json = serde_json::to_string_pretty(&self.task_queue)?;
+        let tasks_path = persistence_path.join("task_queue.json");
+        tokio::fs::write(tasks_path, tasks_json).await?;
+        
+        // Save active channel
+        if let Some(active_channel) = self.active_channel {
+            let state_json = serde_json::json!({
+                "active_channel": active_channel,
+                "timestamp": chrono::Utc::now()
+            });
+            let state_path = persistence_path.join("ui_state.json");
+            tokio::fs::write(state_path, serde_json::to_string_pretty(&state_json)?).await?;
+        }
+        
+        tracing::info!("UI state saved to disk");
         Ok(())
     }
 

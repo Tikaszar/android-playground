@@ -314,6 +314,10 @@ impl TaskQueueComponent {
     pub fn get_agent_task(&self, agent_id: &AgentId) -> Option<&Task> {
         self.active.get(agent_id)
     }
+    
+    pub fn get_in_progress_tasks(&self) -> Vec<&Task> {
+        self.active.values().collect()
+    }
 }
 
 // ============================================================================
