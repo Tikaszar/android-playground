@@ -3,7 +3,7 @@
 use nalgebra::Vector2;
 use uuid::Uuid;
 use crate::input::{GestureType, SwipeDirection};
-use super::docking::{DockingLayout, DockOrientation};
+use super::docking::DockingLayout;
 
 /// Gesture handler for the docking system
 pub struct DockingGestureHandler {

@@ -1,15 +1,19 @@
+use async_trait::async_trait;
 use crate::state::{EditorState, OpenFile, CursorPosition};
 use playground_core_plugin::Plugin;
-use playground_core_types::{PluginMetadata, PluginId, Version, Event, Context, PluginError, RenderContext};
+use playground_core_types::{
+    PluginMetadata, PluginId, Version, Event,
+    context::Context,
+    render_context::RenderContext,
+    error::PluginError,
+};
 use playground_systems_logic::World;
 use playground_systems_ui::UiSystem;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use tracing::info;
-use uuid::Uuid;
 
 pub struct EditorCorePlugin {
-    id: Uuid,
     metadata: PluginMetadata,
     state: Arc<RwLock<EditorState>>,
     base_channel: u16,
@@ -18,7 +22,6 @@ pub struct EditorCorePlugin {
 impl EditorCorePlugin {
     pub fn new() -> Self {
         Self {
-            id: Uuid::new_v4(),
             metadata: PluginMetadata {
                 id: PluginId("editor-core".to_string()),
                 name: "Editor Core".to_string(),
@@ -107,29 +110,30 @@ impl EditorCorePlugin {
     }
 }
 
+#[async_trait]
 impl Plugin for EditorCorePlugin {
     fn metadata(&self) -> &PluginMetadata {
         &self.metadata
     }
 
-    fn on_load(&mut self, ctx: &mut Context) -> Result<(), PluginError> {
+    async fn on_load(&mut self, ctx: &mut Context) -> Result<(), PluginError> {
         info!("Editor Core plugin loaded");
         Ok(())
     }
 
-    fn on_unload(&mut self, ctx: &mut Context) {
+    async fn on_unload(&mut self, ctx: &mut Context) {
         info!("Editor Core plugin unloaded");
     }
 
-    fn update(&mut self, ctx: &mut Context, delta_time: f32) {
+    async fn update(&mut self, ctx: &mut Context, delta_time: f32) {
         // Update logic here
     }
 
-    fn render(&mut self, ctx: &mut RenderContext) {
+    async fn render(&mut self, ctx: &mut RenderContext) {
         // Render logic here
     }
 
-    fn on_event(&mut self, event: &Event) -> bool {
+    async fn on_event(&mut self, event: &Event) -> bool {
         // Handle events
         false
     }

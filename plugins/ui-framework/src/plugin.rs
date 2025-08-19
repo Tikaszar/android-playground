@@ -157,7 +157,7 @@ impl Plugin for UiFrameworkPlugin {
         
         // Register for channels 1200-1209 as a plugin
         let channel_id = {
-            let mut net = networking.write().await;
+            let net = networking.write().await;
             net.register_plugin("ui-framework").await
                 .map_err(|e| PluginError::InitFailed(e.to_string()))?
         };

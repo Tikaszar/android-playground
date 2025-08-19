@@ -2,7 +2,7 @@
 
 use crate::error::{UiError, UiResult};
 use crate::components::*;
-use crate::element::{ElementBounds, ElementId};
+use crate::element::ElementBounds;
 use crate::layout::LayoutConstraints;
 use crate::input::InputManager;
 use crate::rendering::UiRenderer;

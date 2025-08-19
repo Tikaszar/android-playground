@@ -6,14 +6,13 @@ use axum::{
     Json, Router,
 };
 use std::sync::Arc;
-use tracing::{info, debug, error};
+use tracing::{info, error};
 use serde_json::{json, Value};
 use uuid::Uuid;
 
 use crate::websocket::WebSocketState;
 use super::{
-    jsonrpc::{JsonRpcRequest, JsonRpcResponse},
-    session::{SessionManager, SessionInfo},
+    session::SessionManager,
     streamable_http,
 };
 

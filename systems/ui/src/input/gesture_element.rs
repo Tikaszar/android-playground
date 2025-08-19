@@ -1,6 +1,6 @@
 //! Gesture-aware element wrapper
 
-use nalgebra::{Vector2, Vector4};
+use nalgebra::Vector2;
 use crate::element::{Element, ElementBounds};
 use uuid::Uuid;
 use std::any::Any;

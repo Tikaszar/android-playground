@@ -1,4 +1,4 @@
-use crate::archetype::{ArchetypeGraph, ArchetypeStorage};
+use crate::archetype::ArchetypeGraph;
 use crate::entity::Entity;
 use crate::error::LogicResult;
 use fnv::FnvHashMap;

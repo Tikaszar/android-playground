@@ -1,3 +1,4 @@
+use async_trait::async_trait;
 use playground_core_plugin::Plugin;
 use playground_core_types::{
     PluginMetadata, PluginId, Version, Event,
@@ -50,7 +51,7 @@ impl FileBrowserPlugin {
         self
     }
 
-    async fn initialize_file_tree(&mut self) -> Result<(), Box<dyn std::error::Error>> {
+    async fn initialize_file_tree(&mut self) -> Result<(), PluginError> {
         // Create event channel
         let (event_sender, event_receiver) = mpsc::unbounded_channel();
         
@@ -162,12 +163,13 @@ impl FileBrowserPlugin {
     }
 }
 
+#[async_trait]
 impl Plugin for FileBrowserPlugin {
     fn metadata(&self) -> &PluginMetadata {
         &self.metadata
     }
 
-    fn on_load(&mut self, _ctx: &mut Context) -> Result<(), PluginError> {
+    async fn on_load(&mut self, _ctx: &mut Context) -> Result<(), PluginError> {
         info!("File browser plugin loading");
         
         // Register with networking system for channels 1010-1019
@@ -184,7 +186,7 @@ impl Plugin for FileBrowserPlugin {
         Ok(())
     }
 
-    fn on_unload(&mut self, _ctx: &mut Context) {
+    async fn on_unload(&mut self, _ctx: &mut Context) {
         info!("File browser plugin unloading");
         
         // Clean up resources
@@ -194,19 +196,17 @@ impl Plugin for FileBrowserPlugin {
         self.event_receiver = None;
     }
 
-    fn update(&mut self, _ctx: &mut Context, delta_time: f32) {
+    async fn update(&mut self, _ctx: &mut Context, _delta_time: f32) {
         // Handle file tree events
-        if let Ok(runtime) = tokio::runtime::Runtime::new() {
-            runtime.block_on(self.handle_file_tree_events());
-        }
+        self.handle_file_tree_events().await;
     }
 
-    fn render(&mut self, _ctx: &mut RenderContext) {
+    async fn render(&mut self, _ctx: &mut RenderContext) {
         // File tree rendering is handled by the UI system
         // through the Element trait implementation
     }
 
-    fn on_event(&mut self, _event: &Event) -> bool {
+    async fn on_event(&mut self, _event: &Event) -> bool {
         // Handle plugin events
         // Return true if event was handled, false otherwise
         false

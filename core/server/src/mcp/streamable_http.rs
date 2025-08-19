@@ -1,15 +1,14 @@
 use axum::{
-    extract::State,
     http::{HeaderMap, Method, StatusCode},
     response::{IntoResponse, Response, sse::{Event, KeepAlive, Sse}},
     Json,
 };
-use futures_util::stream::{Stream, StreamExt};
+use futures_util::stream::StreamExt;
 use serde_json::{json, Value};
 use std::{convert::Infallible, sync::Arc, time::Duration};
 use tokio::sync::mpsc;
 use tokio_stream::wrappers::UnboundedReceiverStream;
-use tracing::{debug, error, info, warn};
+use tracing::{error, info, warn};
 use uuid::Uuid;
 
 use crate::websocket::WebSocketState;

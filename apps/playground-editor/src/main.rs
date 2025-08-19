@@ -58,7 +58,7 @@ async fn main() -> Result<()> {
     
     // Load and start the UI Framework Plugin
     info!("Loading UI Framework Plugin...");
-    use playground_systems_ui_framework::UiFrameworkPlugin;
+    use playground_plugins_ui_framework::UiFrameworkPlugin;
     use playground_core_plugin::Plugin;
     use playground_core_types::context::Context;
     use playground_core_types::render_context::RenderContext;

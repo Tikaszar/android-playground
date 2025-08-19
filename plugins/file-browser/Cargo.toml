@@ -1,5 +1,5 @@
 [package]
-name = "playground-core-plugins-file-browser"
+name = "playground-plugins-file-browser"
 version.workspace = true
 authors.workspace = true
 edition.workspace = true
@@ -9,6 +9,7 @@ license.workspace = true
 crate-type = ["cdylib"]
 
 [dependencies]
+async-trait = { workspace = true }
 # Systems - Plugins use Systems APIs only (never Core directly)
 playground-systems-ui = { path = "../../systems/ui" }
 playground-systems-logic = { path = "../../systems/logic" }

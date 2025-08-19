@@ -1,11 +1,11 @@
 //! Core UI element trait and types
 
-use crate::{UiResult, UiError};
+use crate::UiResult;
 use crate::layout::{LayoutConstraints, LayoutResult};
 use crate::input::{InputEvent, InputResult};
 use crate::rendering::RenderData;
 use crate::theme::Theme;
-use nalgebra::{Vector2, Vector4};
+use nalgebra::Vector2;
 use serde::{Deserialize, Serialize};
 use slotmap::{new_key_type, SlotMap};
 use std::any::Any;

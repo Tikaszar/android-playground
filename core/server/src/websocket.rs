@@ -1,6 +1,6 @@
 use crate::{
     channel::ChannelManager,
-    packet::{Packet, Priority, ControlMessage, ControlMessageType},
+    packet::{Packet, Priority, ControlMessageType},
     batcher::FrameBatcher,
 };
 use axum::{
@@ -149,7 +149,7 @@ async fn handle_websocket(socket: WebSocket, state: Arc<WebSocketState>) {
     
     send_task.abort();
     
-    let mut connections = state.connections.write().await;
+    let connections = state.connections.write().await;
     if connection_id < connections.len() {
         *connections[connection_id].write().await = None;
     }

@@ -19,7 +19,7 @@ playground-core-types = { path = "../../core/types" }
 playground-core-server = { path = "../../core/server" }
 
 # Plugins
-playground-systems-ui-framework = { path = "../../plugins/ui-framework" }
+playground-plugins-ui-framework = { path = "../../plugins/ui-framework" }
 
 # Web server
 axum = "0.7"

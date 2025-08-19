@@ -1,6 +1,6 @@
 use crate::entity::Entity;
 use crate::storage::HybridStorage;
-use fnv::{FnvHashMap, FnvHashSet};
+use fnv::FnvHashMap;
 use parking_lot::RwLock;
 use std::any::TypeId;
 use std::marker::PhantomData;
@@ -234,4 +234,3 @@ macro_rules! query {
     }};
 }
 
-use fnv::FnvHasher;

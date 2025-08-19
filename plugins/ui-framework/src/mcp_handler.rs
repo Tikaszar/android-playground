@@ -407,7 +407,7 @@ impl McpHandler {
                 tracing::info!("Context switch to: {}", dir);
                 
                 // Update UI state with new context
-                let mut ui_state = self.ui_state.write().await;
+                let ui_state = self.ui_state.write().await;
                 // TODO: Add current_worktree field to ui_state
                 
                 // Send notification

@@ -598,16 +598,17 @@ This starts everything internally:
 ## Current Status
 
 ✅ **Implemented (December 21, 2025)**
-- **Package Naming Standardization** - All packages renamed to match directory paths (playground-core-*, playground-systems-*, etc.)
-- **ECS Query API** - Removed turbofish syntax, changed to .with_component(ComponentId) API
-- **Build System Partially Fixed** - Many compilation errors resolved, some remaining
-- **MCP Tool System** - Dynamic tool registration, test tools implemented
-- **Conversational IDE Application** - Full Discord-style IDE interface
-- **UI Framework Plugin** - Phase 1 & 2 complete with WebSocket integration
+- **Package Naming Standardization** - All packages renamed correctly (playground-plugins-*, not playground-core-plugins-*)
+- **ECS Query API** - NO TURBOFISH! Uses .with_component(ComponentId) throughout
+- **Plugin Async Traits** - All plugins now use async trait methods with proper Context type
+- **Build System Improvements** - Fixed many issues, architecture violations identified
 
-⚠️ **Known Issues**
-- Build not fully working - playground-apps-editor still has compilation errors
-- Need to complete fixing component_id usage in networking system
+⚠️ **Architecture Violations to Fix (Next Session)**
+1. **apps/playground-editor** directly uses core/server (WRONG - should only use systems/logic)
+2. **NetworkingSystem** expects server already running (should start it internally)
+3. **systems/logic** needs to expose all system APIs for Apps/Plugins
+4. **MCP router** has state type mismatch issues
+5. **Compilation errors** remain in Handler traits and WebSocketHandler
 
 ✅ **Implemented (August 2025)**
 - Core layer (types, plugin, server, android, client, **ecs**)

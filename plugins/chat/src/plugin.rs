@@ -1,53 +1,57 @@
-use playground_core_plugin::{Plugin, PluginContext};
-use playground_core_types::{PluginMetadata, Event};
-use uuid::Uuid;
+use async_trait::async_trait;
+use playground_core_plugin::Plugin;
+use playground_core_types::{
+    PluginMetadata, PluginId, Version, Event,
+    context::Context,
+    render_context::RenderContext,
+    error::PluginError,
+};
 
 pub struct ChatPlugin {
-    id: Uuid,
     metadata: PluginMetadata,
 }
 
 impl ChatPlugin {
     pub fn new() -> Self {
         Self {
-            id: Uuid::new_v4(),
             metadata: PluginMetadata {
-                name: "chat".to_string(),
-                version: "0.1.0".to_string(),
-                author: "Playground Team".to_string(),
-                description: "Chat plugin".to_string(),
+                id: PluginId("chat".to_string()),
+                name: "Chat".to_string(),
+                version: Version {
+                    major: 0,
+                    minor: 1,
+                    patch: 0,
+                },
             },
         }
     }
 }
 
+#[async_trait]
 impl Plugin for ChatPlugin {
-    fn id(&self) -> Uuid {
-        self.id
-    }
-
     fn metadata(&self) -> &PluginMetadata {
         &self.metadata
     }
 
-    fn on_load(&mut self, _context: &mut PluginContext) -> Result<(), Box<dyn std::error::Error>> {
+    async fn on_load(&mut self, _ctx: &mut Context) -> Result<(), PluginError> {
         Ok(())
     }
 
-    fn on_unload(&mut self, _context: &mut PluginContext) -> Result<(), Box<dyn std::error::Error>> {
-        Ok(())
+    async fn on_unload(&mut self, _ctx: &mut Context) {
+        // Cleanup if needed
     }
 
-    fn update(&mut self, _context: &mut PluginContext, _delta_time: f32) -> Result<(), Box<dyn std::error::Error>> {
-        Ok(())
+    async fn update(&mut self, _ctx: &mut Context, _delta_time: f32) {
+        // Update logic here
     }
 
-    fn render(&mut self, _context: &mut PluginContext) -> Result<(), Box<dyn std::error::Error>> {
-        Ok(())
+    async fn render(&mut self, _ctx: &mut RenderContext) {
+        // Render logic here
     }
 
-    fn on_event(&mut self, _context: &mut PluginContext, _event: Event) -> Result<(), Box<dyn std::error::Error>> {
-        Ok(())
+    async fn on_event(&mut self, _event: &Event) -> bool {
+        // Handle events, return true if handled
+        false
     }
 }
 

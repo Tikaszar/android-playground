@@ -1,7 +1,7 @@
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use playground_core_server::{WebSocketState, channel::ChannelManager as ServerChannelManager};
-use ui_framework::{UiFrameworkPlugin, WebSocketHandler};
+use playground_plugins_ui_framework::{UiFrameworkPlugin, WebSocketHandler};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {

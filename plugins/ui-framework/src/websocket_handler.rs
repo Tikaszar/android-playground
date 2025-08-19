@@ -3,7 +3,7 @@ use bytes::{Bytes, BytesMut, BufMut};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tokio::sync::{mpsc, RwLock};
-use tracing::{info, debug, error, warn};
+use tracing::{info, debug, warn};
 use uuid::Uuid;
 
 use crate::browser_bridge::{BrowserBridge, BrowserUpdate};
@@ -260,7 +260,7 @@ impl WebSocketHandler {
         debug!("Handling bubble_state_change: component={}, state={}", component_id, state);
         
         // Update state in UI state manager
-        let mut ui_state = self.ui_state.write().await;
+        let ui_state = self.ui_state.write().await;
         
         // Parse state
         let bubble_state = match state.as_str() {

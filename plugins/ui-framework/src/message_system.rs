@@ -1,6 +1,6 @@
 use crate::components::*;
 use crate::channel_manager::ChannelManager;
-use anyhow::{anyhow, Result};
+use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tokio::sync::RwLock;

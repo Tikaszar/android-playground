@@ -95,7 +95,7 @@ impl NetworkSystem {
     
     /// Update network statistics components
     pub async fn update_stats(&self) -> NetworkResult<()> {
-        let mut world = self.world.write().await;
+        let world = self.world.write().await;
         
         // Query all network stats components
         // Note: core/ecs uses a different query API than expected

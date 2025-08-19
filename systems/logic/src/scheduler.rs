@@ -23,7 +23,6 @@ pub struct SchedulerMetrics {
     pub fastest_frame: Duration,
 }
 
-use fnv::FnvHashMap;
 
 impl Scheduler {
     pub fn new() -> Self {

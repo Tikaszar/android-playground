@@ -1,4 +1,4 @@
-use crate::packet::{Packet, Priority};
+use crate::packet::Packet;
 use std::collections::BinaryHeap;
 use std::sync::Arc;
 use tokio::sync::RwLock;

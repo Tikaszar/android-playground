@@ -2,7 +2,7 @@
 
 use crate::element::{ElementGraph, ElementId};
 use crate::error::UiResult;
-use crate::input::{InputEvent, EventHandled, InputResult};
+use crate::input::{InputEvent, EventHandled};
 use nalgebra::Vector2;
 use std::collections::VecDeque;
 

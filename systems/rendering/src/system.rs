@@ -12,9 +12,8 @@ use crate::base_renderer::BaseRenderer;
 use crate::components::*;
 use crate::error::RendererError;
 use crate::resources::{TextureHandle, ShaderHandle, PipelineHandle, RenderTargetHandle};
-use crate::resources::buffer::{VertexBuffer, IndexBuffer, UniformBuffer, StorageBuffer};
+use crate::resources::buffer::VertexBuffer;
 use crate::graph::pass::PassId;
-use crate::capabilities::RendererCapabilities;
 
 /// The main rendering system that manages GPU resources and render state using ECS
 pub struct RenderingSystem<R: BaseRenderer<Error = RendererError>> {

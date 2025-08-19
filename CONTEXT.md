@@ -4,8 +4,8 @@ This file captures the current development session context for seamless continua
 
 ## Current Session - 2025-12-21
 
-**Completed**: Package Naming Standardization & ECS Query API Improvements
-**Status**: Build system partially fixed, turbofish syntax removed
+**Completed**: Package Naming, ECS Fixes, Plugin Async Traits
+**Status**: Architecture violations identified, ready for next session fixes
 
 ### Completed in This Session
 
@@ -25,11 +25,47 @@ This file captures the current development session context for seamless continua
    - Added get_component<T>() method to World for typed retrieval
 
 3. **ECS Query API Improvements** ✅:
-   - Removed turbofish syntax requirement from queries
+   - Removed turbofish syntax requirement from queries  
    - Changed from .with<T>() to .with_component(ComponentId)
-   - Added ComponentIdQuery for runtime component handling
-   - Updated networking_system to use TypeId::of::<T>() for component IDs
-   - Build still has remaining issues to fix in next session
+   - Fixed networking_system to use Component::component_id()
+   - NO TURBOFISH anywhere in codebase
+
+4. **Plugin Trait Fixes** ✅:
+   - All plugins now use async trait methods
+   - Fixed PluginContext → Context 
+   - Added async-trait dependency to all plugins
+   - Removed invalid id() method from plugins
+
+5. **Additional Package Fixes** ✅:
+   - Fixed plugin package names from playground-core-plugins-* to playground-plugins-*
+   - Fixed ui-framework from playground-systems-ui-framework to playground-plugins-ui-framework
+   - Updated all imports to use correct package names
+   - Fixed lib.rs files to use playground_core_plugin instead of playground_plugin
+
+### Architecture Issues Identified (To Fix Next Session)
+
+1. **apps/playground-editor violates architecture**:
+   - Directly imports playground_core_server (WRONG!)
+   - Has run_core_server() function that starts server (WRONG!)
+   - Should ONLY use systems/logic
+
+2. **NetworkingSystem needs to start core/server**:
+   - Currently expects server already running
+   - Should start core/server internally during initialization
+
+3. **systems/logic needs to expose all APIs**:
+   - SystemsManager should provide access to all system functionality
+   - Plugins should get systems through systems/logic
+   - Need server management APIs (start, stop, router access)
+
+4. **MCP Router state type issues**:
+   - Router state type mismatch between MCP and main router
+   - Need proper WebSocketState passing
+
+5. **Remaining compilation errors**:
+   - Handler trait bounds in playground-editor
+   - WebSocketHandler constructor in ui-framework
+   - Minor plugin issues
 
 ## Previous Session - 2025-12-20
 

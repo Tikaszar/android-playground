@@ -1,12 +1,17 @@
 [package]
-name = "playground-systems-ui-framework"
+name = "playground-plugins-ui-framework"
 version = "0.1.0"
 edition = "2021"
 
 [lib]
 crate-type = ["dylib", "rlib"]
 
+[[bin]]
+name = "playground-plugins-ui-framework"
+path = "src/main.rs"
+
 [dependencies]
+tracing-subscriber = { workspace = true }
 playground-core-plugin = { path = "../../core/plugin" }
 playground-core-types = { path = "../../core/types" }
 playground-systems-ui = { path = "../../systems/ui" }

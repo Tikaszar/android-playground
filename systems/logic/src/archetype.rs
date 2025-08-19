@@ -1,6 +1,6 @@
 use crate::entity::Entity;
 use crate::error::LogicResult;
-use fnv::{FnvHashMap, FnvHashSet};
+use fnv::FnvHashMap;
 use parking_lot::RwLock;
 use std::any::TypeId;
 use std::sync::Arc;
@@ -45,7 +45,6 @@ impl Archetype {
 }
 
 use std::hash::Hasher;
-use fnv::FnvHasher;
 
 /// Storage for entities in an archetype (column-based for cache efficiency)
 pub struct ArchetypeStorage {

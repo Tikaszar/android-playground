@@ -1,3 +1,4 @@
+use async_trait::async_trait;
 use playground_core_plugin::Plugin;
 use playground_core_types::{
     PluginMetadata, PluginId, Version, Event,
@@ -106,12 +107,13 @@ impl ChatAssistantPlugin {
     }
 }
 
+#[async_trait]
 impl Plugin for ChatAssistantPlugin {
     fn metadata(&self) -> &PluginMetadata {
         &self.metadata
     }
 
-    fn on_load(&mut self, _ctx: &mut Context) -> Result<(), PluginError> {
+    async fn on_load(&mut self, _ctx: &mut Context) -> Result<(), PluginError> {
         info!("Chat assistant plugin loading");
         
         // Register with networking system for channels 1050-1059
@@ -124,24 +126,24 @@ impl Plugin for ChatAssistantPlugin {
         Ok(())
     }
 
-    fn on_unload(&mut self, _ctx: &mut Context) {
+    async fn on_unload(&mut self, _ctx: &mut Context) {
         info!("Chat assistant plugin unloading");
         
         // Clean up resources
         self.chat_view = None;
     }
 
-    fn update(&mut self, _ctx: &mut Context, _delta_time: f32) {
+    async fn update(&mut self, _ctx: &mut Context, _delta_time: f32) {
         // Update chat view if needed
         // This is where we'd handle animations, etc.
     }
 
-    fn render(&mut self, _ctx: &mut RenderContext) {
+    async fn render(&mut self, _ctx: &mut RenderContext) {
         // Chat rendering is handled by the UI system
         // through the Element trait implementation
     }
 
-    fn on_event(&mut self, event: &Event) -> bool {
+    async fn on_event(&mut self, event: &Event) -> bool {
         // Handle plugin events
         debug!("Chat assistant received event: {:?}", event);
         
