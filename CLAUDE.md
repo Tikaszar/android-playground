@@ -920,6 +920,12 @@ if gesture_handler.handle_gesture(&gesture, &mut docking, position) {
 - **Batch operations**: APIs should operate on collections, not single items
 - **Async by default**: All I/O and potentially blocking operations must be async
 
+### Implementation Requirements
+- **NO simplification**: Implement features completely, no shortcuts or "simple versions"
+- **NO TODOs**: Complete all implementations, don't leave placeholders
+- **ONLY ECS**: core/ecs for Systems, systems/logic for Plugins/Apps (no playground_ecs)
+- **Arc<RwLock<>> consistently**: Use this pattern throughout for thread-safe access
+
 ## ECS System Design
 
 ### Two-Layer Architecture
@@ -1038,3 +1044,4 @@ ecs.add_system(physics_system)
 - Component size warnings prevent cache thrashing
 - Incremental GC prevents frame drops
 - Hybrid storage optimizes for both iteration and insertion
+- lib and mod files must only be exports.

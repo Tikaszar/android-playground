@@ -55,21 +55,29 @@ systems.register_mcp_tool(
 
 ### Next Session Tasks
 
-1. **Test with Claude Code**:
+1. **Fix Build Issues**:
+   - Complete QueryBuilder implementation in core/ecs
+   - Fix networking_system.rs to properly use core/ecs query API
+   - Ensure all systems use core/ecs correctly (NOT playground_ecs which doesn't exist)
+
+2. **Test with Claude Code**:
    - Start playground-editor
    - Connect Claude Code to http://localhost:8080/mcp
    - Test ping/echo tools
    - Verify tool execution
 
-2. **UI Framework Plugin Connection**:
+3. **UI Framework Plugin Connection**:
    - Debug why plugin isn't receiving channel 1200 messages
    - Ensure browser WebSocket subscribes to channels 1200-1209
    - Fix "Loading UI Framework..." stuck state
 
-3. **Plugin Tool Registration**:
-   - Have UI Framework Plugin register its tools on startup
-   - Test dynamic tool registration flow
-   - Verify tools appear in tools/list
+### Important Architecture Reminders
+
+- **ONLY ECS**: core/ecs (for Systems internal state) and systems/logic (for Plugins/Apps)
+- **NO playground_ecs**: This doesn't exist, was a misunderstanding
+- **NO simplification**: Implement features completely, no shortcuts
+- **NO TODOs**: Complete implementations, don't leave things unfinished
+- **Arc<RwLock<>> pattern**: Use consistently throughout for thread safety
 
 ## Previous Session - 2025-12-19
 

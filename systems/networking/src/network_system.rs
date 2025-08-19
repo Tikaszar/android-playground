@@ -1,7 +1,7 @@
 //! Network system implementation using core/ecs
 
 use crate::{NetworkError, NetworkResult};
-use playground_ecs::World;
+use playground_core::ecs::World;
 use playground_types::{ChannelId, Priority, Packet};
 use std::sync::Arc;
 use tokio::sync::RwLock;

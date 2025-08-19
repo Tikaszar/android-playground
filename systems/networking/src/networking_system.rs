@@ -1,0 +1,305 @@
+use crate::{
+    NetworkError, NetworkResult, WebSocketClient,
+    ChannelManager, PacketQueue, IncomingPacket,
+    ConnectionComponent, ChannelComponent, PacketQueueComponent, NetworkStatsComponent,
+    NetworkStats,
+};
+use playground_core::ecs::{World, EntityId};
+use playground_types::{ChannelId, Priority};
+use std::sync::Arc;
+use tokio::sync::RwLock;
+
+/// Main networking system that Plugins interact with
+pub struct NetworkingSystem {
+    // Internal ECS world for managing network state
+    world: Arc<RwLock<World>>,
+    // WebSocket client connection to core/server
+    ws_client: Option<Arc<WebSocketClient>>,
+    // Channel manager for dynamic registration
+    channel_manager: Arc<RwLock<ChannelManager>>,
+    // Packet queue for batching
+    packet_queue: Arc<RwLock<PacketQueue>>,
+}
+
+impl NetworkingSystem {
+    /// Create a new networking system
+    pub async fn new() -> NetworkResult<Self> {
+        let world = Arc::new(RwLock::new(World::new()));
+        
+        Ok(Self {
+            world,
+            ws_client: None,
+            channel_manager: Arc::new(RwLock::new(ChannelManager::new())),
+            packet_queue: Arc::new(RwLock::new(PacketQueue::new())),
+        })
+    }
+    
+    /// Initialize and connect to core/server
+    pub async fn initialize(&mut self, server_url: Option<String>) -> NetworkResult<()> {
+        // Connect to core/server WebSocket endpoint
+        let url = server_url.unwrap_or_else(|| "ws://localhost:8080/ws".to_string());
+        
+        // Create and connect WebSocket client
+        let client = Arc::new(WebSocketClient::new(url));
+        client.connect().await?;
+        
+        // Store the client
+        self.ws_client = Some(client.clone());
+        
+        // Register systems channels (1-999)
+        let mut manager = self.channel_manager.write().await;
+        let channel_id = manager.register_system_channel("networking", 100).await?;
+        
+        // Register with the WebSocket server
+        if let Some(ws) = &self.ws_client {
+            ws.register_channel(channel_id, "networking").await?;
+        }
+        
+        Ok(())
+    }
+    
+    /// Register a Plugin for a dynamic channel (1000+)
+    pub async fn register_plugin(&self, plugin_name: &str) -> NetworkResult<ChannelId> {
+        let mut manager = self.channel_manager.write().await;
+        let channel_id = manager.register_plugin_channel(plugin_name).await?;
+        
+        // Register with the WebSocket server
+        if let Some(ws) = &self.ws_client {
+            ws.register_channel(channel_id, plugin_name).await?;
+        }
+        
+        Ok(channel_id)
+    }
+    
+    /// Register an MCP tool that can be called by LLMs
+    /// The tool will forward calls to the specified channel
+    pub async fn register_mcp_tool(
+        &self,
+        name: String,
+        description: String,
+        input_schema: serde_json::Value,
+        handler_channel: u16,
+    ) -> NetworkResult<()> {
+        // Note: This requires access to the WebSocketState from core/server
+        // which we'll need to expose through a channel message
+        
+        // Send a control message to register the tool
+        let registration = serde_json::json!({
+            "type": "register_mcp_tool",
+            "name": name,
+            "description": description,
+            "input_schema": input_schema,
+            "handler_channel": handler_channel,
+        });
+        
+        let data = serde_json::to_vec(&registration)
+            .map_err(|e| NetworkError::SerializationError(e.to_string()))?;
+        
+        // Send on control channel (0) with high priority
+        self.send_packet(0, 100, data, Priority::High).await?;
+        
+        Ok(())
+    }
+    
+    /// Unregister an MCP tool
+    pub async fn unregister_mcp_tool(&self, name: &str) -> NetworkResult<()> {
+        let unregistration = serde_json::json!({
+            "type": "unregister_mcp_tool",
+            "name": name,
+        });
+        
+        let data = serde_json::to_vec(&unregistration)
+            .map_err(|e| NetworkError::SerializationError(e.to_string()))?;
+        
+        self.send_packet(0, 101, data, Priority::High).await?;
+        
+        Ok(())
+    }
+    
+    /// Send a packet to a specific channel with priority
+    pub async fn send_packet(
+        &self,
+        channel: ChannelId,
+        packet_type: u16,
+        data: Vec<u8>,
+        priority: Priority,
+    ) -> NetworkResult<()> {
+        // Send directly through WebSocket if connected
+        if let Some(ws) = &self.ws_client {
+            use playground_server::packet::Packet;
+            use bytes::Bytes;
+            
+            // Convert Priority type
+            let server_priority = match priority {
+                Priority::Low => playground_server::Priority::Low,
+                Priority::Medium => playground_server::Priority::Medium,
+                Priority::High => playground_server::Priority::High,
+                Priority::Critical => playground_server::Priority::Critical,
+                Priority::Blocker => playground_server::Priority::Blocker,
+            };
+            
+            let packet = Packet {
+                channel_id: channel,
+                packet_type,
+                priority: server_priority,
+                payload: Bytes::from(data.clone()),
+            };
+            
+            ws.send_packet(packet).await?;
+        }
+        
+        // Also queue it locally for tracking
+        let mut queue = self.packet_queue.write().await;
+        queue.enqueue(channel, packet_type, data, priority).await
+    }
+    
+    /// Process incoming packets for a channel
+    pub async fn receive_packets(&self, channel: ChannelId) -> NetworkResult<Vec<IncomingPacket>> {
+        let mut result = Vec::new();
+        
+        // Get packets from WebSocket
+        if let Some(ws) = &self.ws_client {
+            let packets = ws.receive_packets().await;
+            
+            // Filter for requested channel and convert to IncomingPacket
+            for packet in packets {
+                if packet.channel_id == channel {
+                    result.push(IncomingPacket {
+                        channel,
+                        packet_type: packet.packet_type,
+                        data: packet.payload.to_vec(),
+                        timestamp: std::time::SystemTime::now()
+                            .duration_since(std::time::UNIX_EPOCH)
+                            .unwrap()
+                            .as_millis() as u64,
+                    });
+                }
+            }
+        }
+        
+        // Also check local queue
+        let queue = self.packet_queue.read().await;
+        let local_packets = queue.get_incoming(channel).await?;
+        result.extend(local_packets);
+        
+        Ok(result)
+    }
+    
+    /// Create a peer-to-peer connection entity
+    pub async fn create_connection(&self, peer_id: String) -> NetworkResult<EntityId> {
+        let world = self.world.write().await;
+        
+        // Register the component type if not already registered
+        world.register_component::<ConnectionComponent>().await
+            .map_err(|e| NetworkError::EcsError(e.to_string()))?;
+        
+        // Create the connection component
+        let connection = ConnectionComponent {
+            peer_id: peer_id.clone(),
+            connected: false,
+            latency_ms: 0,
+            packets_sent: 0,
+            packets_received: 0,
+            last_activity: std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_millis() as u64,
+        };
+        
+        // Spawn entity with the component
+        let components: Vec<Box<dyn playground_core::ecs::Component>> = vec![
+            Box::new(connection),
+        ];
+        
+        let entities = world.spawn_batch(vec![components]).await
+            .map_err(|e| NetworkError::EcsError(e.to_string()))?;
+        
+        Ok(entities[0])
+    }
+    
+    /// Query connection components
+    pub async fn query_connections(&self) -> NetworkResult<Vec<ConnectionComponent>> {
+        let world = self.world.read().await;
+        
+        // Build and execute query
+        let query = world.query().with::<ConnectionComponent>().build();
+        let results = query.execute().await
+            .map_err(|e| NetworkError::EcsError(e.to_string()))?;
+        
+        // Extract connection components
+        let mut connections = Vec::new();
+        for (_entity, components) in results {
+            if let Some(conn) = components.get(0) {
+                // Downcast and clone the component
+                if let Some(connection) = conn.as_any().downcast_ref::<ConnectionComponent>() {
+                    connections.push(connection.clone());
+                }
+            }
+        }
+        
+        Ok(connections)
+    }
+    
+    /// Send a reliable packet (with retries and acknowledgment)
+    pub async fn send_reliable(
+        &self,
+        channel: ChannelId,
+        packet_type: u16,
+        data: Vec<u8>,
+    ) -> NetworkResult<()> {
+        // For now, just send with Critical priority
+        // TODO: Implement actual reliability with acks
+        self.send_packet(channel, packet_type, data, Priority::Critical).await
+    }
+    
+    /// Get network statistics
+    pub async fn get_stats(&self) -> NetworkResult<NetworkStats> {
+        let world = self.world.read().await;
+        
+        // Query all NetworkStatsComponents
+        let stats_query = world.query::<NetworkStatsComponent>();
+        let stats_components = stats_query.execute().await
+            .map_err(|e| NetworkError::EcsError(e.to_string()))?;
+        
+        // Aggregate stats
+        let mut total_stats = NetworkStats {
+            bytes_sent: 0,
+            bytes_received: 0,
+            packets_sent: 0,
+            packets_received: 0,
+            connections_active: 0,
+            average_latency_ms: 0,
+        };
+        
+        let mut total_latency = 0u64;
+        let mut latency_count = 0u64;
+        
+        for stats in stats_components {
+            total_stats.bytes_sent += stats.bytes_sent;
+            total_stats.bytes_received += stats.bytes_received;
+            total_stats.packets_sent += stats.packets_sent;
+            total_stats.packets_received += stats.packets_received;
+            
+            if stats.average_latency_ms > 0 {
+                total_latency += stats.average_latency_ms as u64;
+                latency_count += 1;
+            }
+        }
+        
+        // Count active connections
+        let conn_query = world.query::<ConnectionComponent>();
+        let connections = conn_query.execute().await
+            .map_err(|e| NetworkError::EcsError(e.to_string()))?;
+        
+        total_stats.connections_active = connections.into_iter()
+            .filter(|c| c.connected)
+            .count() as u32;
+        
+        // Calculate average latency
+        if latency_count > 0 {
+            total_stats.average_latency_ms = (total_latency / latency_count) as u32;
+        }
+        
+        Ok(total_stats)
+    }
+}
