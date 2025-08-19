@@ -1,0 +1,597 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Conversational IDE - Android Playground</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            /* Discord-inspired dark theme colors */
+            --bg-primary: #36393f;
+            --bg-secondary: #2f3136;
+            --bg-tertiary: #202225;
+            --bg-modifier-hover: #4f545c;
+            --bg-modifier-selected: #5865f2;
+            --text-normal: #dcddde;
+            --text-muted: #96989d;
+            --text-link: #00aff4;
+            --header-primary: #ffffff;
+            --header-secondary: #b9bbbe;
+            --interactive-normal: #b9bbbe;
+            --interactive-hover: #dcddde;
+            --interactive-active: #ffffff;
+            --border-color: #202225;
+            --scrollbar-thin-thumb: #202225;
+            --scrollbar-thin-track: transparent;
+            --brand-color: #5865f2;
+            --success-color: #3ba55c;
+            --warning-color: #faa61a;
+            --danger-color: #ed4245;
+            --info-color: #00aff4;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'Helvetica Neue', sans-serif;
+            background-color: var(--bg-primary);
+            color: var(--text-normal);
+            display: flex;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        /* Sidebar - Channel List */
+        .sidebar {
+            width: 240px;
+            background-color: var(--bg-secondary);
+            display: flex;
+            flex-direction: column;
+            border-right: 1px solid var(--border-color);
+        }
+
+        .sidebar-header {
+            padding: 12px 16px;
+            background-color: var(--bg-secondary);
+            border-bottom: 1px solid var(--border-color);
+            font-weight: 600;
+            color: var(--header-primary);
+        }
+
+        .channel-list {
+            flex: 1;
+            overflow-y: auto;
+            padding: 8px;
+        }
+
+        .channel-category {
+            margin-bottom: 8px;
+        }
+
+        .channel-category-header {
+            display: flex;
+            align-items: center;
+            padding: 4px 8px;
+            color: var(--text-muted);
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+            cursor: pointer;
+            user-select: none;
+        }
+
+        .channel-category-header:hover {
+            color: var(--text-normal);
+        }
+
+        .channel {
+            display: flex;
+            align-items: center;
+            padding: 6px 8px;
+            margin: 1px 0;
+            border-radius: 4px;
+            cursor: pointer;
+            color: var(--interactive-normal);
+            transition: all 0.15s;
+        }
+
+        .channel:hover {
+            background-color: var(--bg-modifier-hover);
+            color: var(--interactive-hover);
+        }
+
+        .channel.active {
+            background-color: var(--bg-modifier-selected);
+            color: var(--interactive-active);
+        }
+
+        .channel-icon {
+            width: 20px;
+            height: 20px;
+            margin-right: 8px;
+            opacity: 0.6;
+        }
+
+        .channel-name {
+            flex: 1;
+            font-size: 14px;
+        }
+
+        .channel-unread {
+            background-color: var(--danger-color);
+            color: white;
+            padding: 2px 6px;
+            border-radius: 10px;
+            font-size: 11px;
+            font-weight: 600;
+        }
+
+        /* Main Content Area */
+        .main-content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            background-color: var(--bg-primary);
+        }
+
+        /* Chat Header */
+        .chat-header {
+            height: 48px;
+            padding: 0 16px;
+            background-color: var(--bg-primary);
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .chat-header-title {
+            display: flex;
+            align-items: center;
+            font-weight: 600;
+            color: var(--header-primary);
+        }
+
+        .chat-header-actions {
+            display: flex;
+            gap: 12px;
+        }
+
+        .header-action {
+            padding: 6px;
+            border-radius: 4px;
+            cursor: pointer;
+            color: var(--interactive-normal);
+            transition: all 0.15s;
+        }
+
+        .header-action:hover {
+            background-color: var(--bg-modifier-hover);
+            color: var(--interactive-hover);
+        }
+
+        /* Messages Container */
+        .messages-container {
+            flex: 1;
+            overflow-y: auto;
+            padding: 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        /* Message Bubble */
+        .message {
+            display: flex;
+            gap: 12px;
+            animation: messageSlide 0.3s ease-out;
+        }
+
+        @keyframes messageSlide {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .message-avatar {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background-color: var(--brand-color);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: 600;
+            flex-shrink: 0;
+        }
+
+        .message-content {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .message-header {
+            display: flex;
+            align-items: baseline;
+            gap: 8px;
+            margin-bottom: 4px;
+        }
+
+        .message-author {
+            font-weight: 600;
+            color: var(--header-primary);
+        }
+
+        .message-timestamp {
+            font-size: 12px;
+            color: var(--text-muted);
+        }
+
+        .message-text {
+            color: var(--text-normal);
+            line-height: 1.5;
+            word-wrap: break-word;
+        }
+
+        /* Inline Components */
+        .inline-component {
+            margin-top: 8px;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            overflow: hidden;
+            background-color: var(--bg-secondary);
+        }
+
+        .inline-header {
+            padding: 8px 12px;
+            background-color: var(--bg-tertiary);
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            cursor: pointer;
+            user-select: none;
+        }
+
+        .inline-header:hover {
+            background-color: var(--bg-modifier-hover);
+        }
+
+        .inline-title {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 14px;
+            font-weight: 500;
+            color: var(--header-secondary);
+        }
+
+        .inline-actions {
+            display: flex;
+            gap: 8px;
+        }
+
+        .inline-action {
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            cursor: pointer;
+            background-color: var(--bg-modifier-hover);
+            color: var(--interactive-normal);
+            transition: all 0.15s;
+        }
+
+        .inline-action:hover {
+            background-color: var(--brand-color);
+            color: white;
+        }
+
+        .inline-content {
+            padding: 12px;
+            max-height: 400px;
+            overflow-y: auto;
+            transition: max-height 0.3s ease;
+        }
+
+        .inline-content.collapsed {
+            max-height: 0;
+            padding: 0;
+        }
+
+        .inline-content.compressed {
+            max-height: 150px;
+        }
+
+        /* Code Editor */
+        .inline-editor {
+            font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+            font-size: 13px;
+            line-height: 1.5;
+            background-color: var(--bg-tertiary);
+            padding: 12px;
+            border-radius: 4px;
+            white-space: pre-wrap;
+            overflow-x: auto;
+        }
+
+        /* File Browser */
+        .inline-file-browser {
+            font-size: 13px;
+        }
+
+        .file-tree-item {
+            display: flex;
+            align-items: center;
+            padding: 4px 8px;
+            cursor: pointer;
+            user-select: none;
+        }
+
+        .file-tree-item:hover {
+            background-color: var(--bg-modifier-hover);
+        }
+
+        .file-tree-item.selected {
+            background-color: var(--bg-modifier-selected);
+            color: white;
+        }
+
+        .file-icon {
+            width: 16px;
+            height: 16px;
+            margin-right: 6px;
+            opacity: 0.7;
+        }
+
+        /* Terminal */
+        .inline-terminal {
+            background-color: #000000;
+            color: #00ff00;
+            font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+            font-size: 12px;
+            padding: 8px;
+            border-radius: 4px;
+            min-height: 100px;
+            white-space: pre-wrap;
+            overflow-x: auto;
+        }
+
+        /* Input Area */
+        .input-area {
+            padding: 16px;
+            background-color: var(--bg-primary);
+            border-top: 1px solid var(--border-color);
+        }
+
+        .input-wrapper {
+            background-color: var(--bg-tertiary);
+            border-radius: 8px;
+            padding: 12px;
+            display: flex;
+            align-items: flex-end;
+            gap: 12px;
+        }
+
+        .input-field {
+            flex: 1;
+            background: none;
+            border: none;
+            color: var(--text-normal);
+            font-size: 14px;
+            line-height: 1.5;
+            resize: none;
+            outline: none;
+            min-height: 20px;
+            max-height: 200px;
+        }
+
+        .input-field::placeholder {
+            color: var(--text-muted);
+        }
+
+        .send-button {
+            padding: 8px 16px;
+            background-color: var(--brand-color);
+            color: white;
+            border: none;
+            border-radius: 4px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background-color 0.15s;
+        }
+
+        .send-button:hover {
+            background-color: #4752c4;
+        }
+
+        .send-button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        /* Status Bar */
+        .status-bar {
+            height: 24px;
+            padding: 0 12px;
+            background-color: var(--bg-tertiary);
+            border-top: 1px solid var(--border-color);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            font-size: 12px;
+            color: var(--text-muted);
+        }
+
+        .status-indicator {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background-color: var(--success-color);
+        }
+
+        .status-dot.disconnected {
+            background-color: var(--danger-color);
+        }
+
+        .status-dot.connecting {
+            background-color: var(--warning-color);
+            animation: pulse 1s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        /* Mobile Responsive */
+        @media (max-width: 768px) {
+            .sidebar {
+                position: fixed;
+                left: -240px;
+                height: 100%;
+                z-index: 1000;
+                transition: left 0.3s;
+            }
+
+            .sidebar.open {
+                left: 0;
+            }
+
+            .mobile-menu-toggle {
+                display: block;
+            }
+        }
+
+        @media (min-width: 769px) {
+            .mobile-menu-toggle {
+                display: none;
+            }
+        }
+
+        /* Scrollbar Styling */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: var(--scrollbar-thin-track);
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: var(--scrollbar-thin-thumb);
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: var(--bg-modifier-hover);
+        }
+    </style>
+</head>
+<body>
+    <!-- Sidebar -->
+    <div class="sidebar" id="sidebar">
+        <div class="sidebar-header">
+            Android Playground
+        </div>
+        <div class="channel-list">
+            <!-- Channels -->
+            <div class="channel-category">
+                <div class="channel-category-header">
+                    <span>▼ Conversations</span>
+                </div>
+                <div class="channel active" data-channel="general">
+                    <span class="channel-icon">#</span>
+                    <span class="channel-name">general</span>
+                </div>
+                <div class="channel" data-channel="orchestrator">
+                    <span class="channel-icon">🤖</span>
+                    <span class="channel-name">orchestrator</span>
+                </div>
+                <div class="channel" data-channel="worker-1">
+                    <span class="channel-icon">⚙️</span>
+                    <span class="channel-name">worker-1</span>
+                </div>
+            </div>
+            
+            <div class="channel-category">
+                <div class="channel-category-header">
+                    <span>▼ Direct Messages</span>
+                </div>
+                <div class="channel" data-channel="claude-code">
+                    <span class="channel-icon">🤖</span>
+                    <span class="channel-name">Claude Code</span>
+                    <span class="channel-unread">2</span>
+                </div>
+                <div class="channel" data-channel="user">
+                    <span class="channel-icon">👤</span>
+                    <span class="channel-name">You</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <div class="main-content">
+        <!-- Chat Header -->
+        <div class="chat-header">
+            <button class="mobile-menu-toggle header-action" onclick="toggleSidebar()">☰</button>
+            <div class="chat-header-title">
+                <span id="current-channel"># general</span>
+            </div>
+            <div class="chat-header-actions">
+                <button class="header-action" onclick="toggleAllBubbles('expand')" title="Expand All">⬇</button>
+                <button class="header-action" onclick="toggleAllBubbles('compress')" title="Compress All">≡</button>
+                <button class="header-action" onclick="toggleAllBubbles('collapse')" title="Collapse All">⬆</button>
+            </div>
+        </div>
+
+        <!-- Messages Container -->
+        <div class="messages-container" id="messages">
+            <!-- Messages will be dynamically added here -->
+        </div>
+
+        <!-- Input Area -->
+        <div class="input-area">
+            <div class="input-wrapper">
+                <textarea 
+                    class="input-field" 
+                    id="message-input" 
+                    placeholder="Message #general"
+                    rows="1"
+                ></textarea>
+                <button class="send-button" id="send-button" onclick="sendMessage()">Send</button>
+            </div>
+        </div>
+
+        <!-- Status Bar -->
+        <div class="status-bar">
+            <div class="status-indicator">
+                <span class="status-dot" id="connection-status"></span>
+                <span id="connection-text">Disconnected</span>
+            </div>
+            <div>
+                <span id="agent-status">Idle</span>
+            </div>
+        </div>
+    </div>
+
+    <script src="conversational-ide.js"></script>
+</body>
+</html>

@@ -1,0 +1,459 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MCP Test - UI Framework Plugin</title>
+    <style>
+        body {
+            font-family: monospace;
+            background: #1e1e1e;
+            color: #d4d4d4;
+            padding: 20px;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        
+        h1 {
+            color: #569cd6;
+        }
+        
+        .section {
+            background: #252526;
+            border: 1px solid #3c3c3c;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+        
+        button {
+            background: #0e639c;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+            font-size: 14px;
+        }
+        
+        button:hover {
+            background: #1177bb;
+        }
+        
+        button:disabled {
+            background: #3c3c3c;
+            cursor: not-allowed;
+        }
+        
+        .status {
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+            font-size: 14px;
+        }
+        
+        .status.connected {
+            background: #1b3b1b;
+            border: 1px solid #4ec94e;
+        }
+        
+        .status.disconnected {
+            background: #3b1b1b;
+            border: 1px solid #c94e4e;
+        }
+        
+        .status.pending {
+            background: #3b3b1b;
+            border: 1px solid #c9c94e;
+        }
+        
+        #log {
+            background: #1e1e1e;
+            border: 1px solid #3c3c3c;
+            border-radius: 4px;
+            padding: 10px;
+            height: 300px;
+            overflow-y: auto;
+            font-size: 12px;
+            white-space: pre-wrap;
+        }
+        
+        .log-entry {
+            margin: 2px 0;
+        }
+        
+        .log-entry.info { color: #4ec9b0; }
+        .log-entry.error { color: #f48771; }
+        .log-entry.success { color: #4ec94e; }
+        .log-entry.data { color: #ce9178; }
+        
+        textarea {
+            width: 100%;
+            background: #1e1e1e;
+            color: #d4d4d4;
+            border: 1px solid #3c3c3c;
+            border-radius: 4px;
+            padding: 10px;
+            font-family: monospace;
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body>
+    <h1>🔧 MCP Test - UI Framework Plugin</h1>
+    
+    <div class="section">
+        <h2>Connection Status</h2>
+        <div id="ws-status" class="status disconnected">WebSocket: Disconnected</div>
+        <div id="mcp-status" class="status disconnected">MCP: Not Initialized</div>
+        <button onclick="connectWebSocket()">Connect WebSocket</button>
+        <button onclick="initializeMCP()">Initialize MCP</button>
+    </div>
+    
+    <div class="section">
+        <h2>MCP Tool Tests</h2>
+        <p>Click these buttons to simulate MCP tool calls:</p>
+        
+        <button onclick="testShowFile()">📝 Test show_file</button>
+        <button onclick="testUpdateEditor()">✏️ Test update_editor</button>
+        <button onclick="testShowTerminal()">💻 Test show_terminal_output</button>
+        <button onclick="testAllTools()">🚀 Test All Tools</button>
+    </div>
+    
+    <div class="section">
+        <h2>Custom Tool Call</h2>
+        <textarea id="custom-tool" rows="10" placeholder='Enter custom tool call JSON, e.g.:
+{
+  "name": "show_file",
+  "arguments": {
+    "path": "/test/file.rs",
+    "content": "fn main() {\\n    println!(\"Hello!\");\\n}"
+  }
+}'>{
+  "name": "show_file",
+  "arguments": {
+    "path": "/test/example.rs",
+    "content": "fn main() {\n    println!(\"Hello from MCP!\");\n}"
+  }
+}</textarea>
+        <br>
+        <button onclick="sendCustomTool()">Send Custom Tool Call</button>
+    </div>
+    
+    <div class="section">
+        <h2>Event Log</h2>
+        <div id="log"></div>
+        <button onclick="clearLog()">Clear Log</button>
+    </div>
+    
+    <script>
+        let ws = null;
+        let mcpSessionId = null;
+        let mcpEventSource = null;
+        
+        function log(message, type = 'info') {
+            const logEl = document.getElementById('log');
+            const entry = document.createElement('div');
+            entry.className = `log-entry ${type}`;
+            const timestamp = new Date().toISOString().substr(11, 12);
+            entry.textContent = `[${timestamp}] ${message}`;
+            logEl.appendChild(entry);
+            logEl.scrollTop = logEl.scrollHeight;
+        }
+        
+        function clearLog() {
+            document.getElementById('log').innerHTML = '';
+            log('Log cleared', 'info');
+        }
+        
+        function updateStatus(element, text, connected) {
+            const el = document.getElementById(element);
+            el.textContent = text;
+            el.className = `status ${connected ? 'connected' : 'disconnected'}`;
+        }
+        
+        // WebSocket Connection
+        function connectWebSocket() {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                log('WebSocket already connected', 'info');
+                return;
+            }
+            
+            const wsUrl = 'ws://localhost:8080/ws';
+            log(`Connecting to WebSocket: ${wsUrl}`, 'info');
+            
+            ws = new WebSocket(wsUrl);
+            
+            ws.onopen = () => {
+                log('WebSocket connected!', 'success');
+                updateStatus('ws-status', 'WebSocket: Connected', true);
+                
+                // Register for UI Framework channels
+                registerChannel(1200, 'ui-framework');
+                registerChannel(1201, 'ui-framework-results');
+            };
+            
+            ws.onmessage = (event) => {
+                if (event.data instanceof Blob) {
+                    handleBinaryMessage(event.data);
+                } else {
+                    try {
+                        const msg = JSON.parse(event.data);
+                        log(`WebSocket text message: ${JSON.stringify(msg)}`, 'data');
+                    } catch (e) {
+                        log(`WebSocket raw message: ${event.data}`, 'data');
+                    }
+                }
+            };
+            
+            ws.onerror = (error) => {
+                log(`WebSocket error: ${error}`, 'error');
+                updateStatus('ws-status', 'WebSocket: Error', false);
+            };
+            
+            ws.onclose = () => {
+                log('WebSocket disconnected', 'info');
+                updateStatus('ws-status', 'WebSocket: Disconnected', false);
+            };
+        }
+        
+        async function handleBinaryMessage(blob) {
+            const buffer = await blob.arrayBuffer();
+            const view = new DataView(buffer);
+            
+            const channelId = view.getUint16(0, true);
+            const packetType = view.getUint16(2, true);
+            const priority = view.getUint8(4);
+            const payloadSize = view.getUint32(5, true);
+            
+            const payloadBytes = new Uint8Array(buffer, 9, payloadSize);
+            const payloadText = new TextDecoder().decode(payloadBytes);
+            
+            try {
+                const payload = JSON.parse(payloadText);
+                log(`Channel ${channelId} packet: ${JSON.stringify(payload)}`, 'data');
+                
+                // Handle UI Framework responses
+                if (channelId === 1200 || channelId === 1201) {
+                    handleUIFrameworkMessage(payload);
+                }
+            } catch (e) {
+                log(`Failed to parse packet: ${e}`, 'error');
+            }
+        }
+        
+        function handleUIFrameworkMessage(payload) {
+            log(`UI Framework message: ${payload.type}`, 'success');
+            
+            // Display the full message for debugging
+            if (payload.message) {
+                log(`New message in #${payload.message.channel_id}: ${payload.message.content}`, 'info');
+            }
+            
+            if (payload.component) {
+                log(`New component: ${payload.component.type} - ${payload.component.title}`, 'info');
+            }
+        }
+        
+        function registerChannel(channelId, name) {
+            const packet = {
+                type: 0, // CONTROL_REGISTER
+                channel_id: channelId,
+                name: name
+            };
+            
+            sendPacket(0, packet);
+            log(`Registered channel ${channelId}: ${name}`, 'info');
+        }
+        
+        function sendPacket(channelId, payload) {
+            if (!ws || ws.readyState !== WebSocket.OPEN) {
+                log('WebSocket not connected', 'error');
+                return;
+            }
+            
+            const payloadText = JSON.stringify(payload);
+            const payloadBytes = new TextEncoder().encode(payloadText);
+            
+            const buffer = new ArrayBuffer(9 + payloadBytes.length);
+            const view = new DataView(buffer);
+            
+            view.setUint16(0, channelId, true);
+            view.setUint16(2, 1, true); // packet_type
+            view.setUint8(4, 2); // priority
+            view.setUint32(5, payloadBytes.length, true);
+            
+            const uint8View = new Uint8Array(buffer, 9);
+            uint8View.set(payloadBytes);
+            
+            ws.send(buffer);
+        }
+        
+        // MCP Functions
+        async function initializeMCP() {
+            log('Initializing MCP...', 'info');
+            
+            // First, establish SSE connection
+            const sseUrl = 'http://localhost:8080/mcp';
+            log(`Connecting to MCP SSE: ${sseUrl}`, 'info');
+            
+            mcpEventSource = new EventSource(sseUrl, {
+                headers: {
+                    'Accept': 'text/event-stream'
+                }
+            });
+            
+            mcpEventSource.onopen = () => {
+                log('MCP SSE connection opened', 'success');
+            };
+            
+            mcpEventSource.onmessage = (event) => {
+                log(`MCP SSE message: ${event.data}`, 'data');
+                try {
+                    const msg = JSON.parse(event.data);
+                    if (msg.result && msg.result.sessionId) {
+                        mcpSessionId = msg.result.sessionId;
+                        log(`MCP Session established: ${mcpSessionId}`, 'success');
+                        updateStatus('mcp-status', `MCP: Session ${mcpSessionId}`, true);
+                    }
+                } catch (e) {
+                    // Ignore parse errors
+                }
+            };
+            
+            mcpEventSource.onerror = (error) => {
+                log('MCP SSE error', 'error');
+            };
+            
+            // Wait a moment for SSE to connect, then send initialize
+            setTimeout(async () => {
+                const initRequest = {
+                    jsonrpc: "2.0",
+                    id: 1,
+                    method: "initialize",
+                    params: {
+                        protocolVersion: "2025-06-18",
+                        capabilities: {
+                            roots: { listChanged: true },
+                            sampling: {}
+                        },
+                        clientInfo: {
+                            name: "MCP Test Client",
+                            version: "1.0.0"
+                        }
+                    }
+                };
+                
+                try {
+                    const response = await fetch('http://localhost:8080/mcp', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Accept': 'text/event-stream'
+                        },
+                        body: JSON.stringify(initRequest)
+                    });
+                    
+                    log('Initialize request sent', 'info');
+                } catch (error) {
+                    log(`Initialize error: ${error}`, 'error');
+                }
+            }, 500);
+        }
+        
+        async function callMCPTool(toolName, args) {
+            if (!mcpSessionId) {
+                log('MCP not initialized', 'error');
+                return;
+            }
+            
+            const request = {
+                jsonrpc: "2.0",
+                id: Date.now(),
+                method: "tools/call",
+                params: {
+                    name: toolName,
+                    arguments: args
+                }
+            };
+            
+            log(`Calling tool: ${toolName}`, 'info');
+            log(`Arguments: ${JSON.stringify(args)}`, 'data');
+            
+            try {
+                const response = await fetch('http://localhost:8080/mcp', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Accept': 'text/event-stream',
+                        'Mcp-Session-Id': mcpSessionId
+                    },
+                    body: JSON.stringify(request)
+                });
+                
+                log(`Tool call sent to MCP server`, 'success');
+                
+                // The response will come through WebSocket on channel 1200
+                log('Waiting for UI Framework response on channel 1200...', 'info');
+            } catch (error) {
+                log(`Tool call error: ${error}`, 'error');
+            }
+        }
+        
+        // Test Functions
+        function testShowFile() {
+            callMCPTool('show_file', {
+                path: '/test/hello.rs',
+                content: 'fn main() {\n    println!("Hello from MCP!");\n    // This file was displayed via MCP tool call\n}'
+            });
+        }
+        
+        function testUpdateEditor() {
+            callMCPTool('update_editor', {
+                content: '// Updated content from MCP\n\nfn updated() {\n    println!("Content updated via MCP!");\n}'
+            });
+        }
+        
+        function testShowTerminal() {
+            callMCPTool('show_terminal_output', {
+                output: '$ cargo build\n   Compiling playground-ui-framework v0.1.0\n   Finished dev [unoptimized + debuginfo] target(s) in 2.34s\n$ cargo run\n   Running target/debug/playground-server\nServer listening on http://localhost:8080'
+            });
+        }
+        
+        async function testAllTools() {
+            log('Running all tool tests...', 'info');
+            
+            // Call each tool with a delay
+            await testShowFile();
+            setTimeout(() => testUpdateEditor(), 1000);
+            setTimeout(() => testShowTerminal(), 2000);
+            
+            log('All tools tested! Check channel 1200 for responses.', 'success');
+        }
+        
+        function sendCustomTool() {
+            const customToolEl = document.getElementById('custom-tool');
+            try {
+                const toolCall = JSON.parse(customToolEl.value);
+                if (!toolCall.name || !toolCall.arguments) {
+                    log('Invalid tool call format. Need "name" and "arguments" fields.', 'error');
+                    return;
+                }
+                
+                callMCPTool(toolCall.name, toolCall.arguments);
+            } catch (e) {
+                log(`Invalid JSON: ${e}`, 'error');
+            }
+        }
+        
+        // Auto-connect on load
+        window.addEventListener('DOMContentLoaded', () => {
+            log('MCP Test Interface Ready', 'success');
+            log('1. Click "Connect WebSocket" to establish connection', 'info');
+            log('2. Click "Initialize MCP" to create MCP session', 'info');
+            log('3. Test tools to see channel 1200 communication', 'info');
+        });
+    </script>
+</body>
+</html>

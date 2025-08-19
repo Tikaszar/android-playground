@@ -161,20 +161,23 @@ cargo run -p playground-server
 - **Message bus** for inter-plugin communication in IDE
 - **IDE docking layout** with desktop and mobile variants
 - **Architecture violation FIXED**: systems/ui no longer contains app-specific code
-- **UI Framework Plugin PHASE 1 COMPLETE** (2000+ lines):
-  - Discord-style channel management with persistence
-  - Message system with bubble states (Collapsed/Compressed/Expanded)
-  - Inline components (Editor, FileBrowser, Terminal, Diff)
-  - Agent orchestration with task queue
-  - MCP tool handlers for all UI operations
-  - Ready for WebSocket integration on channels 1200-1209
+- **UI Framework Plugin PHASE 2 COMPLETE** (3000+ lines):
+  - ✅ Discord-style channel management with persistence
+  - ✅ Message system with bubble states (Collapsed/Compressed/Expanded)
+  - ✅ Inline components (Editor, FileBrowser, Terminal, Diff)
+  - ✅ Agent orchestration with task queue
+  - ✅ MCP tool handlers for all UI operations
+  - ✅ WebSocket integration on channels 1200-1209
+  - ✅ Complete browser UI (HTML/JS) for Conversational IDE
+  - ✅ MCP server forwarding tool calls to channel 1200
+  - ✅ Test infrastructure with mcp-test.html
 
 🚧 **Next Session Priority**
-- Wire up WebSocket communication on channels 1200-1209
-- Create browser UI (HTML/JS) for Conversational IDE
-- Update MCP server to forward tool calls to channel 1200
 - Test end-to-end MCP flow with actual Claude Code instance
 - Implement context switching via git worktrees
+- Add real file I/O to inline components
+- Implement conversation persistence to disk
+- Create agent orchestration logic
 
 📋 **Planned**
 - Remaining IDE plugins (debugger, chat-assistant, version-control, theme-manager)
@@ -221,8 +224,8 @@ The project features a sophisticated two-layer ECS design:
 
 ## 📊 Project Stats
 
-- **Total Lines of Code**: ~27,000+ (with UI Framework Plugin)
-- **Compilation Time**: < 10 seconds on modern Android devices
+- **Total Lines of Code**: ~30,000+ (with UI Framework Plugin Phase 2)
+- **Compilation Time**: < 20 seconds on modern Android devices
 - **Memory Usage**: < 50MB baseline
 - **WASM Size**: 431KB (optimized release build)
 - **Supported Platforms**: Android 7.0+ via Termux, Browser via WASM
@@ -234,7 +237,8 @@ The project features a sophisticated two-layer ECS design:
 - **WebSocket Channels**: UI on 10, IDE plugins 1000-1079, Game plugins 1100-1199, UI Framework 1200-1209, LLMs 2000-2999
 - **MCP Tools**: 10 UI update tools for LLM integration
 - **LLM Support**: Claude Code, GPT, Llama, and any MCP-compatible LLM
-- **UI Framework**: 2000+ lines of Discord-style chat infrastructure
+- **UI Framework**: 3000+ lines (Phase 2 complete with browser UI)
+- **Browser UI**: Discord-style IDE with inline components and bubble states
 
 ## 🤝 Contributing
 

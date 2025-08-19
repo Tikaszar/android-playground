@@ -260,9 +260,9 @@ async fn handle_post(
             let tool_name = params.get("name").and_then(|v| v.as_str()).unwrap_or("");
             let arguments = params.get("arguments").cloned().unwrap_or(json!({}));
             
-            info!("  Forwarding tool call '{}' to channel 2000", tool_name);
+            info!("  Forwarding tool call '{}' to channel 1200", tool_name);
             
-            // Forward tool call to plugins via channel 2000
+            // Forward tool call to UI Framework Plugin via channel 1200
             let tool_call_event = json!({
                 "type": "tool_call",
                 "session_id": session_id.as_deref().unwrap_or("unknown"),
@@ -270,10 +270,10 @@ async fn handle_post(
                 "arguments": arguments,
             });
             
-            // Create a packet for channel 1050 (chat-assistant channel)
+            // Create a packet for channel 1200 (ui-framework channel)
             let payload = serde_json::to_vec(&tool_call_event).unwrap_or_default();
             let packet = crate::packet::Packet {
-                channel_id: 1050,
+                channel_id: 1200,
                 packet_type: 1, // Tool call type
                 priority: crate::packet::Priority::High,
                 payload: bytes::Bytes::from(payload),
@@ -281,7 +281,7 @@ async fn handle_post(
             
             // Queue the packet to be sent
             ws_state.batcher.queue_packet(packet).await;
-            info!("  Tool call queued for channel 1050");
+            info!("  Tool call queued for channel 1200");
             
             JsonRpcResponse::success(request.id, json!({
                 "content": [{

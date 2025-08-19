@@ -6,8 +6,10 @@ mod ui_state;
 mod components;
 mod channel_manager;
 mod message_system;
+mod websocket_handler;
 
 pub use plugin::UiFrameworkPlugin;
 pub use components::*;
 pub use channel_manager::ChannelManager;
 pub use message_system::MessageSystem;
+pub use websocket_handler::WebSocketHandler;
