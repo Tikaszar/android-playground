@@ -117,6 +117,51 @@ impl NetworkingSystem {
         Ok(channel_id)
     }
     
+    /// Register an MCP tool that can be called by LLMs
+    /// The tool will forward calls to the specified channel
+    pub async fn register_mcp_tool(
+        &self,
+        name: String,
+        description: String,
+        input_schema: serde_json::Value,
+        handler_channel: u16,
+    ) -> NetworkResult<()> {
+        // Note: This requires access to the WebSocketState from core/server
+        // which we'll need to expose through a channel message
+        
+        // Send a control message to register the tool
+        let registration = serde_json::json!({
+            "type": "register_mcp_tool",
+            "name": name,
+            "description": description,
+            "input_schema": input_schema,
+            "handler_channel": handler_channel,
+        });
+        
+        let data = serde_json::to_vec(&registration)
+            .map_err(|e| NetworkError::SerializationError(e.to_string()))?;
+        
+        // Send on control channel (0) with high priority
+        self.send_packet(0, 100, data, Priority::High).await?;
+        
+        Ok(())
+    }
+    
+    /// Unregister an MCP tool
+    pub async fn unregister_mcp_tool(&self, name: &str) -> NetworkResult<()> {
+        let unregistration = serde_json::json!({
+            "type": "unregister_mcp_tool",
+            "name": name,
+        });
+        
+        let data = serde_json::to_vec(&unregistration)
+            .map_err(|e| NetworkError::SerializationError(e.to_string()))?;
+        
+        self.send_packet(0, 101, data, Priority::High).await?;
+        
+        Ok(())
+    }
+    
     /// Send a packet to a specific channel with priority
     pub async fn send_packet(
         &self,

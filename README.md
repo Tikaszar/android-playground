@@ -142,6 +142,13 @@ cargo run -p playground-server
 
 ## Current Implementation Status
 
+✅ **Completed (MCP Tool System - 2025-12-20)**
+- **MCP Test Tools**: ping, echo, get_status, list_channels execute directly
+- **Dynamic Tool Registration**: Plugins/Apps can register MCP tools at runtime
+- **Tool Forwarding**: Registered tools forward to handler channels
+- **Arc<RwLock<>> Pattern**: Consistent thread-safe access throughout
+- **Control Channel Messages**: Packet types 100/101 for tool registration
+
 ✅ **Completed (Phase 1 Update - 2025-12-18)**
 - Core infrastructure (types, plugin, server, client, android, **ecs**, **mcp**)
 - **Core/ECS** with async, safe, batch-only API (no unsafe code!)

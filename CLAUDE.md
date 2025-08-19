@@ -492,28 +492,30 @@ The MCP implementation follows a channel-based architecture respecting layer sep
 - **Tool Forwarding**: MCP tools route to channel 1200 for UI Framework Plugin
 
 ### MCP Tools Available
-The MCP server provides UI-focused tools that LLMs call to update the browser:
+The MCP server provides three categories of tools:
 
-**UI Display Tools:**
+**Test/Diagnostic Tools (Built-in):**
+- `ping` - Test MCP connection, responds with pong
+- `echo` - Echo back any input for testing
+- `get_status` - Get current MCP server status
+- `list_channels` - List all registered WebSocket channels
+
+**UI Display Tools (Forward to channel 1200):**
 - `show_file` - Display file content in inline editor bubble
 - `update_editor` - Update current editor content
 - `show_terminal_output` - Display terminal output in bubble
-- `update_file_tree` - Show file browser in chat
-- `show_diff` - Display diff view bubble
-- `show_error` - Show error messages inline
-- `update_status_bar` - Update conversation status
-- `show_notification` - Display notifications
-- `show_chat_message` - Add messages to conversation
 
-**Agent Control Tools:**
-- `execute_command` - Execute shell commands (context switching)
-- `set_status` - Set agent status (Busy/Idle/Waiting)
-- `update_context` - Update orchestrator context files
-- `git_worktree_add` - Create agent worktree
-- `git_worktree_remove` - Clean up worktree
-- `git_commit` - Commit agent changes
-- `write_file` - Write context/task files
-- `read_file` - Read context/task files
+**Dynamically Registered Tools:**
+Plugins and Apps can register their own MCP tools via systems/logic:
+```rust
+systems.register_mcp_tool(
+    "tool_name".to_string(),
+    "Tool description".to_string(),
+    json!({ /* JSON Schema */ }),
+    1500, // Handler channel
+).await
+```
+These tools forward calls to the specified handler channel.
 
 ### Usage
 

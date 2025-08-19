@@ -251,7 +251,7 @@ async fn handle_post(
         
         "tools/list" => {
             JsonRpcResponse::success(request.id, json!({
-                "tools": get_available_tools(&ws_state).await
+                "tools": get_available_tools(ws_state.clone()).await
             }))
         },
         
@@ -260,35 +260,134 @@ async fn handle_post(
             let tool_name = params.get("name").and_then(|v| v.as_str()).unwrap_or("");
             let arguments = params.get("arguments").cloned().unwrap_or(json!({}));
             
-            info!("  Forwarding tool call '{}' to channel 1200", tool_name);
+            info!("  Tool call: '{}' with args: {:?}", tool_name, arguments);
             
-            // Forward tool call to UI Framework Plugin via channel 1200
-            let tool_call_event = json!({
-                "type": "tool_call",
-                "session_id": session_id.as_deref().unwrap_or("unknown"),
-                "tool": tool_name,
-                "arguments": arguments,
-            });
-            
-            // Create a packet for channel 1200 (ui-framework channel)
-            let payload = serde_json::to_vec(&tool_call_event).unwrap_or_default();
-            let packet = crate::packet::Packet {
-                channel_id: 1200,
-                packet_type: 1, // Tool call type
-                priority: crate::packet::Priority::High,
-                payload: bytes::Bytes::from(payload),
+            // Handle built-in test tools directly
+            let result = match tool_name {
+                "ping" => {
+                    let message = arguments.get("message")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("pong");
+                    json!({
+                        "content": [{
+                            "type": "text",
+                            "text": format!("pong: {}", message)
+                        }]
+                    })
+                },
+                
+                "echo" => {
+                    let data = arguments.get("data").cloned().unwrap_or(json!("(no data)"));
+                    json!({
+                        "content": [{
+                            "type": "text",
+                            "text": format!("Echo: {}", serde_json::to_string_pretty(&data).unwrap_or_default())
+                        }]
+                    })
+                },
+                
+                "get_status" => {
+                    json!({
+                        "content": [{
+                            "type": "text",
+                            "text": format!("MCP Server Status:\n- Session: {}\n- Active: true\n- Version: 0.1.0", 
+                                          session_id.as_deref().unwrap_or("none"))
+                        }]
+                    })
+                },
+                
+                "list_channels" => {
+                    // Get channel manager info
+                    let channels = ws_state.channel_manager.read().await.list_channels().await;
+                    let channel_info = channels
+                        .into_iter()
+                        .map(|info| format!("  - Channel {}: {} ({})", info.id, info.name, info.owner))
+                        .collect::<Vec<_>>()
+                        .join("\n");
+                    
+                    json!({
+                        "content": [{
+                            "type": "text",
+                            "text": format!("Registered WebSocket Channels:\n{}", 
+                                          if channel_info.is_empty() { "  (none)" } else { &channel_info })
+                        }]
+                    })
+                },
+                
+                // UI Framework tools - forward to channel 1200
+                "show_file" | "update_editor" | "show_terminal_output" => {
+                    info!("  Forwarding UI tool '{}' to channel 1200", tool_name);
+                    
+                    let tool_call_event = json!({
+                        "type": "tool_call",
+                        "session_id": session_id.as_deref().unwrap_or("unknown"),
+                        "tool": tool_name,
+                        "arguments": arguments,
+                    });
+                    
+                    let payload = serde_json::to_vec(&tool_call_event).unwrap_or_default();
+                    let packet = crate::packet::Packet {
+                        channel_id: 1200,
+                        packet_type: 1,
+                        priority: crate::packet::Priority::High,
+                        payload: bytes::Bytes::from(payload),
+                    };
+                    
+                    ws_state.batcher.queue_packet(packet).await;
+                    info!("  Tool call queued for channel 1200");
+                    
+                    json!({
+                        "content": [{
+                            "type": "text",
+                            "text": format!("UI tool '{}' forwarded to browser", tool_name)
+                        }]
+                    })
+                },
+                
+                // Check if it's a dynamically registered tool
+                _ => {
+                    // Look up in registered tools
+                    let registered_tools = ws_state.get_mcp_tools().await;
+                    if let Some(tool) = registered_tools.iter().find(|t| t.name == tool_name) {
+                        info!("  Forwarding registered tool '{}' to channel {}", tool_name, tool.handler_channel);
+                        
+                        let tool_call_event = json!({
+                            "type": "tool_call",
+                            "session_id": session_id.as_deref().unwrap_or("unknown"),
+                            "tool": tool_name,
+                            "arguments": arguments,
+                        });
+                        
+                        let payload = serde_json::to_vec(&tool_call_event).unwrap_or_default();
+                        let packet = crate::packet::Packet {
+                            channel_id: tool.handler_channel,
+                            packet_type: 1,
+                            priority: crate::packet::Priority::High,
+                            payload: bytes::Bytes::from(payload),
+                        };
+                        
+                        ws_state.batcher.queue_packet(packet).await;
+                        info!("  Tool call queued for channel {}", tool.handler_channel);
+                        
+                        json!({
+                            "content": [{
+                                "type": "text",
+                                "text": format!("Tool '{}' executed via channel {}", tool_name, tool.handler_channel)
+                            }]
+                        })
+                    } else {
+                        json!({
+                            "isError": true,
+                            "content": [{
+                                "type": "text",
+                                "text": format!("Unknown tool: {}", tool_name)
+                            }]
+                        })
+                    }
+                }
             };
             
-            // Queue the packet to be sent
-            ws_state.batcher.queue_packet(packet).await;
-            info!("  Tool call queued for channel 1200");
-            
-            JsonRpcResponse::success(request.id, json!({
-                "content": [{
-                    "type": "text",
-                    "text": format!("Tool '{}' executed", tool_name)
-                }]
-            }))
+            JsonRpcResponse::success(request.id, result)
         },
         
         "prompts/list" => {
@@ -373,9 +472,52 @@ async fn handle_post(
     Json(response).into_response()
 }
 
-/// Get list of available tools
-fn get_available_tools() -> Vec<Value> {
-    vec![
+/// Get list of available tools (both built-in and dynamically registered)
+async fn get_available_tools(ws_state: Arc<WebSocketState>) -> Vec<Value> {
+    let mut tools = vec![
+        // Test/diagnostic tools
+        json!({
+            "name": "ping",
+            "description": "Test MCP connection - responds with pong",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "message": {
+                        "type": "string",
+                        "description": "Optional message to echo back"
+                    }
+                }
+            }
+        }),
+        json!({
+            "name": "echo",
+            "description": "Echo back any input for testing",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "data": {
+                        "description": "Any data to echo back"
+                    }
+                }
+            }
+        }),
+        json!({
+            "name": "get_status",
+            "description": "Get current MCP server status",
+            "inputSchema": {
+                "type": "object",
+                "properties": {}
+            }
+        }),
+        json!({
+            "name": "list_channels",
+            "description": "List all registered WebSocket channels",
+            "inputSchema": {
+                "type": "object",
+                "properties": {}
+            }
+        }),
+        // UI Framework tools (forward to channel 1200)
         json!({
             "name": "show_file",
             "description": "Display file content in the browser editor",
@@ -422,5 +564,17 @@ fn get_available_tools() -> Vec<Value> {
                 "required": ["output"]
             }
         }),
-    ]
+    ];
+    
+    // Add dynamically registered tools from WebSocketState
+    let registered_tools = ws_state.get_mcp_tools().await;
+    for tool in registered_tools {
+        tools.push(json!({
+            "name": tool.name,
+            "description": tool.description,
+            "inputSchema": tool.input_schema
+        }));
+    }
+    
+    tools
 }

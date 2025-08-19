@@ -35,7 +35,7 @@ pub struct UiSystem {
     screen_size: Vector2<f32>,
     root_entity: Option<EntityId>,
     channel_id: Option<u16>,
-    channel_manager: Option<Arc<ChannelManager>>,
+    channel_manager: Option<Arc<RwLock<ChannelManager>>>,
     batcher: Option<Arc<FrameBatcher>>,
     terminal_connections: Arc<RwLock<HashMap<Uuid, EntityId>>>,
     current_frame: u64,
@@ -189,9 +189,9 @@ impl UiSystem {
     }
     
     /// Register UI system with core/server for WebSocket communication
-    pub async fn register_with_server(&mut self, channel_manager: Arc<ChannelManager>) -> UiResult<()> {
+    pub async fn register_with_server(&mut self, channel_manager: Arc<RwLock<ChannelManager>>) -> UiResult<()> {
         // Register UI system on channel 10
-        let channel_id = channel_manager.register_system("ui".to_string(), 10)
+        let channel_id = channel_manager.write().await.register_system("ui".to_string(), 10).await
             .map_err(|e| UiError::InitializationFailed(format!("Failed to register UI channel: {}", e)))?;
         
         // Create frame batcher for packet batching (60fps)

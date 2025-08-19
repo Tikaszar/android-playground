@@ -2,51 +2,74 @@
 
 This file captures the current development session context for seamless continuation in future sessions.
 
-## Next Session - 2025-12-20
+## Current Session - 2025-12-20
 
-**Focus**: Complete MCP Tool System and UI Framework Connection
-**Priority**: Get the UI Framework Plugin receiving and rendering MCP tool calls
+**Completed**: MCP Tool System Implementation
+**Status**: Ready for testing with LLM connections
 
-### Critical Tasks for Next Session
+### Completed in This Session
 
-1. **Complete MCP Test Tools Implementation**:
-   - ✅ Added test tool definitions (ping, echo, get_status, test_ui_framework, list_channels)
-   - ⏳ Need to implement actual handlers for these test tools in core/server
-   - Test tools should be GLOBAL (always available for debugging)
-   - Implement response handling back through SSE stream
+1. **MCP Test Tools Implementation** ✅:
+   - Implemented test tool handlers (ping, echo, get_status, list_channels)
+   - Test tools execute directly in MCP server
+   - Tools return proper JSON-RPC responses
+   - Available globally for debugging
 
-2. **Plugin/App MCP Tool Registration**:
-   - ✅ Added `register_mcp_tool()` to systems/networking
-   - ✅ Added wrapper in systems/logic for Apps to use
-   - ⏳ Need core/server to maintain dynamic tool registry
-   - ⏳ Handle tool registrations from control channel messages
-   - Tools registered by plugins should forward to their channels
+2. **Dynamic MCP Tool Registration System** ✅:
+   - Added McpTool struct to WebSocketState with tool registry
+   - Implemented register_mcp_tool() in WebSocketState
+   - Added MCP tool registration API in systems/networking
+   - Systems/logic exposes registration to Apps/Plugins
+   - Control channel messages (packet_type 100/101) handle registration
+   - Dynamic tools forward to their specified handler channels
 
-3. **Fix UI Framework Plugin Startup**:
-   - Currently the plugin is loaded but not receiving WebSocket messages
-   - Need to ensure plugin update loop is receiving packets from channel 1200
-   - Verify browser client is connecting and registering for channels 1200-1209
-   - Debug why "Loading UI Framework..." stays stuck
+3. **Architecture Fixes** ✅:
+   - Converted ChannelManager from DashMap to Arc<RwLock<HashMap>>
+   - Fixed all async/await patterns for channel operations
+   - Updated WebSocketState to use Arc<RwLock<ChannelManager>>
+   - Fixed systems/ui to use proper async channel registration
 
-4. **Architecture Compliance**:
-   - ✅ Plugins use systems/networking, not core directly
-   - ✅ Apps pass systems to plugins via Context
-   - ⏳ WebGL rendering issue - not thread-safe, needs browser-side only solution
+### How the MCP Tool System Works
 
-### Current Status Summary
+**Built-in Test Tools**:
+- `ping` - Returns pong with optional message
+- `echo` - Echoes back any data
+- `get_status` - Shows MCP server status
+- `list_channels` - Lists all registered WebSocket channels
 
-**What's Working**:
-- Core server runs and serves `/playground-editor/` route
-- MCP endpoint responds at `/mcp`
-- Browser loads minimal HTML/JS client
-- WebSocket connection establishes
-- Tool definitions are listed
+**UI Framework Tools** (forward to channel 1200):
+- `show_file` - Display file in editor
+- `update_editor` - Update editor content
+- `show_terminal_output` - Show terminal output
 
-**What's Not Working**:
-- UI Framework Plugin not receiving/processing messages
-- Test tools not implemented (need handlers)
-- Browser stays at "Connecting to UI Framework..."
-- Plugin tool registration not yet connected to MCP
+**Dynamic Registration**:
+```rust
+// Plugins/Apps register tools via systems/logic:
+systems.register_mcp_tool(
+    "my_tool".to_string(),
+    "Description".to_string(),
+    json!({ /* schema */ }),
+    1500, // Handler channel
+).await
+```
+
+### Next Session Tasks
+
+1. **Test with Claude Code**:
+   - Start playground-editor
+   - Connect Claude Code to http://localhost:8080/mcp
+   - Test ping/echo tools
+   - Verify tool execution
+
+2. **UI Framework Plugin Connection**:
+   - Debug why plugin isn't receiving channel 1200 messages
+   - Ensure browser WebSocket subscribes to channels 1200-1209
+   - Fix "Loading UI Framework..." stuck state
+
+3. **Plugin Tool Registration**:
+   - Have UI Framework Plugin register its tools on startup
+   - Test dynamic tool registration flow
+   - Verify tools appear in tools/list
 
 ## Previous Session - 2025-12-19
 
