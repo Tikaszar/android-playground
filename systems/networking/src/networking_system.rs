@@ -4,10 +4,11 @@ use crate::{
     ConnectionComponent, ChannelComponent, PacketQueueComponent, NetworkStatsComponent,
     NetworkStats,
 };
-use playground_core_ecs::{World, EntityId};
+use playground_core_ecs::{World, EntityId, Component, ComponentId};
 use playground_core_types::{ChannelId, Priority};
 use std::sync::Arc;
 use tokio::sync::RwLock;
+use std::any::TypeId;
 
 /// Main networking system that Plugins interact with
 pub struct NetworkingSystem {
@@ -215,7 +216,8 @@ impl NetworkingSystem {
         let world = self.world.read().await;
         
         // Build and execute query  
-        let query = world.query().with_component(ConnectionComponent::component_id()).build();
+        let component_id: ComponentId = TypeId::of::<ConnectionComponent>();
+        let query = world.query().with_component(component_id).build();
         let entity_ids = world.execute_query(query.as_ref()).await
             .map_err(|e| NetworkError::EcsError(e.to_string()))?;
         
@@ -247,7 +249,8 @@ impl NetworkingSystem {
         let world = self.world.read().await;
         
         // Query all NetworkStatsComponents
-        let stats_query = world.query().with_component(NetworkStatsComponent::component_id()).build();
+        let component_id: ComponentId = TypeId::of::<NetworkStatsComponent>();
+        let stats_query = world.query().with_component(component_id).build();
         let entity_ids = world.execute_query(stats_query.as_ref()).await
             .map_err(|e| NetworkError::EcsError(e.to_string()))?;
         

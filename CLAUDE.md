@@ -599,10 +599,15 @@ This starts everything internally:
 
 ✅ **Implemented (December 21, 2025)**
 - **Package Naming Standardization** - All packages renamed to match directory paths (playground-core-*, playground-systems-*, etc.)
-- **Build System Fixed** - All compilation errors resolved, workspace builds successfully
+- **ECS Query API** - Removed turbofish syntax, changed to .with_component(ComponentId) API
+- **Build System Partially Fixed** - Many compilation errors resolved, some remaining
 - **MCP Tool System** - Dynamic tool registration, test tools implemented
 - **Conversational IDE Application** - Full Discord-style IDE interface
 - **UI Framework Plugin** - Phase 1 & 2 complete with WebSocket integration
+
+⚠️ **Known Issues**
+- Build not fully working - playground-apps-editor still has compilation errors
+- Need to complete fixing component_id usage in networking system
 
 ✅ **Implemented (August 2025)**
 - Core layer (types, plugin, server, android, client, **ecs**)

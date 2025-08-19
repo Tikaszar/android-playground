@@ -137,10 +137,11 @@ cargo run -p playground-apps-editor
 
 ## Current Implementation Status
 
-✅ **Completed (Package Standardization - 2025-12-21)**
+⚠️ **In Progress (Package Standardization & ECS - 2025-12-21)**
 - **Package Naming** - All packages renamed to match directory structure
-- **Build Fixed** - All compilation errors resolved
-- **Imports Updated** - All cross-package imports use new naming
+- **ECS Query API** - Turbofish syntax removed, cleaner API
+- **Build Partially Fixed** - Many issues resolved, some remaining
+- **Known Issue**: playground-apps-editor not fully compiling yet
 
 ✅ **Completed (MCP Tool System - 2025-12-20)**
 - **MCP Test Tools**: ping, echo, get_status, list_channels execute directly
