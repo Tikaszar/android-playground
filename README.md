@@ -27,20 +27,15 @@ Android Playground is an ambitious experiment in mobile-native game development.
 git clone https://github.com/Tikaszar/android-playground.git
 cd android-playground
 
-# Build all crates
-cargo build --workspace
-
-# Build with WebGL renderer (for browser IDE)
-cargo build -p playground-rendering --features webgl
+# Build and run - just ONE command:
+cargo run -p playground-apps-editor
 ```
 
 ### Running the Conversational IDE
 
-The Conversational IDE (playground-editor) is a mobile-first Discord-style chat interface for interacting with AI agents:
-
 ```bash
-# Just run this single command:
-cargo run -p playground-editor
+# ONE command to run everything:
+cargo run -p playground-apps-editor
 
 # Then open your browser to:
 http://localhost:8080/playground-editor/
@@ -131,12 +126,12 @@ Android Playground now includes **MCP (Model Context Protocol)** support, enabli
 ### Quick Start
 ```bash
 # Start Android Playground (port 8080 for Termux)
-cargo run -p playground-server
+cargo run -p playground-apps-editor
 
 # LLMs auto-connect via .claude/settings.json or .gemini/settings.json
 # No command-line flags needed!
 
-# Open browser to http://localhost:8080/test/ide.html
+# Open browser to http://localhost:8080/playground-editor/
 # Start coding through conversation!
 ```
 
