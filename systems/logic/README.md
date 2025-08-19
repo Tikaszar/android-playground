@@ -1,10 +1,16 @@
 # playground-systems-logic
 
-Full-featured game ECS with system initialization, parallel execution, and networking support.
+Full-featured game ECS that Apps and Plugins use, which also initializes and provides access to all other engine systems.
 
 ## Overview
 
-Systems/Logic provides a complete ECS framework for game development and **initializes ALL other systems**. This is the primary ECS that Plugins and Apps use for game logic.
+Systems/Logic is the **game-level ECS** that Apps and Plugins use for their game logic. As part of its initialization, it also creates and registers all other engine systems (Networking, UI, Rendering, Physics), making them available to Apps and Plugins through a unified interface.
+
+### Primary Purpose
+**Game ECS for Apps/Plugins** - This is the ECS where game entities, components, and systems live. It's NOT for engine internals (those use core/ecs).
+
+### Secondary Role  
+**System Initialization** - Since Apps and Plugins need access to engine systems, Logic initializes them and provides access through SystemsManager.
 
 ### Key Features
 - Hybrid archetype storage (fast iteration + efficient insertion)
@@ -14,29 +20,59 @@ Systems/Logic provides a complete ECS framework for game development and **initi
 - Query caching for performance
 - Hot-reload support with migrations
 - Batch-only API for mobile efficiency
+- **SystemsManager**: Provides access to all initialized engine systems
 
-## SPECIAL ROLE: System Initialization
+## Architecture Role
 
-**This system is unique** - it initializes ALL other systems in the engine:
+**This is the game ECS** - Apps and Plugins use this for game logic AND to access other systems:
 
 ```rust
 use playground_systems_logic::{ECS, SystemsManager};
 
-// Apps create ECS
+// Apps create the game ECS
 let mut ecs = ECS::new();
 
-// ECS initializes ALL systems internally
+// ECS initialization also sets up all engine systems
 let systems = ecs.initialize_systems().await?;
+// Behind the scenes, this calls SystemsManager::initialize() which:
+// - Creates NetworkingSystem (starts core/server internally)
+// - Creates UiSystem (uses core/ecs for its internal state)
+// - Creates RenderingSystem (browser-side only)
+// - Creates PhysicsSystem (placeholder for now)
 
-// Systems include:
-// - NetworkingSystem (manages core/server)
-// - UiSystem 
-// - RenderingSystem
-// - PhysicsSystem (future)
+// Now Apps can use the ECS for game logic
+ecs.register_component::<Health>().await?;
+ecs.register_component::<Position>().await?;
 
-// App passes systems to plugins via Context
-let context = Context::new(systems);
+// AND access engine systems through the SystemsManager
+let channel = systems.networking.read().await
+    .register_plugin("my-plugin").await?;
+
+// Plugins get both ECS and systems via Context
+let context = Context::new(ecs, systems);
 plugin.on_load(&context).await?;
+```
+
+## SystemsManager API
+
+The SystemsManager provides unified access to all engine systems:
+
+```rust
+pub struct SystemsManager {
+    pub networking: Arc<RwLock<NetworkingSystem>>, // WebSocket, channels, MCP
+    pub ui: Arc<RwLock<UiSystem>>,                 // UI elements, layout, input
+    // pub rendering: Arc<RwLock<RenderingSystem>>, // Browser-side only
+    // pub physics: Arc<RwLock<PhysicsSystem>>,     // Coming soon
+}
+
+impl SystemsManager {
+    // Initialize all systems (called by ECS)
+    pub async fn initialize() -> Result<Self>;
+    
+    // Helper methods that wrap system functions
+    pub async fn register_mcp_tool(...) -> Result<()>;
+    pub async fn register_plugin_channels(...) -> Result<()>;
+}
 ```
 
 ## Architecture
