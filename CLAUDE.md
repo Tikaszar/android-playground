@@ -567,14 +567,16 @@ The Conversational IDE is the primary interface for interacting with the Android
 ### Running the IDE
 
 ```bash
-# Terminal 1: Start the core server
-cargo run -p playground-server
-
-# Terminal 2: Start the Playground Editor (Conversational IDE)
+# Just run this single command:
 cargo run -p playground-editor
 
 # Browser: Open http://localhost:3001
 ```
+
+This starts everything internally:
+- Core server with WebSocket and MCP
+- All engine systems via systems/logic
+- Web interface on port 3001
 
 ### Architecture
 - **apps/playground-editor**: The Conversational IDE application

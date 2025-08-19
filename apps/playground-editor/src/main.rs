@@ -26,9 +26,18 @@ async fn main() -> Result<()> {
     info!("  Playground Editor - Conversational IDE  ");
     info!("===========================================");
     info!("");
-    info!("This is the Conversational IDE for Android Playground.");
-    info!("It provides a Discord-style chat interface for development.");
-    info!("");
+    
+    // Start the core server internally
+    info!("Starting core server on port 8080...");
+    tokio::spawn(async {
+        // Run the core server
+        if let Err(e) = run_core_server().await {
+            tracing::error!("Core server failed: {}", e);
+        }
+    });
+    
+    // Give the core server time to start
+    tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
     
     // Initialize the ECS system from systems/logic
     info!("Creating ECS from systems/logic...");
@@ -52,12 +61,6 @@ async fn main() -> Result<()> {
     let ecs = Arc::new(RwLock::new(ecs));
     let systems = systems.clone();
     
-    // Note: In a complete implementation:
-    // 1. Load the UI Framework Plugin using the Plugin trait
-    // 2. Pass the systems to the plugin through its Context
-    // 3. The plugin uses the provided systems (NEVER creates its own)
-    // 4. The plugin uses systems/networking to handle WebSocket messages
-    
     // Start the web server for the IDE interface
     tokio::spawn(async move {
         // Serve static files for the Conversational IDE interface
@@ -77,25 +80,58 @@ async fn main() -> Result<()> {
     });
     
     info!("=========================================");
-    info!("Conversational IDE Architecture:");
+    info!("Conversational IDE is running!");
     info!("");
+    info!("Open your browser to: http://localhost:3001");
+    info!("");
+    info!("Architecture:");
     info!("  playground-editor (App)");
-    info!("      ↓ creates");
-    info!("  systems/logic (ECS)");
-    info!("      ↓ creates core/ecs internally");
-    info!("      ↓ initializes ALL systems");
-    info!("  systems/networking");
-    info!("      ↓ creates and manages");
-    info!("  core/server connection");
+    info!("      ↓ starts core/server internally");
+    info!("      ↓ creates systems/logic");
+    info!("      ↓ systems/logic initializes all systems");
+    info!("      ↓ systems/networking connects to core/server");
     info!("");
-    info!("Web Interface: http://localhost:3001");
-    info!("WebSocket: ws://localhost:8080/ws");
-    info!("Channels: 1200-1209 (UI Framework)");
+    info!("Everything is running in this single process.");
     info!("=========================================");
     
     // Keep the application running
     tokio::signal::ctrl_c().await?;
     info!("Shutting down Conversational IDE...");
+    
+    Ok(())
+}
+
+// Run the core server internally
+async fn run_core_server() -> Result<()> {
+    use playground_server::WebSocketState;
+    use playground_server::mcp::McpServer;
+    use playground_server::websocket::websocket_handler;
+    use playground_server::handlers::{list_plugins, reload_plugin, root};
+    use axum::routing::{get, post};
+    
+    let ws_state = Arc::new(WebSocketState::new());
+    
+    // Create MCP server
+    let mcp_server = McpServer::new();
+    let mcp_router = mcp_server.router();
+    
+    let app = Router::new()
+        .route("/", get(root))
+        .route("/ws", get(websocket_handler))
+        .route("/api/plugins", get(list_plugins))
+        .route("/api/reload", post(reload_plugin))
+        .nest("/mcp", mcp_router)
+        .layer(CorsLayer::permissive())
+        .layer(TraceLayer::new_for_http())
+        .with_state(ws_state);
+    
+    let addr = SocketAddr::from(([127, 0, 0, 1], 8080));
+    tracing::info!("Core server listening on {}", addr);
+    tracing::info!("WebSocket endpoint: ws://localhost:8080/ws");
+    tracing::info!("MCP endpoint: http://localhost:8080/mcp");
+    
+    let listener = tokio::net::TcpListener::bind(addr).await?;
+    axum::serve(listener, app).await?;
     
     Ok(())
 }
