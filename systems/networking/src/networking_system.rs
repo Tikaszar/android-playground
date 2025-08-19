@@ -214,19 +214,16 @@ impl NetworkingSystem {
     pub async fn query_connections(&self) -> NetworkResult<Vec<ConnectionComponent>> {
         let world = self.world.read().await;
         
-        // Build and execute query
-        let query = world.query().with::<ConnectionComponent>().build();
-        let results = query.execute().await
+        // Build and execute query  
+        let query = world.query().with_component(ConnectionComponent::component_id()).build();
+        let entity_ids = world.execute_query(query.as_ref()).await
             .map_err(|e| NetworkError::EcsError(e.to_string()))?;
         
         // Extract connection components
         let mut connections = Vec::new();
-        for (_entity, components) in results {
-            if let Some(conn) = components.get(0) {
-                // Downcast and clone the component
-                if let Some(connection) = conn.as_any().downcast_ref::<ConnectionComponent>() {
-                    connections.push(connection.clone());
-                }
+        for entity in entity_ids {
+            if let Ok(component) = world.get_component::<ConnectionComponent>(entity).await {
+                connections.push(component);
             }
         }
         
@@ -250,8 +247,8 @@ impl NetworkingSystem {
         let world = self.world.read().await;
         
         // Query all NetworkStatsComponents
-        let stats_query = world.query::<NetworkStatsComponent>();
-        let stats_components = stats_query.execute().await
+        let stats_query = world.query().with_component(NetworkStatsComponent::component_id()).build();
+        let entity_ids = world.execute_query(stats_query.as_ref()).await
             .map_err(|e| NetworkError::EcsError(e.to_string()))?;
         
         // Aggregate stats
@@ -267,26 +264,34 @@ impl NetworkingSystem {
         let mut total_latency = 0u64;
         let mut latency_count = 0u64;
         
-        for stats in stats_components {
-            total_stats.bytes_sent += stats.bytes_sent;
-            total_stats.bytes_received += stats.bytes_received;
-            total_stats.packets_sent += stats.packets_sent;
-            total_stats.packets_received += stats.packets_received;
-            
-            if stats.average_latency_ms > 0 {
-                total_latency += stats.average_latency_ms as u64;
-                latency_count += 1;
+        for entity in entity_ids {
+            if let Ok(stats) = world.get_component::<NetworkStatsComponent>(entity).await {
+                total_stats.bytes_sent += stats.bytes_sent;
+                total_stats.bytes_received += stats.bytes_received;
+                total_stats.packets_sent += stats.packets_sent;
+                total_stats.packets_received += stats.packets_received;
+                
+                if stats.average_latency_ms > 0 {
+                    total_latency += stats.average_latency_ms as u64;
+                    latency_count += 1;
+                }
             }
         }
         
         // Count active connections
-        let conn_query = world.query::<ConnectionComponent>();
-        let connections = conn_query.execute().await
+        let conn_query = world.query().with_component(ConnectionComponent::component_id()).build();
+        let connections = world.execute_query(conn_query.as_ref()).await
             .map_err(|e| NetworkError::EcsError(e.to_string()))?;
         
-        total_stats.connections_active = connections.into_iter()
-            .filter(|c| c.connected)
-            .count() as u32;
+        let mut active_count = 0;
+        for entity in connections {
+            if let Ok(conn) = world.get_component::<ConnectionComponent>(entity).await {
+                if conn.connected {
+                    active_count += 1;
+                }
+            }
+        }
+        total_stats.connections_active = active_count;
         
         // Calculate average latency
         if latency_count > 0 {

@@ -220,6 +220,13 @@ impl World {
         }
     }
     
+    pub async fn get_component<T: Component>(&self, entity: EntityId) -> EcsResult<T> {
+        let component_box = self.get_component_raw(entity, T::component_id()).await?;
+        // Deserialize from bytes
+        let bytes = component_box.serialize().await?;
+        T::deserialize(&bytes).await
+    }
+    
     pub async fn has_component(&self, entity: EntityId, component_id: ComponentId) -> bool {
         if let Some(storage) = self.storages.get(&component_id) {
             storage.contains(entity).await

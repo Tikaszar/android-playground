@@ -14,6 +14,45 @@ pub trait Query: Send + Sync {
     async fn matches(&self, entity: EntityId, storages: &DashMap<ComponentId, Arc<dyn ComponentStorage>>) -> bool;
 }
 
+pub struct ComponentIdQuery {
+    component_id: ComponentId,
+    include: bool, // true for with, false for without
+}
+
+impl ComponentIdQuery {
+    pub fn new(component_id: ComponentId) -> Self {
+        Self { component_id, include: true }
+    }
+    
+    pub fn new_exclude(component_id: ComponentId) -> Self {
+        Self { component_id, include: false }
+    }
+}
+
+#[async_trait]
+impl Query for ComponentIdQuery {
+    async fn execute(&self, storages: &DashMap<ComponentId, Arc<dyn ComponentStorage>>) -> EcsResult<Vec<EntityId>> {
+        if self.include {
+            if let Some(storage) = storages.get(&self.component_id) {
+                Ok(storage.entities().await)
+            } else {
+                Ok(Vec::new())
+            }
+        } else {
+            Err(EcsError::QueryError("Cannot execute 'without' query standalone".into()))
+        }
+    }
+    
+    async fn matches(&self, entity: EntityId, storages: &DashMap<ComponentId, Arc<dyn ComponentStorage>>) -> bool {
+        if let Some(storage) = storages.get(&self.component_id) {
+            let contains = storage.contains(entity).await;
+            if self.include { contains } else { !contains }
+        } else {
+            !self.include
+        }
+    }
+}
+
 pub struct WithComponent<T: Component> {
     _phantom: PhantomData<T>,
 }
@@ -171,13 +210,14 @@ impl QueryBuilder {
         }
     }
     
-    pub fn with<T: Component>(mut self) -> Self {
-        self.queries.push(Box::new(WithComponent::<T>::new()));
+    pub fn with_component(mut self, component_id: ComponentId) -> Self {
+        // We'll need to create a generic query for any component ID
+        self.queries.push(Box::new(ComponentIdQuery::new(component_id)));
         self
     }
     
-    pub fn without<T: Component>(mut self) -> Self {
-        self.exclude.push(Box::new(WithoutComponent::<T>::new()));
+    pub fn without_component(mut self, component_id: ComponentId) -> Self {
+        self.exclude.push(Box::new(ComponentIdQuery::new_exclude(component_id)));
         self
     }
     
