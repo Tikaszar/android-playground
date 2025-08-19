@@ -114,11 +114,8 @@ class UIFrameworkClient {
         console.log('Connected to UI Framework');
         this.reconnectAttempts = 0;
         
-        // Register for UI Framework channels
-        for (let i = 0; i < this.UI_FRAMEWORK_CHANNELS; i++) {
-            const channel = this.UI_FRAMEWORK_BASE + i;
-            this.registerChannel(channel);
-        }
+        // Browser is a client - no need to register channels
+        // The UI Framework Plugin on the server handles our messages
         
         // Hide loading, show canvas
         document.body.classList.add('ui-ready');
@@ -126,8 +123,12 @@ class UIFrameworkClient {
         document.getElementById('error').style.display = 'none';
         this.canvas.style.display = 'block';
         
-        // Send initial resize event
-        this.handleResize();
+        // Wait a bit for WebSocket to fully stabilize before sending first message
+        // This avoids race condition with async connection establishment
+        setTimeout(() => {
+            // Send initial resize event to UI Framework Plugin
+            this.handleResize();
+        }, 100);
     }
     
     onMessage(event) {
@@ -146,11 +147,11 @@ class UIFrameworkClient {
     handleBinaryMessage(data) {
         const view = new DataView(data);
         
-        // Parse packet header
-        const channelId = view.getUint16(0, true);
-        const packetType = view.getUint16(2, true);
+        // Parse packet header (big-endian to match server)
+        const channelId = view.getUint16(0, false);
+        const packetType = view.getUint16(2, false);
         const priority = view.getUint8(4);
-        const payloadSize = view.getUint32(5, true);
+        const payloadSize = view.getUint32(5, false);  // Note: offset 5 is correct per Rust code
         
         // Check if this is a UI Framework channel
         if (channelId >= this.UI_FRAMEWORK_BASE && 
@@ -320,6 +321,7 @@ class UIFrameworkClient {
     
     sendToUIFramework(msgType, data) {
         if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
+            console.warn('WebSocket not ready, skipping message type:', msgType);
             return;
         }
         
@@ -333,11 +335,11 @@ class UIFrameworkClient {
         const packet = new ArrayBuffer(9 + payloadBytes.length);
         const view = new DataView(packet);
         
-        // Write header
-        view.setUint16(0, channel, true);
-        view.setUint16(2, msgType, true);
+        // Write header (big-endian to match server)
+        view.setUint16(0, channel, false);
+        view.setUint16(2, msgType, false);
         view.setUint8(4, 2); // Priority: High
-        view.setUint32(5, payloadBytes.length, true);
+        view.setUint32(5, payloadBytes.length, false);
         
         // Write payload
         const bytes = new Uint8Array(packet, 9);
@@ -346,19 +348,9 @@ class UIFrameworkClient {
         this.ws.send(packet);
     }
     
-    registerChannel(channelId) {
-        if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
-            return;
-        }
-        
-        const msg = {
-            type: 'register',
-            channel_id: channelId,
-            name: `ui-framework-${channelId - this.UI_FRAMEWORK_BASE}`,
-        };
-        
-        this.ws.send(JSON.stringify(msg));
-    }
+    // Browser doesn't need to register channels - it's a client
+    // The UI Framework Plugin (server-side) handles messages on channels 1200-1209
+    // We just send messages to those channels
     
     onError(error) {
         console.error('WebSocket error:', error);
