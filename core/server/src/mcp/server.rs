@@ -142,9 +142,108 @@ async fn end_session(
 
 /// List available tools
 async fn list_tools() -> Json<Value> {
-    // Tools will be registered by plugins via channels
+    // Diagnostic/test tools for debugging MCP connection
+    let test_tools = vec![
+        json!({
+            "name": "ping",
+            "description": "Test MCP connection - responds with pong",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "message": {
+                        "type": "string",
+                        "description": "Optional message to echo back"
+                    }
+                }
+            }
+        }),
+        json!({
+            "name": "echo",
+            "description": "Echo back any input for testing",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "data": {
+                        "type": "any",
+                        "description": "Any data to echo back"
+                    }
+                }
+            }
+        }),
+        json!({
+            "name": "get_status",
+            "description": "Get current MCP server status",
+            "inputSchema": {
+                "type": "object",
+                "properties": {}
+            }
+        }),
+        json!({
+            "name": "test_ui_framework",
+            "description": "Test if UI Framework Plugin is receiving messages",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "test_message": {
+                        "type": "string",
+                        "description": "Test message to send to UI Framework"
+                    }
+                }
+            }
+        }),
+        json!({
+            "name": "list_channels",
+            "description": "List all registered WebSocket channels",
+            "inputSchema": {
+                "type": "object",
+                "properties": {}
+            }
+        }),
+    ];
+    
+    // UI Framework tools (these forward to channel 1200)
+    let ui_tools = vec![
+        json!({
+            "name": "show_file",
+            "description": "Display file content in editor bubble",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "path": { "type": "string" },
+                    "content": { "type": "string" }
+                },
+                "required": ["path", "content"]
+            }
+        }),
+        json!({
+            "name": "update_editor",
+            "description": "Update current editor content",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "content": { "type": "string" }
+                },
+                "required": ["content"]
+            }
+        }),
+        json!({
+            "name": "show_terminal_output",
+            "description": "Display terminal output",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "output": { "type": "string" }
+                },
+                "required": ["output"]
+            }
+        }),
+    ];
+    
+    let mut all_tools = test_tools;
+    all_tools.extend(ui_tools);
+    
     Json(json!({
-        "tools": []
+        "tools": all_tools
     }))
 }
 

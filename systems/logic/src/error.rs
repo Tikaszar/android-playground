@@ -47,6 +47,12 @@ pub enum LogicError {
     
     #[error("Core ECS error: {0}")]
     CoreError(#[from] playground_ecs::EcsError),
+    
+    #[error("Initialization failed: {0}")]
+    InitializationFailed(String),
+    
+    #[error("System error: {0}")]
+    SystemError(String),
 }
 
 pub type LogicResult<T> = Result<T, LogicError>;

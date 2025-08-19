@@ -12,7 +12,7 @@ playground-ecs = { path = "../../core/ecs" }
 # Other systems to initialize
 playground-networking = { path = "../networking" }
 playground-ui = { path = "../ui" }
-playground-rendering = { path = "../rendering" }
+# playground-rendering = { path = "../rendering", features = ["webgl"] } # Browser-side only
 # playground-physics = { path = "../physics" } # Not yet implemented
 serde = { workspace = true }
 serde_json = { workspace = true }

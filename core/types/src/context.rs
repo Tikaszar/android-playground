@@ -5,3 +5,12 @@ pub struct Context {
     pub resources: HashMap<String, Box<dyn std::any::Any + Send + Sync>>,
     pub messages: Vec<Message>,
 }
+
+impl Context {
+    pub fn new() -> Self {
+        Self {
+            resources: HashMap::new(),
+            messages: Vec::new(),
+        }
+    }
+}

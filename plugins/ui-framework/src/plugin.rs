@@ -28,7 +28,7 @@ pub struct UiFrameworkPlugin {
     ui_state: Arc<RwLock<UiState>>,
     orchestrator: Arc<RwLock<Orchestrator>>,
     channel_id: Option<u16>,
-    networking: Option<Arc<NetworkingSystem>>,
+    networking: Option<Arc<RwLock<NetworkingSystem>>>,
 }
 
 impl UiFrameworkPlugin {
@@ -109,7 +109,8 @@ impl UiFrameworkPlugin {
                     });
                     
                     let data = serde_json::to_vec(&response).unwrap_or_default();
-                    let _ = networking.send_packet(
+                    let net = networking.read().await;
+                    let _ = net.send_packet(
                         1201, // Response channel
                         2, // Tool result packet type
                         data,
@@ -147,21 +148,22 @@ impl Plugin for UiFrameworkPlugin {
             };
         }
         
-        // Initialize networking system
-        let mut networking = NetworkingSystem::new()
-            .await
-            .map_err(|e| PluginError::InitFailed(e.to_string()))?;
+        // Get NetworkingSystem from Context (provided by the App)
+        // The App should have added this to the context resources
+        let networking = ctx.resources.get("networking")
+            .and_then(|r| r.downcast_ref::<Arc<RwLock<NetworkingSystem>>>())
+            .ok_or_else(|| PluginError::InitFailed("NetworkingSystem not found in context".to_string()))?
+            .clone();
         
-        // Connect to core/server
-        networking.initialize(None).await
-            .map_err(|e| PluginError::InitFailed(e.to_string()))?;
-        
-        // Register for channel 1200 as a plugin
-        let channel_id = networking.register_plugin("ui-framework").await
-            .map_err(|e| PluginError::InitFailed(e.to_string()))?;
+        // Register for channels 1200-1209 as a plugin
+        let channel_id = {
+            let mut net = networking.write().await;
+            net.register_plugin("ui-framework").await
+                .map_err(|e| PluginError::InitFailed(e.to_string()))?
+        };
         
         self.channel_id = Some(channel_id);
-        self.networking = Some(Arc::new(networking));
+        self.networking = Some(networking);
         
         info!("UI Framework Plugin registered on channel {}", channel_id);
         
@@ -210,23 +212,27 @@ impl Plugin for UiFrameworkPlugin {
         // Check for MCP messages on our channel
         if let Some(channel_id) = self.channel_id {
             if let Some(networking) = &self.networking {
-                // Receive packets from our channel
-                if let Ok(packets) = networking.receive_packets(channel_id).await {
-                    for packet in packets {
-                        // Parse MCP tool call from packet
-                        if let Ok(json) = serde_json::from_slice::<serde_json::Value>(&packet.data) {
-                            debug!("Received MCP message on channel {}: {:?}", channel_id, json);
+                // Receive packets from our channel (release lock quickly)
+                let packets = {
+                    let net = networking.read().await;
+                    net.receive_packets(channel_id).await.unwrap_or_default()
+                };
+                
+                // Process packets without holding the lock
+                for packet in packets {
+                    // Parse MCP tool call from packet
+                    if let Ok(json) = serde_json::from_slice::<serde_json::Value>(&packet.data) {
+                        debug!("Received MCP message on channel {}: {:?}", channel_id, json);
+                        
+                        // Handle MCP tool call
+                        if json.get("type").and_then(|v| v.as_str()) == Some("tool_call") {
+                            let tool_name = json.get("tool").and_then(|v| v.as_str()).unwrap_or("");
+                            let arguments = json.get("arguments").cloned().unwrap_or(serde_json::json!({}));
                             
-                            // Handle MCP tool call
-                            if json.get("type").and_then(|v| v.as_str()) == Some("tool_call") {
-                                let tool_name = json.get("tool").and_then(|v| v.as_str()).unwrap_or("");
-                                let arguments = json.get("arguments").cloned().unwrap_or(serde_json::json!({}));
-                                
-                                info!("Processing MCP tool call: {}", tool_name);
-                                
-                                // Process the tool call
-                                self.handle_mcp_tool_call(tool_name, arguments).await;
-                            }
+                            info!("Processing MCP tool call: {}", tool_name);
+                            
+                            // Process the tool call
+                            self.handle_mcp_tool_call(tool_name, arguments).await;
                         }
                     }
                 }

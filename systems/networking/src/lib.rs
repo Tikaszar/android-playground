@@ -225,6 +225,50 @@ impl NetworkingSystem {
         Ok(())
     }
     
+    /// Register an MCP tool that this plugin/app provides
+    /// The tool will be callable through the MCP interface
+    pub async fn register_mcp_tool(
+        &self,
+        name: String,
+        description: String,
+        input_schema: serde_json::Value,
+        handler_channel: ChannelId,
+    ) -> NetworkResult<()> {
+        // Send registration to core/server via control channel
+        let registration = serde_json::json!({
+            "type": "register_mcp_tool",
+            "name": name,
+            "description": description,
+            "inputSchema": input_schema,
+            "handlerChannel": handler_channel,
+        });
+        
+        let data = serde_json::to_vec(&registration)
+            .map_err(|e| NetworkError::SerializationError(e.to_string()))?;
+        
+        // Send to control channel (0) with high priority
+        self.send_packet(0, 100, data, Priority::High).await?;
+        
+        tracing::info!("Registered MCP tool '{}' on channel {}", name, handler_channel);
+        Ok(())
+    }
+    
+    /// Unregister an MCP tool
+    pub async fn unregister_mcp_tool(&self, name: String) -> NetworkResult<()> {
+        let unregistration = serde_json::json!({
+            "type": "unregister_mcp_tool",
+            "name": name,
+        });
+        
+        let data = serde_json::to_vec(&unregistration)
+            .map_err(|e| NetworkError::SerializationError(e.to_string()))?;
+        
+        self.send_packet(0, 101, data, Priority::High).await?;
+        
+        tracing::info!("Unregistered MCP tool '{}'", name);
+        Ok(())
+    }
+    
     /// Get network statistics
     pub async fn get_stats(&self) -> NetworkResult<NetworkStats> {
         let _world = self.world.read().await;

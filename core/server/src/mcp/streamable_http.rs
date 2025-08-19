@@ -251,7 +251,7 @@ async fn handle_post(
         
         "tools/list" => {
             JsonRpcResponse::success(request.id, json!({
-                "tools": get_available_tools()
+                "tools": get_available_tools(&ws_state).await
             }))
         },
         

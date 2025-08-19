@@ -2,15 +2,62 @@
 
 This file captures the current development session context for seamless continuation in future sessions.
 
-## Current Session - 2025-12-19
+## Next Session - 2025-12-20
+
+**Focus**: Complete MCP Tool System and UI Framework Connection
+**Priority**: Get the UI Framework Plugin receiving and rendering MCP tool calls
+
+### Critical Tasks for Next Session
+
+1. **Complete MCP Test Tools Implementation**:
+   - ✅ Added test tool definitions (ping, echo, get_status, test_ui_framework, list_channels)
+   - ⏳ Need to implement actual handlers for these test tools in core/server
+   - Test tools should be GLOBAL (always available for debugging)
+   - Implement response handling back through SSE stream
+
+2. **Plugin/App MCP Tool Registration**:
+   - ✅ Added `register_mcp_tool()` to systems/networking
+   - ✅ Added wrapper in systems/logic for Apps to use
+   - ⏳ Need core/server to maintain dynamic tool registry
+   - ⏳ Handle tool registrations from control channel messages
+   - Tools registered by plugins should forward to their channels
+
+3. **Fix UI Framework Plugin Startup**:
+   - Currently the plugin is loaded but not receiving WebSocket messages
+   - Need to ensure plugin update loop is receiving packets from channel 1200
+   - Verify browser client is connecting and registering for channels 1200-1209
+   - Debug why "Loading UI Framework..." stays stuck
+
+4. **Architecture Compliance**:
+   - ✅ Plugins use systems/networking, not core directly
+   - ✅ Apps pass systems to plugins via Context
+   - ⏳ WebGL rendering issue - not thread-safe, needs browser-side only solution
+
+### Current Status Summary
+
+**What's Working**:
+- Core server runs and serves `/playground-editor/` route
+- MCP endpoint responds at `/mcp`
+- Browser loads minimal HTML/JS client
+- WebSocket connection establishes
+- Tool definitions are listed
+
+**What's Not Working**:
+- UI Framework Plugin not receiving/processing messages
+- Test tools not implemented (need handlers)
+- Browser stays at "Connecting to UI Framework..."
+- Plugin tool registration not yet connected to MCP
+
+## Previous Session - 2025-12-19
 
 **Focus**: Mobile-First UI Framework Implementation
-**Status**: ✅ COMPLETE - Playground Editor with proper UI Framework Plugin integration
+**Status**: ✅ PARTIAL - Infrastructure ready, needs connection debugging
 
 ### Session Objectives Completed
 1. ✅ Fixed architectural flow (systems/logic initializes all systems)
 2. ✅ Set up playground-editor accessible at `/playground-editor/`
 3. ✅ Implemented proper UI Framework Plugin integration for mobile
+4. ✅ Added MCP test tools and plugin registration API
 
 ### Critical Architecture Correction ✅
 

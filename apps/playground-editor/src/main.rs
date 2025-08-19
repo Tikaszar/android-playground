@@ -45,7 +45,7 @@ async fn main() -> Result<()> {
     info!("✓ All systems initialized:");
     info!("  - NetworkingSystem (connected to core/server)");
     info!("  - UiSystem (using core/ecs internally)");
-    info!("  - RenderingSystem (using core/ecs internally)");
+    info!("  - RenderingSystem (skipped - browser-side only)");
     
     // Register UI Framework Plugin channels
     info!("Registering UI Framework Plugin channels...");
@@ -54,10 +54,59 @@ async fn main() -> Result<()> {
     
     // Store the ECS and systems for plugin usage
     let ecs = Arc::new(RwLock::new(ecs));
-    let systems = systems.clone();
+    let systems_clone = systems.clone();
+    
+    // Load and start the UI Framework Plugin
+    info!("Loading UI Framework Plugin...");
+    use playground_ui_framework::UiFrameworkPlugin;
+    use playground_plugin::Plugin;
+    use playground_types::context::Context;
+    use playground_types::render_context::RenderContext;
+    
+    let mut ui_plugin = UiFrameworkPlugin::new();
+    
+    // Create plugin context with access to systems
+    let mut context = Context::new();
+    
+    // Add NetworkingSystem to the context for the plugin to use
+    // This follows the architecture: Apps pass Systems to Plugins
+    context.resources.insert(
+        "networking".to_string(),
+        Box::new(systems.networking.clone())
+    );
+    context.resources.insert(
+        "ui".to_string(),
+        Box::new(systems.ui.clone())
+    );
+    // Rendering is browser-side only (WebGL isn't thread-safe)
+    
+    // Initialize the plugin with access to systems
+    ui_plugin.on_load(&mut context).await?;
+    info!("✓ UI Framework Plugin loaded and ready");
+    
+    // Start plugin update loop
+    let ui_plugin = Arc::new(RwLock::new(ui_plugin));
+    let ui_plugin_clone = ui_plugin.clone();
+    let systems_for_update = systems.clone();
+    
+    tokio::spawn(async move {
+        let mut interval = tokio::time::interval(tokio::time::Duration::from_millis(16)); // ~60fps
+        loop {
+            interval.tick().await;
+            let mut plugin = ui_plugin_clone.write().await;
+            
+            // Create context with systems for update
+            let mut ctx = Context::new();
+            ctx.resources.insert(
+                "networking".to_string(),
+                Box::new(systems_for_update.networking.clone())
+            );
+            
+            plugin.update(&mut ctx, 0.016).await;
+        }
+    });
     
     // Note: The IDE interface is served by core/server at /playground-editor/
-    // No need for a separate web server here - that violates the architecture
     
     info!("=========================================");
     info!("Conversational IDE is running!");
@@ -83,10 +132,10 @@ async fn main() -> Result<()> {
 
 // Run the core server internally
 async fn run_core_server() -> Result<()> {
-    use playground_server::WebSocketState;
-    use playground_server::mcp::McpServer;
-    use playground_server::websocket::websocket_handler;
-    use playground_server::handlers::{list_plugins, reload_plugin, root};
+    use playground_server::{
+        McpServer, WebSocketState, websocket_handler,
+        list_plugins, reload_plugin, root
+    };
     use axum::{Router, routing::{get, post}};
     use std::net::SocketAddr;
     use tower_http::cors::CorsLayer;
