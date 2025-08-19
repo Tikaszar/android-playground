@@ -561,7 +561,7 @@ cd ../orchestrator && claude --continue  # Back to orchestrator
 
 ## Current Status
 
-✅ **Implemented**
+✅ **Implemented (December 2024)**
 - Core layer (types, plugin, server, android, client, **ecs**)
 - **Core/ECS** with async, generational IDs, and batch-only API
 - **Core/Server** as both binary and library with channel management
