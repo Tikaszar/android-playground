@@ -9,12 +9,14 @@ mod connection;
 mod packet_queue;
 mod channel_manager;
 mod network_system;
+mod websocket_client;
 
 pub use components::*;
 pub use connection::*;
 pub use packet_queue::*;
 pub use channel_manager::*;
 pub use network_system::*;
+use websocket_client::WebSocketClient;
 
 use playground_ecs::{World, EntityId, ComponentBox};
 use playground_types::{ChannelId, Priority};
@@ -48,8 +50,8 @@ pub type NetworkResult<T> = Result<T, NetworkError>;
 pub struct NetworkingSystem {
     // Internal ECS world for managing network state
     world: Arc<RwLock<World>>,
-    // Connection to core/server
-    server_handle: Option<Arc<ConnectionManager>>,
+    // WebSocket client connection to core/server
+    ws_client: Option<Arc<WebSocketClient>>,
     // Channel manager for dynamic registration
     channel_manager: Arc<RwLock<ChannelManager>>,
     // Packet queue for batching
@@ -72,7 +74,7 @@ impl NetworkingSystem {
         
         Ok(Self {
             world,
-            server_handle: None,
+            ws_client: None,
             channel_manager: Arc::new(RwLock::new(ChannelManager::new())),
             packet_queue: Arc::new(RwLock::new(PacketQueue::new())),
         })
@@ -81,14 +83,23 @@ impl NetworkingSystem {
     /// Initialize and connect to core/server
     pub async fn initialize(&mut self, server_url: Option<String>) -> NetworkResult<()> {
         // Connect to core/server WebSocket endpoint
-        let _url = server_url.unwrap_or_else(|| "ws://localhost:3000/ws".to_string());
+        let url = server_url.unwrap_or_else(|| "ws://localhost:8080/ws".to_string());
         
-        // TODO: Create actual connection to core/server
-        // For now, we'll prepare the internal structure
+        // Create and connect WebSocket client
+        let client = Arc::new(WebSocketClient::new(url));
+        client.connect().await?;
+        
+        // Store the client
+        self.ws_client = Some(client.clone());
         
         // Register systems channels (1-999)
         let mut manager = self.channel_manager.write().await;
-        manager.register_system_channel("networking", 100).await?;
+        let channel_id = manager.register_system_channel("networking", 100).await?;
+        
+        // Register with the WebSocket server
+        if let Some(ws) = &self.ws_client {
+            ws.register_channel(channel_id, "networking").await?;
+        }
         
         Ok(())
     }
@@ -96,7 +107,14 @@ impl NetworkingSystem {
     /// Register a Plugin for a dynamic channel (1000+)
     pub async fn register_plugin(&self, plugin_name: &str) -> NetworkResult<ChannelId> {
         let mut manager = self.channel_manager.write().await;
-        manager.register_plugin_channel(plugin_name).await
+        let channel_id = manager.register_plugin_channel(plugin_name).await?;
+        
+        // Register with the WebSocket server
+        if let Some(ws) = &self.ws_client {
+            ws.register_channel(channel_id, plugin_name).await?;
+        }
+        
+        Ok(channel_id)
     }
     
     /// Send a packet to a specific channel with priority
@@ -107,14 +125,65 @@ impl NetworkingSystem {
         data: Vec<u8>,
         priority: Priority,
     ) -> NetworkResult<()> {
+        // Send directly through WebSocket if connected
+        if let Some(ws) = &self.ws_client {
+            use playground_server::packet::Packet;
+            use bytes::Bytes;
+            
+            // Convert Priority type
+            let server_priority = match priority {
+                Priority::Low => playground_server::Priority::Low,
+                Priority::Medium => playground_server::Priority::Medium,
+                Priority::High => playground_server::Priority::High,
+                Priority::Critical => playground_server::Priority::Critical,
+                Priority::Blocker => playground_server::Priority::Blocker,
+            };
+            
+            let packet = Packet {
+                channel_id: channel,
+                packet_type,
+                priority: server_priority,
+                payload: Bytes::from(data.clone()),
+            };
+            
+            ws.send_packet(packet).await?;
+        }
+        
+        // Also queue it locally for tracking
         let mut queue = self.packet_queue.write().await;
         queue.enqueue(channel, packet_type, data, priority).await
     }
     
     /// Process incoming packets for a channel
     pub async fn receive_packets(&self, channel: ChannelId) -> NetworkResult<Vec<IncomingPacket>> {
+        let mut result = Vec::new();
+        
+        // Get packets from WebSocket
+        if let Some(ws) = &self.ws_client {
+            let packets = ws.receive_packets().await;
+            
+            // Filter for requested channel and convert to IncomingPacket
+            for packet in packets {
+                if packet.channel_id == channel {
+                    result.push(IncomingPacket {
+                        channel,
+                        packet_type: packet.packet_type,
+                        data: packet.payload.to_vec(),
+                        timestamp: std::time::SystemTime::now()
+                            .duration_since(std::time::UNIX_EPOCH)
+                            .unwrap()
+                            .as_millis() as u64,
+                    });
+                }
+            }
+        }
+        
+        // Also check local queue
         let queue = self.packet_queue.read().await;
-        queue.get_incoming(channel).await
+        let local_packets = queue.get_incoming(channel).await?;
+        result.extend(local_packets);
+        
+        Ok(result)
     }
     
     /// Create a peer-to-peer connection entity
@@ -178,15 +247,54 @@ impl NetworkingSystem {
     
     /// Process one frame of network updates (called at 60fps)
     pub async fn update(&self, _delta_time: f32) -> NetworkResult<()> {
-        // Process outgoing packet queue
+        // Check WebSocket connection status
+        if let Some(ws) = &self.ws_client {
+            if !ws.is_connected().await {
+                // TODO: Handle reconnection
+                return Ok(());
+            }
+            
+            // Process any incoming packets from WebSocket
+            let packets = ws.receive_packets().await;
+            if !packets.is_empty() {
+                // Store incoming packets in local queue for processing
+                let mut queue = self.packet_queue.write().await;
+                for packet in packets {
+                    queue.enqueue_incoming(
+                        packet.channel_id,
+                        packet.packet_type,
+                        packet.payload.to_vec(),
+                    ).await?;
+                }
+            }
+        }
+        
+        // Process outgoing packet queue (for batching if needed)
         let mut queue = self.packet_queue.write().await;
         let batched_packets = queue.flush_frame().await?;
         
-        // Send batched packets through core/server
-        if let Some(_server) = &self.server_handle {
+        // Send any remaining batched packets
+        if let Some(ws) = &self.ws_client {
+            use playground_server::packet::Packet;
+            use bytes::Bytes;
+            
             for (channel, packets) in batched_packets {
-                // TODO: Send through actual server connection
-                let _ = (channel, packets);
+                for outgoing in packets {
+                    let packet = Packet {
+                        channel_id: channel,
+                        packet_type: outgoing.packet_type,
+                        priority: match outgoing.priority {
+                            0 => playground_server::packet::Priority::Low,
+                            1 => playground_server::packet::Priority::Medium,
+                            2 => playground_server::packet::Priority::High,
+                            3 => playground_server::packet::Priority::Critical,
+                            4 => playground_server::packet::Priority::Blocker,
+                            _ => playground_server::packet::Priority::Medium,
+                        },
+                        payload: Bytes::from(outgoing.data),
+                    };
+                    ws.send_packet(packet).await?;
+                }
             }
         }
         

@@ -8,6 +8,7 @@ license.workspace = true
 [dependencies]
 playground-types = { path = "../../core/types" }
 playground-ecs = { path = "../../core/ecs" }
+playground-server = { path = "../../core/server" }  # For packet types and channel definitions
 serde = { workspace = true }
 serde_json = { workspace = true }
 bytes = { workspace = true }
@@ -19,3 +20,4 @@ futures = { workspace = true }
 tracing = { workspace = true }
 bincode = { workspace = true }
 async-trait = { workspace = true }
+tokio-tungstenite = "0.20"  # For native WebSocket client

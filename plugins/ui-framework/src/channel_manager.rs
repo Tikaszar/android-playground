@@ -1,27 +1,24 @@
 use crate::components::*;
 use anyhow::{anyhow, Result};
-use dashmap::DashMap;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
-use std::sync::Arc;
-use tokio::sync::RwLock;
 use uuid::Uuid;
 
 /// Manages all chat channels and their participants
 pub struct ChannelManager {
-    channels: Arc<DashMap<Uuid, ChannelComponent>>,
-    messages: Arc<DashMap<Uuid, Arc<RwLock<Vec<MessageComponent>>>>>,
-    agents: Arc<DashMap<AgentId, AgentComponent>>,
+    channels: HashMap<Uuid, ChannelComponent>,
+    messages: HashMap<Uuid, Vec<MessageComponent>>,
+    agents: HashMap<AgentId, AgentComponent>,
     persistence_path: Option<PathBuf>,
 }
 
 impl ChannelManager {
     pub fn new() -> Self {
         Self {
-            channels: Arc::new(DashMap::new()),
-            messages: Arc::new(DashMap::new()),
-            agents: Arc::new(DashMap::new()),
+            channels: HashMap::new(),
+            messages: HashMap::new(),
+            agents: HashMap::new(),
             persistence_path: None,
         }
     }
@@ -37,7 +34,7 @@ impl ChannelManager {
     // ========================================================================
 
     pub async fn create_channel(
-        &self,
+        &mut self,
         name: String,
         channel_type: ChannelType,
         participants: Vec<AgentId>,
@@ -61,8 +58,7 @@ impl ChannelManager {
 
         let channel_id = channel.id;
         self.channels.insert(channel_id, channel);
-        self.messages
-            .insert(channel_id, Arc::new(RwLock::new(Vec::new())));
+        self.messages.insert(channel_id, Vec::new());
 
         // Persist if enabled
         if self.persistence_path.is_some() {
@@ -73,7 +69,7 @@ impl ChannelManager {
         Ok(channel_id)
     }
 
-    pub async fn delete_channel(&self, channel_id: Uuid) -> Result<()> {
+    pub async fn delete_channel(&mut self, channel_id: Uuid) -> Result<()> {
         self.channels
             .remove(&channel_id)
             .ok_or_else(|| anyhow!("Channel {} not found", channel_id))?;
@@ -92,19 +88,19 @@ impl ChannelManager {
     }
 
     pub fn list_channels(&self) -> Vec<ChannelComponent> {
-        self.channels.iter().map(|c| c.clone()).collect()
+        self.channels.values().cloned().collect()
     }
 
     pub fn list_channels_for_agent(&self, agent_id: &AgentId) -> Vec<ChannelComponent> {
         self.channels
-            .iter()
+            .values()
             .filter(|c| c.participants.contains(agent_id))
-            .map(|c| c.clone())
+            .cloned()
             .collect()
     }
 
-    pub async fn add_participant(&self, channel_id: Uuid, agent_id: AgentId) -> Result<()> {
-        let mut channel = self
+    pub async fn add_participant(&mut self, channel_id: Uuid, agent_id: AgentId) -> Result<()> {
+        let channel = self
             .channels
             .get_mut(&channel_id)
             .ok_or_else(|| anyhow!("Channel {} not found", channel_id))?;
@@ -113,8 +109,6 @@ impl ChannelManager {
             channel.participants.push(agent_id);
         }
 
-        drop(channel); // Release the lock
-
         if self.persistence_path.is_some() {
             self.save_to_disk().await?;
         }
@@ -122,15 +116,13 @@ impl ChannelManager {
         Ok(())
     }
 
-    pub async fn remove_participant(&self, channel_id: Uuid, agent_id: AgentId) -> Result<()> {
-        let mut channel = self
+    pub async fn remove_participant(&mut self, channel_id: Uuid, agent_id: AgentId) -> Result<()> {
+        let channel = self
             .channels
             .get_mut(&channel_id)
             .ok_or_else(|| anyhow!("Channel {} not found", channel_id))?;
 
         channel.participants.retain(|id| id != &agent_id);
-
-        drop(channel); // Release the lock
 
         if self.persistence_path.is_some() {
             self.save_to_disk().await?;
@@ -144,7 +136,7 @@ impl ChannelManager {
     // ========================================================================
 
     pub async fn send_message(
-        &self,
+        &mut self,
         channel_id: Uuid,
         sender: AgentId,
         content: MessageContent,
@@ -159,7 +151,6 @@ impl ChannelManager {
         if !channel.participants.contains(&sender) {
             return Err(anyhow!("Agent {:?} is not a participant in this channel", sender));
         }
-        drop(channel);
 
         let message = MessageComponent {
             id: Uuid::new_v4(),
@@ -175,13 +166,12 @@ impl ChannelManager {
         let message_id = message.id;
 
         // Add message to channel
-        if let Some(messages) = self.messages.get(&channel_id) {
-            let mut messages = messages.write().await;
+        if let Some(messages) = self.messages.get_mut(&channel_id) {
             messages.push(message);
         }
 
         // Update channel's last message time
-        if let Some(mut channel) = self.channels.get_mut(&channel_id) {
+        if let Some(channel) = self.channels.get_mut(&channel_id) {
             channel.last_message_at = Some(chrono::Utc::now());
         }
 
@@ -196,10 +186,7 @@ impl ChannelManager {
         self.messages
             .get(&channel_id)
             .ok_or_else(|| anyhow!("Channel {} not found", channel_id))
-            .map(|messages| {
-                let messages = messages.blocking_read();
-                messages.clone()
-            })
+            .map(|messages| messages.clone())
     }
 
     pub async fn get_messages_paginated(
@@ -209,7 +196,6 @@ impl ChannelManager {
         limit: usize,
     ) -> Result<Vec<MessageComponent>> {
         if let Some(messages) = self.messages.get(&channel_id) {
-            let messages = messages.read().await;
             let total = messages.len();
             
             if offset >= total {
@@ -224,13 +210,12 @@ impl ChannelManager {
     }
 
     pub async fn update_bubble_state(
-        &self,
+        &mut self,
         channel_id: Uuid,
         message_id: Uuid,
         new_state: BubbleState,
     ) -> Result<()> {
-        if let Some(messages) = self.messages.get(&channel_id) {
-            let mut messages = messages.write().await;
+        if let Some(messages) = self.messages.get_mut(&channel_id) {
             if let Some(message) = messages.iter_mut().find(|m| m.id == message_id) {
                 message.bubble_state = new_state;
                 
@@ -246,9 +231,8 @@ impl ChannelManager {
         }
     }
 
-    pub async fn toggle_bubble_state(&self, channel_id: Uuid, message_id: Uuid) -> Result<()> {
-        if let Some(messages) = self.messages.get(&channel_id) {
-            let mut messages = messages.write().await;
+    pub async fn toggle_bubble_state(&mut self, channel_id: Uuid, message_id: Uuid) -> Result<()> {
+        if let Some(messages) = self.messages.get_mut(&channel_id) {
             if let Some(message) = messages.iter_mut().find(|m| m.id == message_id) {
                 message.bubble_state = match message.bubble_state {
                     BubbleState::Collapsed => BubbleState::Compressed,
@@ -272,7 +256,7 @@ impl ChannelManager {
     // Agent Management
     // ========================================================================
 
-    pub async fn register_agent(&self, agent: AgentComponent) -> Result<()> {
+    pub async fn register_agent(&mut self, agent: AgentComponent) -> Result<()> {
         let agent_id = agent.id;
         self.agents.insert(agent_id, agent);
 
@@ -284,16 +268,14 @@ impl ChannelManager {
         Ok(())
     }
 
-    pub async fn update_agent_status(&self, agent_id: AgentId, status: AgentStatus) -> Result<()> {
-        let mut agent = self
+    pub async fn update_agent_status(&mut self, agent_id: AgentId, status: AgentStatus) -> Result<()> {
+        let agent = self
             .agents
             .get_mut(&agent_id)
             .ok_or_else(|| anyhow!("Agent {:?} not found", agent_id))?;
         
         agent.status = status;
         agent.last_active = chrono::Utc::now();
-        
-        drop(agent);
 
         if self.persistence_path.is_some() {
             self.save_to_disk().await?;
@@ -303,94 +285,21 @@ impl ChannelManager {
     }
 
     pub fn get_agent(&self, agent_id: &AgentId) -> Option<AgentComponent> {
-        self.agents.get(agent_id).map(|a| a.clone())
+        self.agents.get(agent_id).cloned()
     }
 
     pub fn list_agents(&self) -> Vec<AgentComponent> {
-        self.agents.iter().map(|a| a.clone()).collect()
+        self.agents.values().cloned().collect()
     }
 
     pub fn list_online_agents(&self) -> Vec<AgentComponent> {
         self.agents
-            .iter()
+            .values()
             .filter(|a| !matches!(a.status, AgentStatus::Offline))
-            .map(|a| a.clone())
+            .cloned()
             .collect()
     }
 
-    // ========================================================================
-    // Persistence
-    // ========================================================================
-
-    pub async fn save_to_disk(&self) -> Result<()> {
-        if let Some(path) = &self.persistence_path {
-            #[derive(Serialize, Deserialize)]
-            struct PersistedState {
-                channels: Vec<ChannelComponent>,
-                messages: HashMap<Uuid, Vec<MessageComponent>>,
-                agents: Vec<AgentComponent>,
-            }
-            
-            let mut messages_map = HashMap::new();
-            for entry in self.messages.iter() {
-                let channel_id = *entry.key();
-                let messages = entry.value().read().await;
-                messages_map.insert(channel_id, messages.clone());
-            }
-
-            let state = PersistedState {
-                channels: self.list_channels(),
-                messages: messages_map,
-                agents: self.list_agents(),
-            };
-
-            let json = serde_json::to_string_pretty(&state)?;
-            tokio::fs::write(path, json).await?;
-            
-            tracing::debug!("Saved channel state to {:?}", path);
-        }
-        Ok(())
-    }
-
-    pub async fn load_from_disk(&self) -> Result<()> {
-        if let Some(path) = &self.persistence_path {
-            if path.exists() {
-                #[derive(Serialize, Deserialize)]
-                struct PersistedState {
-                    channels: Vec<ChannelComponent>,
-                    messages: HashMap<Uuid, Vec<MessageComponent>>,
-                    agents: Vec<AgentComponent>,
-                }
-                
-                let json = tokio::fs::read_to_string(path).await?;
-                let state: PersistedState = serde_json::from_str(&json)?;
-
-                // Clear existing data
-                self.channels.clear();
-                self.messages.clear();
-                self.agents.clear();
-
-                // Load channels
-                for channel in state.channels {
-                    self.channels.insert(channel.id, channel);
-                }
-
-                // Load messages
-                for (channel_id, messages) in state.messages {
-                    self.messages
-                        .insert(channel_id, Arc::new(RwLock::new(messages)));
-                }
-
-                // Load agents
-                for agent in state.agents {
-                    self.agents.insert(agent.id, agent);
-                }
-
-                tracing::info!("Loaded channel state from {:?}", path);
-            }
-        }
-        Ok(())
-    }
 
     // ========================================================================
     // Search and Filtering
@@ -400,10 +309,8 @@ impl ChannelManager {
         let mut results = Vec::new();
         let query_lower = query.to_lowercase();
 
-        for channel_entry in self.channels.iter() {
-            let channel = channel_entry.clone();
-            if let Some(messages) = self.messages.get(&channel.id) {
-                let messages = messages.read().await;
+        for (channel_id, channel) in self.channels.iter() {
+            if let Some(messages) = self.messages.get(channel_id) {
                 for message in messages.iter() {
                     let matches = match &message.content {
                         MessageContent::Text(text) => text.to_lowercase().contains(&query_lower),
@@ -424,5 +331,102 @@ impl ChannelManager {
         }
 
         results
+    }
+    
+    // ========================================================================
+    // Persistence  
+    // ========================================================================
+    
+    pub async fn save_to_disk(&self) -> Result<()> {
+        let path = match &self.persistence_path {
+            Some(p) => p,
+            None => return Ok(()), // No persistence configured
+        };
+        
+        // Create persistence directory if it doesn't exist
+        tokio::fs::create_dir_all(path).await?;
+        
+        // Save channels
+        let channels_path = path.join("channels.json");
+        let channels: Vec<ChannelComponent> = self.channels
+            .values()
+            .cloned()
+            .collect();
+        let channels_json = serde_json::to_string_pretty(&channels)?;
+        tokio::fs::write(channels_path, channels_json).await?;
+        
+        // Save agents
+        let agents_path = path.join("agents.json");
+        let agents: Vec<AgentComponent> = self.agents
+            .values()
+            .cloned()
+            .collect();
+        let agents_json = serde_json::to_string_pretty(&agents)?;
+        tokio::fs::write(agents_path, agents_json).await?;
+        
+        // Save messages for each channel
+        for (channel_id, messages) in self.messages.iter() {
+            let messages_path = path.join(format!("messages_{}.json", channel_id));
+            let messages_json = serde_json::to_string_pretty(messages)?;
+            tokio::fs::write(messages_path, messages_json).await?;
+        }
+        
+        tracing::info!("Saved conversations to disk at {:?}", path);
+        Ok(())
+    }
+    
+    pub async fn load_from_disk(&mut self) -> Result<()> {
+        let path = match &self.persistence_path {
+            Some(p) => p,
+            None => return Ok(()), // No persistence configured
+        };
+        
+        if !path.exists() {
+            return Ok(()); // Nothing to load
+        }
+        
+        // Load channels
+        let channels_path = path.join("channels.json");
+        if channels_path.exists() {
+            let channels_json = tokio::fs::read_to_string(channels_path).await?;
+            let channels: Vec<ChannelComponent> = serde_json::from_str(&channels_json)?;
+            
+            for channel in channels {
+                self.channels.insert(channel.id, channel);
+            }
+        }
+        
+        // Load agents
+        let agents_path = path.join("agents.json");
+        if agents_path.exists() {
+            let agents_json = tokio::fs::read_to_string(agents_path).await?;
+            let agents: Vec<AgentComponent> = serde_json::from_str(&agents_json)?;
+            
+            for agent in agents {
+                self.agents.insert(agent.id, agent);
+            }
+        }
+        
+        // Load messages for each channel
+        for (channel_id, _channel) in self.channels.iter() {
+            let messages_path = path.join(format!("messages_{}.json", channel_id));
+            
+            if messages_path.exists() {
+                let messages_json = tokio::fs::read_to_string(messages_path).await?;
+                let messages: Vec<MessageComponent> = serde_json::from_str(&messages_json)?;
+                
+                self.messages.insert(*channel_id, messages);
+            }
+        }
+        
+        tracing::info!("Loaded conversations from disk at {:?}", path);
+        Ok(())
+    }
+    
+    pub async fn auto_save(&self) -> Result<()> {
+        if self.persistence_path.is_some() {
+            self.save_to_disk().await?;
+        }
+        Ok(())
     }
 }

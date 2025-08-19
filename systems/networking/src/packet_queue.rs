@@ -6,6 +6,15 @@ use std::collections::{HashMap, BinaryHeap, VecDeque};
 use std::cmp::Ordering;
 use bytes::Bytes;
 
+/// Outgoing packet data
+#[derive(Debug, Clone)]
+pub struct OutgoingPacket {
+    pub packet_type: u16,
+    pub priority: u8,
+    pub data: Vec<u8>,
+    pub timestamp: u64,
+}
+
 /// Packet queue for batching messages per frame
 pub struct PacketQueue {
     // Outgoing packets organized by channel and priority
@@ -74,6 +83,26 @@ impl PacketQueue {
         }
         
         Ok(())
+    }
+    
+    /// Enqueue an incoming packet by components
+    pub async fn enqueue_incoming(
+        &mut self,
+        channel: ChannelId,
+        packet_type: u16,
+        data: Vec<u8>,
+    ) -> NetworkResult<()> {
+        let packet = IncomingPacket {
+            channel,
+            packet_type,
+            data,
+            timestamp: std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_millis() as u64,
+        };
+        
+        self.add_incoming(packet).await
     }
     
     /// Flush packets for this frame
@@ -176,13 +205,4 @@ impl PartialOrd for PrioritizedPacket {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         Some(self.cmp(other))
     }
-}
-
-/// Outgoing packet data
-#[derive(Debug, Clone)]
-pub struct OutgoingPacket {
-    pub packet_type: u16,
-    pub priority: u8,
-    pub data: Vec<u8>,
-    pub timestamp: u64,
 }

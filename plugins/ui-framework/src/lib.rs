@@ -7,6 +7,7 @@ mod components;
 mod channel_manager;
 mod message_system;
 mod websocket_handler;
+mod orchestrator;
 
 pub use plugin::UiFrameworkPlugin;
 pub use components::*;

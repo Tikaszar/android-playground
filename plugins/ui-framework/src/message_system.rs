@@ -3,15 +3,16 @@ use crate::channel_manager::ChannelManager;
 use anyhow::{anyhow, Result};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
+use tokio::sync::RwLock;
 use uuid::Uuid;
 
 /// Handles message creation, formatting, and bubble state management
 pub struct MessageSystem {
-    channel_manager: Arc<ChannelManager>,
+    channel_manager: Arc<RwLock<ChannelManager>>,
 }
 
 impl MessageSystem {
-    pub fn new(channel_manager: Arc<ChannelManager>) -> Self {
+    pub fn new(channel_manager: Arc<RwLock<ChannelManager>>) -> Self {
         Self { channel_manager }
     }
 
@@ -27,6 +28,8 @@ impl MessageSystem {
     ) -> Result<Uuid> {
         let content = MessageContent::Text(text);
         self.channel_manager
+            .write()
+            .await
             .send_message(channel_id, sender, content)
             .await
     }
@@ -43,6 +46,8 @@ impl MessageSystem {
             content: code,
         };
         self.channel_manager
+            .write()
+            .await
             .send_message(channel_id, sender, content)
             .await
     }
@@ -71,6 +76,8 @@ impl MessageSystem {
         let message_content = MessageContent::InlineEditor(editor);
         let message_id = self
             .channel_manager
+            .write()
+            .await
             .send_message(channel_id, sender, message_content)
             .await?;
 
@@ -100,6 +107,8 @@ impl MessageSystem {
         let message_content = MessageContent::InlineFileBrowser(browser);
         let message_id = self
             .channel_manager
+            .write()
+            .await
             .send_message(channel_id, sender, message_content)
             .await?;
 
@@ -129,6 +138,8 @@ impl MessageSystem {
         let message_content = MessageContent::InlineTerminal(terminal);
         let message_id = self
             .channel_manager
+            .write()
+            .await
             .send_message(channel_id, sender, message_content)
             .await?;
 
@@ -156,6 +167,8 @@ impl MessageSystem {
         let message_content = MessageContent::InlineDiff(diff);
         let message_id = self
             .channel_manager
+            .write()
+            .await
             .send_message(channel_id, sender, message_content)
             .await?;
 
@@ -175,6 +188,8 @@ impl MessageSystem {
         // System notifications use a special system agent ID
         let system_agent = AgentId(Uuid::nil());
         self.channel_manager
+            .write()
+            .await
             .send_message(channel_id, system_agent, content)
             .await
     }
@@ -239,9 +254,11 @@ impl MessageSystem {
         channel_id: Uuid,
         state: BubbleState,
     ) -> Result<()> {
-        let messages = self.channel_manager.get_messages(channel_id).await?;
+        let messages = self.channel_manager.read().await.get_messages(channel_id).await?;
         for message in messages {
             self.channel_manager
+                .write()
+                .await
                 .update_bubble_state(channel_id, message.id, state.clone())
                 .await?;
         }

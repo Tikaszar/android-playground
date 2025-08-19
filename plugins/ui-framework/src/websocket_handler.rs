@@ -143,7 +143,7 @@ impl WebSocketHandler {
         
         // Set up initial state
         let mut ui_state = self.ui_state.write().await;
-        ui_state.setup_default_channels().await?;
+        ui_state.initialize_default_setup().await?;
         
         info!("UI Framework WebSocket handler initialized");
         Ok(())
@@ -211,9 +211,9 @@ impl WebSocketHandler {
         
         // Build state object
         let state = serde_json::json!({
-            "channels": channel_manager.get_all_channels(),
-            "agents": ui_state.get_all_agents(),
-            "tasks": ui_state.get_task_queue(),
+            "channels": channel_manager.list_channels(),
+            "agents": channel_manager.list_agents(),
+            "tasks": ui_state.task_queue,
         });
         
         self.send_to_browser(UiFrameworkMessage::StateUpdate { state }).await?;
@@ -237,20 +237,16 @@ impl WebSocketHandler {
         };
         
         // Store in channel manager
+        let channel_id = Uuid::parse_str(&channel).unwrap_or_else(|_| Uuid::new_v4());
+        let sender = crate::components::AgentId(Uuid::new_v4()); // User agent
+        
+        // Use the channel_manager through proper async locking
         let mut channel_manager = self.channel_manager.write().await;
-        channel_manager.add_message(&channel, crate::components::MessageComponent {
-            id: message_id,
-            channel_id: Uuid::parse_str(&channel).unwrap_or_else(|_| Uuid::new_v4()),
-            author_id: Uuid::new_v4(),
-            content: crate::components::MessageContent::Text(content),
-            timestamp,
-            bubble_state: crate::components::BubbleState::Expanded,
-            inline_components: vec![],
-            reactions: vec![],
-            thread_id: None,
-            edited: false,
-            deleted: false,
-        }).await?;
+        channel_manager.send_message(
+            channel_id,
+            sender,
+            crate::components::MessageContent::Text(content),
+        ).await?;
         
         // Send to browser
         self.send_to_browser(UiFrameworkMessage::Message { message }).await?;

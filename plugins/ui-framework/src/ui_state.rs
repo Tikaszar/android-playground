@@ -3,11 +3,12 @@ use crate::channel_manager::ChannelManager;
 use crate::message_system::MessageSystem;
 use anyhow::Result;
 use std::sync::Arc;
+use tokio::sync::RwLock;
 use uuid::Uuid;
 
 /// Central UI state management for the conversational IDE
 pub struct UiState {
-    pub channel_manager: Arc<ChannelManager>,
+    pub channel_manager: Arc<RwLock<ChannelManager>>,
     pub message_system: Arc<MessageSystem>,
     pub active_channel: Option<Uuid>,
     pub active_agents: Vec<AgentComponent>,
@@ -16,7 +17,7 @@ pub struct UiState {
 
 impl UiState {
     pub fn new() -> Self {
-        let channel_manager = Arc::new(ChannelManager::new());
+        let channel_manager = Arc::new(RwLock::new(ChannelManager::new()));
         let message_system = Arc::new(MessageSystem::new(channel_manager.clone()));
         
         Self {
@@ -29,7 +30,7 @@ impl UiState {
     }
 
     pub fn with_persistence(path: std::path::PathBuf) -> Self {
-        let channel_manager = Arc::new(ChannelManager::with_persistence(path));
+        let channel_manager = Arc::new(RwLock::new(ChannelManager::with_persistence(path)));
         let message_system = Arc::new(MessageSystem::new(channel_manager.clone()));
         
         Self {
@@ -48,6 +49,8 @@ impl UiState {
     pub async fn create_system_channel(&mut self) -> Result<Uuid> {
         let channel_id = self
             .channel_manager
+            .write()
+            .await
             .create_channel(
                 "System".to_string(),
                 ChannelType::System,
@@ -67,6 +70,8 @@ impl UiState {
         // Get all agent IDs
         let participants: Vec<AgentId> = self
             .channel_manager
+            .read()
+            .await
             .list_agents()
             .into_iter()
             .map(|a| a.id)
@@ -74,6 +79,8 @@ impl UiState {
         
         let channel_id = self
             .channel_manager
+            .write()
+            .await
             .create_channel(
                 "#general".to_string(),
                 ChannelType::Group,
@@ -99,12 +106,16 @@ impl UiState {
     ) -> Result<Uuid> {
         let agent1_name = self
             .channel_manager
+            .read()
+            .await
             .get_agent(&agent1)
             .map(|a| a.name)
             .unwrap_or_else(|| "Unknown".to_string());
         
         let agent2_name = self
             .channel_manager
+            .read()
+            .await
             .get_agent(&agent2)
             .map(|a| a.name)
             .unwrap_or_else(|| "Unknown".to_string());
@@ -112,6 +123,8 @@ impl UiState {
         let channel_name = format!("DM: {} ↔ {}", agent1_name, agent2_name);
         
         self.channel_manager
+            .write()
+            .await
             .create_channel(channel_name, ChannelType::Direct, vec![agent1, agent2])
             .await
     }
@@ -142,7 +155,7 @@ impl UiState {
         };
         
         let agent_id = agent.id;
-        self.channel_manager.register_agent(agent).await?;
+        self.channel_manager.write().await.register_agent(agent).await?;
         Ok(agent_id)
     }
 
@@ -164,7 +177,7 @@ impl UiState {
         };
         
         let agent_id = agent.id;
-        self.channel_manager.register_agent(agent).await?;
+        self.channel_manager.write().await.register_agent(agent).await?;
         Ok(agent_id)
     }
 
@@ -186,7 +199,7 @@ impl UiState {
         };
         
         let agent_id = agent.id;
-        self.channel_manager.register_agent(agent).await?;
+        self.channel_manager.write().await.register_agent(agent).await?;
         Ok(agent_id)
     }
 
@@ -202,6 +215,8 @@ impl UiState {
         // Find an idle worker
         let idle_agents = self
             .channel_manager
+            .read()
+            .await
             .list_agents()
             .into_iter()
             .filter(|a| {
@@ -214,6 +229,8 @@ impl UiState {
             if let Some(task) = self.task_queue.assign_task(agent.id) {
                 // Update agent status
                 self.channel_manager
+                    .write()
+                    .await
                     .update_agent_status(agent.id, AgentStatus::Busy)
                     .await?;
                 
@@ -233,6 +250,8 @@ impl UiState {
         
         // Update agent status back to idle
         self.channel_manager
+            .write()
+            .await
             .update_agent_status(agent_id, AgentStatus::Idle)
             .await?;
         

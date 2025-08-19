@@ -1,10 +1,13 @@
+use async_trait::async_trait;
 use playground_plugin::Plugin;
 use playground_types::{
     PluginMetadata, PluginId, Version, Event,
     context::Context,
     render_context::RenderContext,
     error::PluginError,
+    Priority,
 };
+use playground_networking::NetworkingSystem;
 use tracing::{info, debug, error};
 use std::sync::Arc;
 use tokio::sync::RwLock;
@@ -13,6 +16,7 @@ use crate::panel_manager::PanelManager;
 use crate::mcp_handler::McpHandler;
 use crate::browser_bridge::BrowserBridge;
 use crate::ui_state::UiState;
+use crate::orchestrator::Orchestrator;
 
 /// The UI Framework Plugin coordinates all UI updates between server plugins and the browser.
 /// It listens for MCP tool calls and routes them to the appropriate UI panels.
@@ -22,19 +26,44 @@ pub struct UiFrameworkPlugin {
     mcp_handler: Arc<McpHandler>,
     browser_bridge: Arc<BrowserBridge>,
     ui_state: Arc<RwLock<UiState>>,
+    orchestrator: Arc<RwLock<Orchestrator>>,
     channel_id: Option<u16>,
+    networking: Option<Arc<NetworkingSystem>>,
 }
 
 impl UiFrameworkPlugin {
     pub fn new() -> Self {
-        let ui_state = Arc::new(RwLock::new(UiState::new()));
+        // Create persistence directory for conversations
+        let persistence_path = std::path::PathBuf::from("/data/data/com.termux/files/home/.android-playground/conversations");
+        
+        // Create UI state with persistence
+        let ui_state = Arc::new(RwLock::new(UiState::with_persistence(persistence_path.clone())));
         let browser_bridge = Arc::new(BrowserBridge::new());
         let panel_manager = Arc::new(RwLock::new(PanelManager::new()));
-        let mcp_handler = Arc::new(McpHandler::new(
+        
+        // Create orchestrator first
+        let ui_state_clone = ui_state.clone();
+        let orchestrator = Arc::new(RwLock::new(Orchestrator::new(
+            tokio::task::block_in_place(|| {
+                tokio::runtime::Handle::current().block_on(async {
+                    ui_state_clone.read().await.channel_manager.clone()
+                })
+            }),
+            tokio::task::block_in_place(|| {
+                tokio::runtime::Handle::current().block_on(async {
+                    ui_state_clone.read().await.message_system.clone()
+                })
+            }),
+        )));
+        
+        // Create McpHandler with orchestrator
+        let mut mcp_handler_inner = McpHandler::new(
             ui_state.clone(),
             browser_bridge.clone(),
             panel_manager.clone(),
-        ));
+        );
+        mcp_handler_inner.set_orchestrator(orchestrator.clone());
+        let mcp_handler = Arc::new(mcp_handler_inner);
 
         Self {
             metadata: PluginMetadata {
@@ -50,36 +79,117 @@ impl UiFrameworkPlugin {
             mcp_handler,
             browser_bridge,
             ui_state,
+            orchestrator,
             channel_id: None,
+            networking: None,
+        }
+    }
+    
+    async fn handle_mcp_tool_call(&mut self, tool_name: &str, arguments: serde_json::Value) {
+        use crate::mcp_handler::ToolResult;
+        
+        // Process the tool call through MCP handler
+        let result = self.mcp_handler.handle_tool_call(tool_name, arguments).await;
+        
+        match result {
+            Ok(ToolResult { success, message }) => {
+                if success {
+                    info!("Tool {} executed successfully: {}", tool_name, message);
+                } else {
+                    error!("Tool {} failed: {}", tool_name, message);
+                }
+                
+                // Send response back via channel 1201 if needed
+                if let Some(networking) = &self.networking {
+                    let response = serde_json::json!({
+                        "type": "tool_result",
+                        "tool": tool_name,
+                        "success": success,
+                        "message": message
+                    });
+                    
+                    let data = serde_json::to_vec(&response).unwrap_or_default();
+                    let _ = networking.send_packet(
+                        1201, // Response channel
+                        2, // Tool result packet type
+                        data,
+                        Priority::High
+                    ).await;
+                }
+            }
+            Err(e) => {
+                error!("Failed to handle tool {}: {}", tool_name, e);
+            }
         }
     }
 }
 
+#[async_trait]
 impl Plugin for UiFrameworkPlugin {
     fn metadata(&self) -> &PluginMetadata {
         &self.metadata
     }
 
-    fn on_load(&mut self, ctx: &mut Context) -> Result<(), PluginError> {
+    async fn on_load(&mut self, ctx: &mut Context) -> Result<(), PluginError> {
         info!("UI Framework Plugin loading...");
         
-        // Register for channel 1200-1209
-        let channel_id = 1200;
-        self.channel_id = Some(channel_id);
+        // Load previous conversations from disk
+        {
+            let ui_state = self.ui_state.read().await;
+            if let Err(e) = ui_state.channel_manager.write().await.load_from_disk().await {
+                info!("No previous conversations loaded: {}", e);
+            } else {
+                info!("Loaded previous conversations from disk");
+            }
+        }
         
-        // TODO: Register with channel manager when Context provides access
-        // ctx.channel_manager.register(channel_id, "ui-framework")?;
+        // Initialize networking system
+        let mut networking = NetworkingSystem::new()
+            .await
+            .map_err(|e| PluginError::InitFailed(e.to_string()))?;
+        
+        // Connect to core/server
+        networking.initialize(None).await
+            .map_err(|e| PluginError::InitFailed(e.to_string()))?;
+        
+        // Register for channel 1200 as a plugin
+        let channel_id = networking.register_plugin("ui-framework").await
+            .map_err(|e| PluginError::InitFailed(e.to_string()))?;
+        
+        self.channel_id = Some(channel_id);
+        self.networking = Some(Arc::new(networking));
         
         info!("UI Framework Plugin registered on channel {}", channel_id);
         
-        // Initialize browser bridge connection
-        // This will establish WebSocket connection on channel 10 for UI updates
+        // If no channels exist, initialize default setup
+        {
+            let mut ui_state = self.ui_state.write().await;
+            if ui_state.channel_manager.read().await.list_channels().is_empty() {
+                info!("No channels found, initializing default setup...");
+                ui_state.initialize_default_setup().await
+                    .map_err(|e| PluginError::InitFailed(e.to_string()))?;
+            }
+        }
+        
+        // Initialize orchestrator
+        {
+            let mut orchestrator = self.orchestrator.write().await;
+            orchestrator.initialize().await
+                .map_err(|e| PluginError::InitFailed(e.to_string()))?;
+            
+            // Start the assignment loop in the background
+            let orchestrator_clone = self.orchestrator.clone();
+            tokio::spawn(async move {
+                let orchestrator = orchestrator_clone.read().await;
+                orchestrator.run_assignment_loop().await;
+            });
+        }
         
         info!("UI Framework Plugin loaded successfully");
         Ok(())
     }
 
-    fn on_unload(&mut self, _ctx: &mut Context) {
+    async fn on_unload(&mut self, _ctx: &mut Context) {
         info!("UI Framework Plugin unloading...");
         
         // Cleanup resources
@@ -89,25 +199,42 @@ impl Plugin for UiFrameworkPlugin {
         }
     }
 
-    fn update(&mut self, _ctx: &mut Context, _delta_time: f32) {
+    async fn update(&mut self, _ctx: &mut Context, _delta_time: f32) {
         // Process any pending UI updates
         // This is called every frame
         
         // Check for MCP messages on our channel
-        if let Some(_channel_id) = self.channel_id {
-            // TODO: Read messages from channel when Context provides access
-            // let messages = ctx.channel_manager.read_channel(channel_id)?;
-            // for message in messages {
-            //     self.mcp_handler.handle_message(message)?;
-            // }
+        if let Some(channel_id) = self.channel_id {
+            if let Some(networking) = &self.networking {
+                // Receive packets from our channel
+                if let Ok(packets) = networking.receive_packets(channel_id).await {
+                    for packet in packets {
+                        // Parse MCP tool call from packet
+                        if let Ok(json) = serde_json::from_slice::<serde_json::Value>(&packet.data) {
+                            debug!("Received MCP message on channel {}: {:?}", channel_id, json);
+                            
+                            // Handle MCP tool call
+                            if json.get("type").and_then(|v| v.as_str()) == Some("tool_call") {
+                                let tool_name = json.get("tool").and_then(|v| v.as_str()).unwrap_or("");
+                                let arguments = json.get("arguments").cloned().unwrap_or(serde_json::json!({}));
+                                
+                                info!("Processing MCP tool call: {}", tool_name);
+                                
+                                // Process the tool call
+                                self.handle_mcp_tool_call(tool_name, arguments).await;
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 
-    fn render(&mut self, _ctx: &mut RenderContext) {
+    async fn render(&mut self, _ctx: &mut RenderContext) {
         // UI Framework doesn't render directly - it sends commands to browser
     }
 
-    fn on_event(&mut self, event: &Event) -> bool {
+    async fn on_event(&mut self, event: &Event) -> bool {
         // Handle events from other plugins or MCP
         debug!("Received event: {} with data: {:?}", event.id, event.data);
         
