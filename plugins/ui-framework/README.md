@@ -11,15 +11,35 @@ The UI Framework Plugin serves as the central hub for all UI interactions in the
 ```
 ui-framework/
 ├── plugin.rs           # Main plugin implementation and lifecycle
-├── components.rs       # Core UI component definitions
+├── components.rs       # Core UI component definitions (with TaskQueue methods)
 ├── channel_manager.rs  # Chat channel and agent management
 ├── message_system.rs   # Message creation and formatting
-├── orchestrator.rs     # Agent coordination and task assignment
-├── mcp_handler.rs      # MCP tool call processing
+├── orchestrator.rs     # Agent coordination with process_pending_updates()
+├── mcp_handler.rs      # MCP tool call processing (3-param constructor)
 ├── browser_bridge.rs   # Browser communication layer
 ├── websocket_handler.rs # WebSocket protocol handling
 ├── panel_manager.rs    # Panel layout management
-└── ui_state.rs        # Global UI state management
+└── ui_state.rs        # Global UI state with save_state() and handle_chat_message()
+```
+
+### Component Initialization
+
+The plugin components now have streamlined constructors:
+
+```rust
+// Orchestrator: takes 2 parameters
+let orchestrator = Orchestrator::new(
+    channel_manager.clone(),
+    message_system.clone()
+);
+
+// McpHandler: takes 3 parameters, orchestrator set separately
+let mut mcp_handler = McpHandler::new(
+    ui_state.clone(),
+    browser_bridge.clone(),
+    panel_manager.clone()
+);
+mcp_handler.set_orchestrator(orchestrator.clone());
 ```
 
 ## Core Features
@@ -153,7 +173,7 @@ channel_manager.register_agent(worker).await?;
 
 #### Task Management
 ```rust
-use playground_plugins_ui_framework::{Task, TaskPriority, TaskStatus};
+use playground_plugins_ui_framework::{Task, TaskPriority, TaskStatus, TaskQueueComponent};
 
 // Create a new task
 let task_id = orchestrator.create_task(
@@ -168,6 +188,13 @@ let task_id = orchestrator.create_task(
 
 // Task assignment happens automatically
 orchestrator.run_assignment_loop().await;
+
+// Query in-progress tasks
+let task_queue = TaskQueueComponent::new();
+let active_tasks = task_queue.get_in_progress_tasks();
+for task in active_tasks {
+    println!("Task {} assigned at {:?}", task.title, task.assigned_at);
+}
 
 // Complete a task
 orchestrator.complete_task(
@@ -242,9 +269,48 @@ let ui_state = UiState::with_persistence(
     PathBuf::from("/data/data/com.termux/files/home/.android-playground/conversations")
 );
 
-// Manual save/load
+// Save current state
+ui_state.save_state().await?;
+// Saves: channels.json, agents.json, task_queue.json, ui_state.json
+
+// Manual save/load for channel manager
 channel_manager.save_to_disk().await?;
 channel_manager.load_from_disk().await?;
+```
+
+### 8. UI State Management
+
+The UI state provides centralized management with new capabilities:
+
+```rust
+// Handle incoming chat messages from browser
+ui_state.handle_chat_message(serde_json::json!({
+    "channel_id": "uuid-here",
+    "content": "Hello world",
+    "author_id": "agent-uuid"
+})).await?;
+
+// The message is automatically:
+// - Routed to the correct channel
+// - Sent through the message system
+// - Persisted to disk
+// - Broadcast to connected clients
+```
+
+### 9. Orchestrator Updates
+
+The orchestrator now includes automatic update processing:
+
+```rust
+// Process pending updates each frame
+orchestrator.process_pending_updates(delta_time).await?;
+
+// This automatically:
+// - Assigns pending tasks to idle workers
+// - Monitors task timeouts (warns after 1 hour)
+// - Tracks worker activity and idle time
+// - Sends notifications for important events
+// - Updates task history and statistics
 ```
 
 ## WebSocket Protocol
@@ -335,10 +401,13 @@ UI_FRAMEWORK_MAX_TASKS_PER_WORKER=3
 ### Complete Example: Multi-Agent Development Session
 ```rust
 use playground_plugins_ui_framework::*;
+use playground_systems_logic::{SystemsManager, World};
 
-// Initialize UI Framework
-let mut ui_plugin = UiFrameworkPlugin::new();
-ui_plugin.on_load(&mut context).await?;
+// Initialize UI Framework with SystemsManager
+let world = Arc::new(RwLock::new(World::new()));
+let systems_manager = Arc::new(SystemsManager::new(world.clone()).await?);
+let mut ui_plugin = UiFrameworkPlugin::new(systems_manager);
+ui_plugin.initialize(&*world.read().await).await?;
 
 // Create development channel
 let channel_id = {
@@ -438,6 +507,17 @@ match channel_manager.create_channel(name, channel_type, participants).await {
         // - Invalid parameters
     }
 }
+
+// Browser message handling with proper error reporting
+if let Err(e) = ui_state.handle_chat_message(msg).await {
+    error!("Failed to handle chat message: {}", e);
+}
+
+// MCP tool call handling
+match mcp_handler.handle_tool_call(tool_name, params).await {
+    Ok(result) => debug!("Tool call succeeded: {:?}", result),
+    Err(e) => error!("Tool call failed: {}", e),
+}
 ```
 
 ## Testing
@@ -472,6 +552,24 @@ cargo bench -p playground-plugins-ui-framework
 - `tracing`: Logging and diagnostics
 - `bytes`: Binary message handling
 - `dashmap`: Concurrent hash maps
+
+## Recent Changes
+
+### Version 0.1.1 (Latest)
+- **Fixed constructor signatures**:
+  - `Orchestrator::new()` now takes 2 parameters (channel_manager, message_system)
+  - `McpHandler::new()` now takes 3 parameters with separate `set_orchestrator()`
+- **Added new methods**:
+  - `UiState::save_state()` - Comprehensive state persistence
+  - `UiState::handle_chat_message()` - Browser message handling
+  - `Orchestrator::process_pending_updates()` - Automatic task monitoring
+  - `TaskQueueComponent::get_in_progress_tasks()` - Query active tasks
+- **Removed unused binary target** - Plugin is library-only
+- **Improved error handling** - All async operations properly handle Results
+- **Full Systems integration** - Plugin properly implements `systems/logic::System` trait
+
+### Version 0.1.0
+- Initial implementation with full feature set
 
 ## License
 
