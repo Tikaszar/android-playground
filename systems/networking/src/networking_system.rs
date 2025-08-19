@@ -36,6 +36,19 @@ impl NetworkingSystem {
     
     /// Initialize and connect to core/server
     pub async fn initialize(&mut self, server_url: Option<String>) -> NetworkResult<()> {
+        // Start the core server internally if not provided
+        if server_url.is_none() {
+            // Start core/server in the background
+            tokio::spawn(async {
+                if let Err(e) = Self::run_core_server().await {
+                    tracing::error!("Core server failed: {}", e);
+                }
+            });
+            
+            // Give the server time to start
+            tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
+        }
+        
         // Connect to core/server WebSocket endpoint
         let url = server_url.unwrap_or_else(|| "ws://localhost:8080/ws".to_string());
         
@@ -299,5 +312,45 @@ impl NetworkingSystem {
         }
         
         Ok(total_stats)
+    }
+    
+    /// Run the core server internally (called by initialize)
+    async fn run_core_server() -> Result<(), Box<dyn std::error::Error>> {
+        use playground_core_server::{
+            McpServer, WebSocketState, websocket_handler,
+            list_plugins, reload_plugin, root
+        };
+        use axum::{Router, routing::{get, post}};
+        use std::net::SocketAddr;
+        use tower_http::cors::CorsLayer;
+        use tower_http::services::ServeDir;
+        use tower_http::trace::TraceLayer;
+        
+        let ws_state = Arc::new(WebSocketState::new());
+        
+        // Create MCP server
+        let mcp_server = McpServer::new();
+        let mcp_router = mcp_server.router();
+        
+        let app = Router::new()
+            .route("/", get(root))
+            .route("/ws", get(websocket_handler))
+            .route("/api/plugins", get(list_plugins))
+            .route("/api/reload", post(reload_plugin))
+            .nest_service("/playground-editor", ServeDir::new("apps/playground-editor/static"))
+            .nest("/mcp", mcp_router)
+            .layer(CorsLayer::permissive())
+            .layer(TraceLayer::new_for_http())
+            .with_state(ws_state);
+        
+        let addr = SocketAddr::from(([127, 0, 0, 1], 8080));
+        tracing::info!("Core server listening on {}", addr);
+        tracing::info!("WebSocket endpoint: ws://localhost:8080/ws");
+        tracing::info!("MCP endpoint: http://localhost:8080/mcp");
+        
+        let listener = tokio::net::TcpListener::bind(addr).await?;
+        axum::serve(listener, app).await?;
+        
+        Ok(())
     }
 }

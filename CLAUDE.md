@@ -35,17 +35,23 @@ This file contains critical memory for Claude Code when working with this reposi
 - systems/logic is SPECIAL - initializes all other systems
 
 ## #current-violations
-1. apps/playground-editor directly uses core/server (WRONG)
-2. NetworkingSystem expects server already running (should start internally)
-3. systems/logic needs to expose all system APIs
-4. MCP router state type mismatch issues
-5. Compilation errors in Handler traits and WebSocketHandler
+1. UI Framework Plugin incomplete implementation ❌
+   - Missing McpHandler methods
+   - Missing UiState persistence methods
+   - Missing Orchestrator update methods
 
 ## #immediate-goals
-1. Fix architecture violations above
+1. Complete UI Framework Plugin implementation
 2. Get playground-apps-editor fully compiling
 3. Test MCP integration with Claude Code
 4. Verify UI Framework Plugin receives channel 1200 messages
+
+## #architecture-fixed
+✅ Plugins ARE Systems - no separate Plugin trait
+✅ Plugin trait doesn't exist in Core (removed core/plugin)
+✅ NetworkingSystem starts server internally
+✅ Apps only use systems/logic, never core/server directly
+✅ Axum version unified to 0.8 workspace-wide
 
 ## #channel-allocation
 - 0: Control channel

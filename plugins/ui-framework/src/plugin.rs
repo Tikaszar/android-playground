@@ -1,16 +1,11 @@
 use async_trait::async_trait;
-use playground_core_plugin::Plugin;
+use playground_systems_logic::{System, World, LogicResult};
 use playground_core_types::{
-    PluginMetadata, PluginId, Version, Event,
-    context::Context,
-    render_context::RenderContext,
-    error::PluginError,
     Priority,
 };
-use playground_systems_networking::NetworkingSystem;
-use tracing::{info, debug, error};
 use std::sync::Arc;
 use tokio::sync::RwLock;
+use tracing::{info, debug, error};
 
 use crate::panel_manager::PanelManager;
 use crate::mcp_handler::McpHandler;
@@ -19,20 +14,19 @@ use crate::ui_state::UiState;
 use crate::orchestrator::Orchestrator;
 
 /// The UI Framework Plugin coordinates all UI updates between server plugins and the browser.
-/// It listens for MCP tool calls and routes them to the appropriate UI panels.
+/// It implements systems/logic::System so it can be registered in the World as a System.
 pub struct UiFrameworkPlugin {
-    metadata: PluginMetadata,
     panel_manager: Arc<RwLock<PanelManager>>,
     mcp_handler: Arc<McpHandler>,
     browser_bridge: Arc<BrowserBridge>,
     ui_state: Arc<RwLock<UiState>>,
     orchestrator: Arc<RwLock<Orchestrator>>,
     channel_id: Option<u16>,
-    networking: Option<Arc<RwLock<NetworkingSystem>>>,
+    systems_manager: Arc<playground_systems_logic::SystemsManager>,
 }
 
 impl UiFrameworkPlugin {
-    pub fn new() -> Self {
+    pub fn new(systems_manager: Arc<playground_systems_logic::SystemsManager>) -> Self {
         // Create persistence directory for conversations
         let persistence_path = std::path::PathBuf::from("/data/data/com.termux/files/home/.android-playground/conversations");
         
@@ -49,216 +43,187 @@ impl UiFrameworkPlugin {
                     ui_state_clone.read().await.channel_manager.clone()
                 })
             }),
-            tokio::task::block_in_place(|| {
-                tokio::runtime::Handle::current().block_on(async {
-                    ui_state_clone.read().await.message_system.clone()
-                })
-            }),
+            panel_manager.clone(),
+            browser_bridge.clone(),
         )));
         
-        // Create McpHandler with orchestrator
-        let mut mcp_handler_inner = McpHandler::new(
-            ui_state.clone(),
-            browser_bridge.clone(),
+        // Create MCP handler with references to all components
+        let mcp_handler = Arc::new(McpHandler::new(
             panel_manager.clone(),
-        );
-        mcp_handler_inner.set_orchestrator(orchestrator.clone());
-        let mcp_handler = Arc::new(mcp_handler_inner);
-
+            orchestrator.clone(),
+            browser_bridge.clone(),
+            ui_state.clone(),
+        ));
+        
         Self {
-            metadata: PluginMetadata {
-                id: PluginId("ui-framework".to_string()),
-                name: "UI Framework".to_string(),
-                version: Version {
-                    major: 0,
-                    minor: 1,
-                    patch: 0,
-                },
-            },
             panel_manager,
             mcp_handler,
             browser_bridge,
             ui_state,
             orchestrator,
             channel_id: None,
-            networking: None,
-        }
-    }
-    
-    async fn handle_mcp_tool_call(&mut self, tool_name: &str, arguments: serde_json::Value) {
-        use crate::mcp_handler::ToolResult;
-        
-        // Process the tool call through MCP handler
-        let result = self.mcp_handler.handle_tool_call(tool_name, arguments).await;
-        
-        match result {
-            Ok(ToolResult { success, message }) => {
-                if success {
-                    info!("Tool {} executed successfully: {}", tool_name, message);
-                } else {
-                    error!("Tool {} failed: {}", tool_name, message);
-                }
-                
-                // Send response back via channel 1201 if needed
-                if let Some(networking) = &self.networking {
-                    let response = serde_json::json!({
-                        "type": "tool_result",
-                        "tool": tool_name,
-                        "success": success,
-                        "message": message
-                    });
-                    
-                    let data = serde_json::to_vec(&response).unwrap_or_default();
-                    let net = networking.read().await;
-                    let _ = net.send_packet(
-                        1201, // Response channel
-                        2, // Tool result packet type
-                        data,
-                        Priority::High
-                    ).await;
-                }
-            }
-            Err(e) => {
-                error!("Failed to handle tool {}: {}", tool_name, e);
-            }
+            systems_manager,
         }
     }
 }
 
 #[async_trait]
-impl Plugin for UiFrameworkPlugin {
-    fn metadata(&self) -> &PluginMetadata {
-        &self.metadata
+impl System for UiFrameworkPlugin {
+    fn name(&self) -> &'static str {
+        "UiFrameworkPlugin"
     }
-
-    async fn on_load(&mut self, ctx: &mut Context) -> Result<(), PluginError> {
-        info!("UI Framework Plugin loading...");
+    
+    async fn initialize(&mut self, _world: &World) -> LogicResult<()> {
+        info!("UI Framework Plugin initializing...");
         
-        // Load previous conversations from disk
-        {
-            let channel_manager = {
-                let ui_state = self.ui_state.read().await;
-                ui_state.channel_manager.clone()
-            };
-            
-            if let Err(e) = channel_manager.write().await.load_from_disk().await {
-                info!("No previous conversations loaded: {}", e);
-            } else {
-                info!("Loaded previous conversations from disk");
-            };
+        // Register our channel (1200) with the networking system
+        let networking = self.systems_manager.networking();
+        let net = networking.read().await;
+        
+        // Register channels 1200-1209 for UI Framework
+        for i in 0..10 {
+            let channel = 1200 + i;
+            net.register_plugin(&format!("ui-framework-{}", i)).await
+                .map_err(|e| playground_systems_logic::LogicError::InitializationFailed(
+                    format!("Failed to register channel {}: {}", channel, e)
+                ))?;
         }
         
-        // Get NetworkingSystem from Context (provided by the App)
-        // The App should have added this to the context resources
-        let networking = ctx.resources.get("networking")
-            .and_then(|r| r.downcast_ref::<Arc<RwLock<NetworkingSystem>>>())
-            .ok_or_else(|| PluginError::InitFailed("NetworkingSystem not found in context".to_string()))?
-            .clone();
+        self.channel_id = Some(1200);
         
-        // Register for channels 1200-1209 as a plugin
-        let channel_id = {
-            let net = networking.write().await;
-            net.register_plugin("ui-framework").await
-                .map_err(|e| PluginError::InitFailed(e.to_string()))?
-        };
+        // Register MCP tools for UI manipulation
+        self.register_mcp_tools().await?;
         
-        self.channel_id = Some(channel_id);
-        self.networking = Some(networking);
+        // Start listening for messages on our channels
+        self.start_message_listener().await;
         
-        info!("UI Framework Plugin registered on channel {}", channel_id);
+        // Initialize panels
+        let mut pm = self.panel_manager.write().await;
+        pm.initialize_default_panels().await;
         
-        // If no channels exist, initialize default setup
-        {
-            let mut ui_state = self.ui_state.write().await;
-            if ui_state.channel_manager.read().await.list_channels().is_empty() {
-                info!("No channels found, initializing default setup...");
-                ui_state.initialize_default_setup().await
-                    .map_err(|e| PluginError::InitFailed(e.to_string()))?;
-            }
-        }
-        
-        // Initialize orchestrator
-        {
-            let mut orchestrator = self.orchestrator.write().await;
-            orchestrator.initialize().await
-                .map_err(|e| PluginError::InitFailed(e.to_string()))?;
-            
-            // Start the assignment loop in the background
-            let orchestrator_clone = self.orchestrator.clone();
-            tokio::spawn(async move {
-                let orchestrator = orchestrator_clone.read().await;
-                orchestrator.run_assignment_loop().await;
-            });
-        }
-        
-        info!("UI Framework Plugin loaded successfully");
+        info!("UI Framework Plugin initialized on channels 1200-1209");
         Ok(())
     }
-
-    async fn on_unload(&mut self, _ctx: &mut Context) {
-        info!("UI Framework Plugin unloading...");
-        
-        // Cleanup resources
-        if let Some(channel_id) = self.channel_id {
-            debug!("Unregistering from channel {}", channel_id);
-            // TODO: Unregister from channel manager
-        }
-    }
-
-    async fn update(&mut self, _ctx: &mut Context, _delta_time: f32) {
+    
+    async fn run(&mut self, _world: &World, delta_time: f32) -> LogicResult<()> {
         // Process any pending UI updates
-        // This is called every frame
+        let mut orchestrator = self.orchestrator.write().await;
+        orchestrator.process_pending_updates(delta_time).await;
         
-        // Check for MCP messages on our channel
+        // Check for incoming messages from browser
         if let Some(channel_id) = self.channel_id {
-            if let Some(networking) = &self.networking {
-                // Receive packets from our channel (release lock quickly)
-                let packets = {
-                    let net = networking.read().await;
-                    net.receive_packets(channel_id).await.unwrap_or_default()
-                };
-                
-                // Process packets without holding the lock
-                for packet in packets {
-                    // Parse MCP tool call from packet
-                    if let Ok(json) = serde_json::from_slice::<serde_json::Value>(&packet.data) {
-                        debug!("Received MCP message on channel {}: {:?}", channel_id, json);
-                        
-                        // Handle MCP tool call
-                        if json.get("type").and_then(|v| v.as_str()) == Some("tool_call") {
-                            let tool_name = json.get("tool").and_then(|v| v.as_str()).unwrap_or("");
-                            let arguments = json.get("arguments").cloned().unwrap_or(serde_json::json!({}));
-                            
-                            info!("Processing MCP tool call: {}", tool_name);
-                            
-                            // Process the tool call
-                            self.handle_mcp_tool_call(tool_name, arguments).await;
-                        }
+            let networking = self.systems_manager.networking();
+            let net = networking.read().await;
+            
+            // Check all our channels (1200-1209)
+            for i in 0..10 {
+                let channel = channel_id + i;
+                if let Ok(packets) = net.receive_packets(channel).await {
+                    for packet in packets {
+                        self.handle_browser_message(packet.data).await;
                     }
                 }
             }
         }
-    }
-
-    async fn render(&mut self, _ctx: &mut RenderContext) {
-        // UI Framework doesn't render directly - it sends commands to browser
-    }
-
-    async fn on_event(&mut self, event: &Event) -> bool {
-        // Handle events from other plugins or MCP
-        debug!("Received event: {} with data: {:?}", event.id, event.data);
         
-        // Check if this is an MCP event
-        if event.id.starts_with("mcp:") {
-            // TODO: Parse and handle MCP events
-            true
-        } else {
-            false
-        }
+        Ok(())
+    }
+    
+    async fn cleanup(&mut self, _world: &World) -> LogicResult<()> {
+        info!("UI Framework Plugin shutting down...");
+        
+        // Save UI state
+        let ui_state = self.ui_state.read().await;
+        ui_state.save_state().await
+            .map_err(|e| playground_systems_logic::LogicError::SystemError(
+                format!("Failed to save UI state: {}", e)
+            ))?;
+        
+        Ok(())
     }
 }
 
-#[no_mangle]
-pub extern "C" fn create_plugin() -> Box<dyn Plugin> {
-    Box::new(UiFrameworkPlugin::new())
+impl UiFrameworkPlugin {
+    async fn register_mcp_tools(&self) -> LogicResult<()> {
+        // Register MCP tools with the networking system
+        let tools = vec![
+            ("ui_create_panel", "Create a new UI panel", serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "panel_type": { "type": "string" },
+                    "title": { "type": "string" },
+                    "position": { "type": "object" }
+                }
+            })),
+            ("ui_update_panel", "Update an existing UI panel", serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "panel_id": { "type": "string" },
+                    "content": { "type": "object" }
+                }
+            })),
+            ("ui_send_message", "Send a message to the chat", serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "channel_id": { "type": "string" },
+                    "content": { "type": "string" },
+                    "author": { "type": "string" }
+                }
+            })),
+        ];
+        
+        for (name, description, schema) in tools {
+            self.systems_manager.register_mcp_tool(
+                name.to_string(),
+                description.to_string(),
+                schema,
+                1200, // Our base channel
+            ).await?;
+        }
+        
+        Ok(())
+    }
+    
+    async fn start_message_listener(&self) {
+        // Start a task to listen for messages from the browser
+        let mcp_handler = self.mcp_handler.clone();
+        let orchestrator = self.orchestrator.clone();
+        
+        tokio::spawn(async move {
+            debug!("UI Framework message listener started");
+            // Message handling will be done in the run() method
+        });
+    }
+    
+    async fn handle_browser_message(&self, data: Vec<u8>) {
+        // Parse and handle messages from the browser
+        match serde_json::from_slice::<serde_json::Value>(&data) {
+            Ok(msg) => {
+                debug!("Received browser message: {:?}", msg);
+                
+                // Route to appropriate handler
+                if let Some(msg_type) = msg.get("type").and_then(|v| v.as_str()) {
+                    match msg_type {
+                        "mcp_tool_call" => {
+                            self.mcp_handler.handle_tool_call(msg).await;
+                        }
+                        "panel_update" => {
+                            let mut pm = self.panel_manager.write().await;
+                            pm.handle_panel_update(msg).await;
+                        }
+                        "chat_message" => {
+                            let mut ui_state = self.ui_state.write().await;
+                            ui_state.handle_chat_message(msg).await;
+                        }
+                        _ => {
+                            debug!("Unknown message type: {}", msg_type);
+                        }
+                    }
+                }
+            }
+            Err(e) => {
+                error!("Failed to parse browser message: {}", e);
+            }
+        }
+    }
 }

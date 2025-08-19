@@ -7,7 +7,6 @@ members = [
     "core/android",
     "core/server",
     "core/client",
-    "core/plugin",
     
     # Systems layer
     "systems/ui",

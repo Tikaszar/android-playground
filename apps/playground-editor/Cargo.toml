@@ -13,18 +13,16 @@ path = "src/main.rs"
 # Systems - Apps primarily use systems/logic which initializes all others
 playground-systems-logic = { path = "../../systems/logic" }
 
-# Core dependencies for plugin management
-playground-core-plugin = { path = "../../core/plugin" }
+# Core dependencies
 playground-core-types = { path = "../../core/types" }
-playground-core-server = { path = "../../core/server" }
 
 # Plugins
 playground-plugins-ui-framework = { path = "../../plugins/ui-framework" }
 
 # Web server
-axum = "0.7"
-tower = "0.4"
-tower-http = { version = "0.5", features = ["fs", "cors", "trace"] }
+axum = { workspace = true }
+tower = { workspace = true }
+tower-http = { workspace = true }
 
 # Standard dependencies
 tokio = { workspace = true, features = ["full"] }

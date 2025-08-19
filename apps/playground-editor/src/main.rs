@@ -7,7 +7,7 @@ use std::sync::Arc;
 use tokio::sync::RwLock;
 use tracing::info;
 
-use playground_systems_logic::ECS;
+use playground_systems_logic::{World, System, SystemsManager};
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -22,87 +22,41 @@ async fn main() -> Result<()> {
     info!("===========================================");
     info!("");
     
-    // Start the core server internally
-    info!("Starting core server on port 8080...");
-    tokio::spawn(async {
-        // Run the core server
-        if let Err(e) = run_core_server().await {
-            tracing::error!("Core server failed: {}", e);
-        }
-    });
+    // Create the World from systems/logic
+    info!("Creating World from systems/logic...");
+    let world = Arc::new(RwLock::new(World::new()));
+    info!("✓ World created");
     
-    // Give the core server time to start
-    tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
-    
-    // Initialize the ECS system from systems/logic
-    info!("Creating ECS from systems/logic...");
-    let mut ecs = ECS::new();
-    info!("✓ ECS created (with core/ecs internally)");
-    
-    // Initialize ALL systems through systems/logic
+    // Create SystemsManager which initializes ALL engine systems
     info!("Initializing all engine systems...");
-    let systems = ecs.initialize_systems().await?;
+    let systems = Arc::new(SystemsManager::new(world.clone()).await?);
+    systems.initialize_all().await?;
     info!("✓ All systems initialized:");
-    info!("  - NetworkingSystem (connected to core/server)");
+    info!("  - NetworkingSystem (starts core/server internally)");
     info!("  - UiSystem (using core/ecs internally)");
     info!("  - RenderingSystem (skipped - browser-side only)");
     
-    // Register UI Framework Plugin channels
-    info!("Registering UI Framework Plugin channels...");
-    systems.register_plugin_channels("ui-framework", 1200, 10).await?;
-    info!("✓ Registered channels 1200-1209 for UI Framework Plugin");
-    
-    // Store the ECS and systems for plugin usage
-    let ecs = Arc::new(RwLock::new(ecs));
-    let systems_clone = systems.clone();
-    
-    // Load and start the UI Framework Plugin
+    // Load and register the UI Framework Plugin as a System
     info!("Loading UI Framework Plugin...");
     use playground_plugins_ui_framework::UiFrameworkPlugin;
-    use playground_core_plugin::Plugin;
-    use playground_core_types::context::Context;
-    use playground_core_types::render_context::RenderContext;
     
-    let mut ui_plugin = UiFrameworkPlugin::new();
+    let ui_plugin = Box::new(UiFrameworkPlugin::new(systems.clone()));
     
-    // Create plugin context with access to systems
-    let mut context = Context::new();
+    // Register the plugin as a System in the World
+    world.write().await.register_plugin_system(ui_plugin).await?;
+    info!("✓ UI Framework Plugin registered as System");
+    info!("✓ Plugin will register channels 1200-1209 during initialization");
     
-    // Add NetworkingSystem to the context for the plugin to use
-    // This follows the architecture: Apps pass Systems to Plugins
-    context.resources.insert(
-        "networking".to_string(),
-        Box::new(systems.networking.clone())
-    );
-    context.resources.insert(
-        "ui".to_string(),
-        Box::new(systems.ui.clone())
-    );
-    // Rendering is browser-side only (WebGL isn't thread-safe)
-    
-    // Initialize the plugin with access to systems
-    ui_plugin.on_load(&mut context).await?;
-    info!("✓ UI Framework Plugin loaded and ready");
-    
-    // Start plugin update loop
-    let ui_plugin = Arc::new(RwLock::new(ui_plugin));
-    let ui_plugin_clone = ui_plugin.clone();
-    let systems_for_update = systems.clone();
-    
+    // Start the main update loop that runs all Systems
+    let world_for_update = world.clone();
     tokio::spawn(async move {
         let mut interval = tokio::time::interval(tokio::time::Duration::from_millis(16)); // ~60fps
         loop {
             interval.tick().await;
-            let mut plugin = ui_plugin_clone.write().await;
             
-            // Create context with systems for update
-            let mut ctx = Context::new();
-            ctx.resources.insert(
-                "networking".to_string(),
-                Box::new(systems_for_update.networking.clone())
-            );
-            
-            plugin.update(&mut ctx, 0.016).await;
+            // Run all registered Systems
+            let mut world_lock = world_for_update.write().await;
+            world_lock.run_systems(0.016).await;
         }
     });
     
@@ -115,10 +69,11 @@ async fn main() -> Result<()> {
     info!("");
     info!("Architecture:");
     info!("  playground-editor (App)");
-    info!("      ↓ starts core/server internally");
-    info!("      ↓ creates systems/logic");
-    info!("      ↓ systems/logic initializes all systems");
-    info!("      ↓ systems/networking connects to core/server");
+    info!("      ↓ creates systems/logic World");
+    info!("      ↓ creates SystemsManager");
+    info!("      ↓ SystemsManager initializes all systems");
+    info!("      ↓ NetworkingSystem starts core/server internally");
+    info!("      ↓ Plugins register as Systems in World");
     info!("");
     info!("Everything is running in this single process.");
     info!("=========================================");
@@ -126,47 +81,6 @@ async fn main() -> Result<()> {
     // Keep the application running
     tokio::signal::ctrl_c().await?;
     info!("Shutting down Conversational IDE...");
-    
-    Ok(())
-}
-
-// Run the core server internally
-async fn run_core_server() -> Result<()> {
-    use playground_core_server::{
-        McpServer, WebSocketState, websocket_handler,
-        list_plugins, reload_plugin, root
-    };
-    use axum::{Router, routing::{get, post}};
-    use std::net::SocketAddr;
-    use tower_http::cors::CorsLayer;
-    use tower_http::services::ServeDir;
-    use tower_http::trace::TraceLayer;
-    
-    let ws_state = Arc::new(WebSocketState::new());
-    
-    // Create MCP server
-    let mcp_server = McpServer::new();
-    let mcp_router = mcp_server.router();
-    
-    let app = Router::new()
-        .route("/", get(root))
-        .route("/ws", get(websocket_handler))
-        .route("/api/plugins", get(list_plugins))
-        .route("/api/reload", post(reload_plugin))
-        .nest_service("/playground-editor", ServeDir::new("apps/playground-editor/static"))
-        .nest("/mcp", mcp_router)
-        .layer(CorsLayer::permissive())
-        .layer(TraceLayer::new_for_http())
-        .with_state(ws_state);
-    
-    let addr = SocketAddr::from(([127, 0, 0, 1], 8080));
-    tracing::info!("Core server listening on {}", addr);
-    tracing::info!("WebSocket endpoint: ws://localhost:8080/ws");
-    tracing::info!("MCP endpoint: http://localhost:8080/mcp");
-    tracing::info!("Playground Editor: http://localhost:8080/playground-editor/");
-    
-    let listener = tokio::net::TcpListener::bind(addr).await?;
-    axum::serve(listener, app).await?;
     
     Ok(())
 }

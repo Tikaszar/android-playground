@@ -12,7 +12,6 @@ path = "src/main.rs"
 
 [dependencies]
 tracing-subscriber = { workspace = true }
-playground-core-plugin = { path = "../../core/plugin" }
 playground-core-types = { path = "../../core/types" }
 playground-systems-ui = { path = "../../systems/ui" }
 playground-systems-logic = { path = "../../systems/logic" }

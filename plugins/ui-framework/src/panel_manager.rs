@@ -43,6 +43,26 @@ impl PanelManager {
             layout: PanelLayout::Tabs(Vec::new()),
         }
     }
+    
+    pub async fn initialize_default_panels(&mut self) {
+        // Create default panels
+        self.create_panel(PanelType::Chat, "Chat".to_string());
+        self.create_panel(PanelType::Editor, "Editor".to_string());
+        self.create_panel(PanelType::FileBrowser, "Files".to_string());
+    }
+    
+    pub async fn handle_panel_update(&mut self, msg: serde_json::Value) {
+        // Handle panel update messages from browser
+        if let Some(panel_id) = msg.get("panel_id").and_then(|v| v.as_str()) {
+            if let Ok(id) = Uuid::parse_str(panel_id) {
+                if let Some(panel) = self.panels.get_mut(&id) {
+                    if let Some(is_focused) = msg.get("is_focused").and_then(|v| v.as_bool()) {
+                        panel.is_focused = is_focused;
+                    }
+                }
+            }
+        }
+    }
 
     pub fn create_panel(&mut self, panel_type: PanelType, title: String) -> Uuid {
         let panel = Panel {

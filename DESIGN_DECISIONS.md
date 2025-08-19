@@ -224,20 +224,37 @@ This file documents key architectural decisions, why they were made, and how the
 
 ## Plugin System
 
-### Dynamic Loading with .so Files
-**Decision**: Plugins compile to shared libraries
+### Plugins ARE Systems
+**Decision**: No separate Plugin trait - Plugins implement systems/logic::System
 
 **Why**:
-- Hot-reload without restart
-- Reduced compilation times
-- Plugin marketplace potential
-- Standard approach in game engines
+- Maintains architectural boundaries
+- Core doesn't need to know about Plugins
+- Plugins are just Systems to the ECS
+- Cleaner abstraction layers
+- Apps handle plugin loading, Systems handle execution
 
-### Plugin Trait with Async Methods
-**Decision**: All plugin lifecycle methods are async
+**Evolution**:
+1. Initially had Plugin trait in core/plugin (WRONG)
+2. Realized this violated layering - Core shouldn't know about Plugins
+3. Understood Plugins are just Systems with special loading
+4. Removed core/plugin entirely
+5. Plugins now implement systems/logic::System trait
+
+### Plugin Loading by Apps
+**Decision**: Apps load plugins and register them as Systems
 
 **Why**:
-- Plugins may need I/O in initialization
+- Only Apps know about plugin libraries
+- Systems just see other Systems
+- Clean separation of concerns
+- Apps orchestrate, Systems execute
+
+### Async System Methods
+**Decision**: All System lifecycle methods are async
+
+**Why**:
+- Systems may need I/O in initialization
 - Consistent with async-everywhere principle
 - Better for network operations
 - Natural fit with tokio runtime

@@ -7,6 +7,7 @@ use crate::scheduler::Scheduler;
 use crate::storage::HybridStorage;
 use crate::system::{SystemRegistration, Stage};
 use parking_lot::RwLock;
+use tokio::sync::RwLock as AsyncRwLock;
 use std::any::TypeId;
 use std::sync::Arc;
 
@@ -211,6 +212,17 @@ impl World {
         // For now, just a placeholder
         Ok(())
     }
+    
+    /// Register a System with the World (for plugins)
+    pub async fn register_plugin_system(&mut self, system: Box<dyn crate::system::System>) -> LogicResult<()> {
+        // Register with the scheduler
+        self.scheduler.executor().register(system).await
+    }
+    
+    /// Run all registered systems for one frame
+    pub async fn run_systems(&mut self, delta_time: f32) -> LogicResult<()> {
+        self.scheduler.run_frame(self, delta_time).await
+    }
 }
 
 
@@ -231,7 +243,8 @@ impl ECS {
     /// Initialize all engine systems
     /// This must be called before using any system functionality
     pub async fn initialize_systems(&mut self) -> crate::error::LogicResult<Arc<crate::systems_manager::SystemsManager>> {
-        let systems = crate::systems_manager::SystemsManager::initialize().await?;
+        let world_lock = Arc::new(AsyncRwLock::new(self.world.as_ref().clone()));
+        let systems = crate::systems_manager::SystemsManager::new(world_lock).await?;
         let systems = Arc::new(systems);
         self.systems = Some(systems.clone());
         Ok(systems)

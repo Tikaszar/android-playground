@@ -1,6 +1,7 @@
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use crate::error::{LogicResult, LogicError};
+use crate::world::World;
 
 // Import other systems
 use playground_systems_networking::NetworkingSystem;
@@ -10,6 +11,7 @@ use playground_systems_ui::UiSystem;
 
 /// Manages all system instances for the engine
 pub struct SystemsManager {
+    world: Arc<RwLock<World>>,
     pub networking: Arc<RwLock<NetworkingSystem>>,
     pub ui: Arc<RwLock<UiSystem>>,
     // Note: RenderingSystem needs a renderer type, but WebGL isn't thread-safe
@@ -19,25 +21,34 @@ pub struct SystemsManager {
 }
 
 impl SystemsManager {
+    /// Create a new SystemsManager with reference to the World
+    pub async fn new(world: Arc<RwLock<World>>) -> LogicResult<Self> {
+        let networking = NetworkingSystem::new().await
+            .map_err(|e| LogicError::InitializationFailed(format!("NetworkingSystem: {}", e)))?;
+        
+        Ok(Self {
+            world,
+            networking: Arc::new(RwLock::new(networking)),
+            ui: Arc::new(RwLock::new(UiSystem::new())),
+        })
+    }
+    
     /// Initialize all systems
-    /// This is called by systems/logic when the ECS is created
-    pub async fn initialize() -> LogicResult<Self> {
+    pub async fn initialize_all(&self) -> LogicResult<()> {
         tracing::info!("Initializing all engine systems...");
         
         // Initialize NetworkingSystem
-        // It will create and manage core/server connection using core/ecs
-        let mut networking = NetworkingSystem::new().await
+        // It will start core/server internally if not already running
+        let mut networking = self.networking.write().await;
+        networking.initialize(None).await
             .map_err(|e| LogicError::InitializationFailed(format!("NetworkingSystem: {}", e)))?;
         
-        // Connect to core/server WebSocket
-        networking.initialize(None).await
-            .map_err(|e| LogicError::InitializationFailed(format!("NetworkingSystem connect: {}", e)))?;
-        
-        tracing::info!("✓ NetworkingSystem initialized and connected to core/server");
+        tracing::info!("✓ NetworkingSystem initialized (started core/server internally)");
         
         // Initialize UiSystem
         // It uses core/ecs internally for state management
-        let ui = UiSystem::new();
+        // let mut ui = self.ui.write().await;
+        // ui.initialize().await?;
         tracing::info!("✓ UiSystem initialized");
         
         // RenderingSystem initialization skipped for now
@@ -49,12 +60,17 @@ impl SystemsManager {
         // let physics = PhysicsSystem::new();
         // tracing::info!("✓ PhysicsSystem initialized");
         
-        Ok(Self {
-            networking: Arc::new(RwLock::new(networking)),
-            ui: Arc::new(RwLock::new(ui)),
-            // rendering: Arc::new(RwLock::new(rendering)),
-            // physics: Arc::new(RwLock::new(physics)),
-        })
+        Ok(())
+    }
+    
+    /// Get reference to NetworkingSystem
+    pub fn networking(&self) -> Arc<RwLock<NetworkingSystem>> {
+        self.networking.clone()
+    }
+    
+    /// Get reference to UiSystem
+    pub fn ui(&self) -> Arc<RwLock<UiSystem>> {
+        self.ui.clone()
     }
     
     /// Register an MCP tool for a plugin or app
@@ -72,20 +88,4 @@ impl SystemsManager {
         Ok(())
     }
     
-    /// Register plugin channels with the networking system
-    pub async fn register_plugin_channels(&self, plugin_name: &str, base_channel: u16, count: u16) -> LogicResult<()> {
-        let net = self.networking.read().await;
-        
-        // Register the plugin once to get its base channel
-        let registered_channel = net.register_plugin(plugin_name).await
-            .map_err(|e| LogicError::SystemError(format!("Failed to register plugin '{}': {}", plugin_name, e)))?;
-        
-        tracing::info!("Registered plugin '{}' on channel {} (requested base {}, count {})", 
-            plugin_name, registered_channel, base_channel, count);
-        
-        // Note: The actual channel allocation is handled by the networking system
-        // Plugins get a single channel ID and can use sub-channels internally
-        
-        Ok(())
-    }
 }

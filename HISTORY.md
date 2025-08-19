@@ -2,6 +2,56 @@
 
 This file tracks the detailed history of development sessions, including achievements, bug fixes, and implementation progress.
 
+## Session: 2025-08-19 - Major Architecture Refactoring
+
+### Completed
+1. **Plugin Architecture Completely Redesigned**
+   - Removed core/plugin package entirely
+   - Plugins now implement systems/logic::System trait
+   - No separate Plugin trait - Plugins ARE Systems
+   - Apps load plugins and register them as Systems in World
+   - Fixed critical layering violation
+
+2. **NetworkingSystem Improvements**
+   - Now starts core/server internally via run_core_server()
+   - Apps no longer need to know about core/server
+   - Added axum, tower, tower-http dependencies to networking
+
+3. **Dependency Version Fixes**
+   - Fixed axum version mismatch (0.7 vs 0.8)
+   - All packages now use workspace version (0.8)
+   - Fixed tower-http version mismatch
+
+4. **SystemsManager Updates**
+   - Now takes World reference in constructor
+   - Fixed async constructor pattern
+   - Removed deprecated register_plugin_channels method
+   - Added networking() and ui() accessors
+
+5. **World ECS Updates**
+   - Added register_plugin_system() for plugin registration
+   - Added run_systems() for frame updates
+   - SystemExecutor now has register() method
+
+### Architecture Changes
+- Apps → systems/logic → all systems → core (ENFORCED)
+- Plugins can ONLY access Systems through systems/logic
+- Core never knows about Plugins
+- Systems never know about Plugins (just Systems)
+
+### Bug Fixes
+- **Issue**: Apps directly using core/server
+  - **Fix**: NetworkingSystem starts server internally
+- **Issue**: Plugin trait in wrong layer (Core)
+  - **Fix**: Plugins implement systems/logic::System
+- **Issue**: Axum version conflict
+  - **Fix**: All using workspace version 0.8
+
+### Remaining Issues
+- UI Framework Plugin incomplete (missing methods)
+- McpHandler, UiState, Orchestrator need implementation
+- Need to complete business logic for UI Framework
+
 ## Session: Package Standardization & Build Fixes
 
 ### Completed

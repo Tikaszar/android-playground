@@ -158,6 +158,27 @@ impl SystemExecutor {
         self.rebuild_execution_order();
     }
     
+    /// Register a System (used by World::register_system)
+    pub async fn register(&self, system: Box<dyn System>) -> LogicResult<()> {
+        let instance = SystemInstance {
+            info: SystemInfo {
+                type_id: TypeId::of::<Box<dyn System>>(),
+                name: system.name().to_string(),
+                dependencies: system.dependencies(),
+                parallel: system.parallel(),
+                retry_count: 0,
+                max_retries: 3,
+                enabled: true,
+                safe_mode: false,
+            },
+            system,
+            last_error: None,
+        };
+        
+        self.add_system(Stage::Update, instance);
+        Ok(())
+    }
+    
     fn rebuild_execution_order(&self) {
         let stages = self.stages.read();
         let mut order = Vec::new();
