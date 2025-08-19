@@ -1,183 +1,18 @@
-mod messages;
-mod message_bus;
-mod layout;
+// mod messages;
+// mod message_bus;
+// mod layout;
 
 use anyhow::Result;
-use dashmap::DashMap;
-use playground_plugin::{Plugin, PluginLoader};
-use playground_server::{ChannelManager, FrameBatcher};
-use playground_ui::UiSystem;
+use axum::Router;
+use std::net::SocketAddr;
 use std::sync::Arc;
-use tokio::sync::{RwLock, mpsc};
-use tracing::{info, warn};
-use uuid::Uuid;
+use tower_http::cors::CorsLayer;
+use tower_http::services::ServeDir;
+use tower_http::trace::TraceLayer;
+use tokio::sync::RwLock;
+use tracing::info;
 
-use crate::message_bus::MessageBus;
-use crate::layout::IdeLayout;
-use crate::messages::{PluginMessage, MessageEnvelope};
-
-/// The Playground Editor IDE application.
-/// Coordinates multiple editor plugins to provide a complete development environment.
-pub struct PlaygroundEditorApp {
-    /// Loaded plugins mapped by their IDs
-    plugins: Arc<DashMap<Uuid, Box<dyn Plugin>>>,
-    /// Plugin loader for dynamic loading
-    plugin_loader: PluginLoader,
-    /// UI system instance
-    ui_system: Arc<RwLock<UiSystem>>,
-    /// Channel manager for WebSocket communication
-    channel_manager: Arc<ChannelManager>,
-    /// Frame batcher for packet batching
-    frame_batcher: Arc<FrameBatcher>,
-    /// Message bus for inter-plugin communication
-    message_bus: Arc<MessageBus>,
-    /// IDE layout
-    layout: Arc<RwLock<IdeLayout>>,
-    /// Application configuration
-    config: AppConfig,
-}
-
-#[derive(Clone)]
-pub struct AppConfig {
-    /// Plugin directory path
-    pub plugin_dir: String,
-    /// Auto-load plugins on startup
-    pub auto_load_plugins: bool,
-    /// WebSocket server port
-    pub server_port: u16,
-    /// Enable hot-reload
-    pub hot_reload: bool,
-}
-
-impl Default for AppConfig {
-    fn default() -> Self {
-        Self {
-            plugin_dir: "./plugins".to_string(),
-            auto_load_plugins: true,
-            server_port: 3000,
-            hot_reload: true,
-        }
-    }
-}
-
-impl PlaygroundEditorApp {
-    pub fn new(config: AppConfig) -> Result<Self> {
-        let channel_manager = Arc::new(ChannelManager::new());
-        let frame_batcher = Arc::new(FrameBatcher::new(2000, 60)); // 2000 channels, 60fps
-        let ui_system = Arc::new(RwLock::new(UiSystem::new()));
-        let (message_bus, _broadcast_receiver) = MessageBus::new();
-        let layout = Arc::new(RwLock::new(IdeLayout::new()));
-        
-        Ok(Self {
-            plugins: Arc::new(DashMap::new()),
-            plugin_loader: PluginLoader::new(),
-            ui_system,
-            channel_manager,
-            frame_batcher,
-            message_bus: Arc::new(message_bus),
-            layout,
-            config,
-        })
-    }
-
-    /// Load all IDE plugins
-    pub async fn load_plugins(&self) -> Result<()> {
-        info!("Loading IDE plugins...");
-        
-        // List of IDE plugins to load (channels 1000-1079)
-        let ide_plugins = vec![
-            ("editor-core", 1000),
-            ("file-browser", 1010),
-            ("terminal", 1020),
-            ("lsp-client", 1030),
-            ("debugger", 1040),
-            ("chat-assistant", 1050),
-            ("version-control", 1060),
-            ("theme-manager", 1070),
-        ];
-        
-        for (plugin_name, base_channel) in ide_plugins {
-            match self.load_plugin(plugin_name, base_channel).await {
-                Ok(id) => info!("Loaded plugin '{}' with ID {}", plugin_name, id),
-                Err(e) => warn!("Failed to load plugin '{}': {}", plugin_name, e),
-            }
-        }
-        
-        Ok(())
-    }
-
-    /// Load a single plugin
-    async fn load_plugin(&self, name: &str, base_channel: u16) -> Result<Uuid> {
-        let plugin_path = format!("{}/{}/lib{}.so", self.config.plugin_dir, name, name.replace("-", "_"));
-        
-        // For now, we'll skip actual loading since plugins aren't compiled yet
-        // In production, this would use plugin_loader.load(&plugin_path)
-        
-        info!("Would load plugin from: {}", plugin_path);
-        
-        // Register plugin channels
-        for i in 0..10 {
-            self.channel_manager.register_channel(
-                base_channel + i,
-                format!("{}-{}", name, i),
-            );
-        }
-        
-        Ok(Uuid::new_v4())
-    }
-
-    /// Main application loop
-    pub async fn run(&self) -> Result<()> {
-        info!("Starting Playground Editor IDE...");
-        
-        // Load plugins if auto-load is enabled
-        if self.config.auto_load_plugins {
-            self.load_plugins().await?;
-        }
-        
-        // Start the UI system
-        info!("Initializing UI system...");
-        {
-            let mut ui = self.ui_system.write().await;
-            // UI system initialization would happen here
-        }
-        
-        // Start the server
-        info!("Starting server on port {}...", self.config.server_port);
-        
-        // Main application loop
-        loop {
-            // Process plugin updates
-            for plugin in self.plugins.iter() {
-                // Call plugin update methods
-                // plugin.update(delta_time);
-            }
-            
-            // Process frame batching
-            // In a real implementation, we would process batches per channel
-            // For now, just a placeholder
-            
-            // Sleep for frame time (16ms for 60fps)
-            tokio::time::sleep(tokio::time::Duration::from_millis(16)).await;
-        }
-    }
-
-    /// Shutdown the application
-    pub async fn shutdown(&self) -> Result<()> {
-        info!("Shutting down Playground Editor...");
-        
-        // Unload all plugins
-        for plugin in self.plugins.iter() {
-            let (id, _) = plugin.pair();
-            info!("Unloading plugin {}", id);
-            // plugin.on_unload();
-        }
-        
-        self.plugins.clear();
-        
-        Ok(())
-    }
-}
+use playground_logic::ECS;
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -185,29 +20,82 @@ async fn main() -> Result<()> {
     tracing_subscriber::fmt()
         .with_target(false)
         .with_thread_ids(true)
-        .with_line_number(true)
         .init();
     
-    info!("Playground Editor IDE starting...");
+    info!("===========================================");
+    info!("  Playground Editor - Conversational IDE  ");
+    info!("===========================================");
+    info!("");
+    info!("This is the Conversational IDE for Android Playground.");
+    info!("It provides a Discord-style chat interface for development.");
+    info!("");
     
-    // Load configuration (could be from file in future)
-    let config = AppConfig::default();
+    // Initialize the ECS system from systems/logic
+    info!("Creating ECS from systems/logic...");
+    let mut ecs = ECS::new();
+    info!("✓ ECS created (with core/ecs internally)");
     
-    // Create and run the application
-    let app = PlaygroundEditorApp::new(config)?;
+    // Initialize ALL systems through systems/logic
+    info!("Initializing all engine systems...");
+    let systems = ecs.initialize_systems().await?;
+    info!("✓ All systems initialized:");
+    info!("  - NetworkingSystem (connected to core/server)");
+    info!("  - UiSystem (using core/ecs internally)");
+    info!("  - RenderingSystem (using core/ecs internally)");
     
-    // Set up shutdown handler
-    let app_clone = Arc::new(app);
-    let shutdown_app = app_clone.clone();
+    // Register UI Framework Plugin channels
+    info!("Registering UI Framework Plugin channels...");
+    systems.register_plugin_channels("ui-framework", 1200, 10).await?;
+    info!("✓ Registered channels 1200-1209 for UI Framework Plugin");
     
+    // Store the ECS and systems for plugin usage
+    let ecs = Arc::new(RwLock::new(ecs));
+    let systems = systems.clone();
+    
+    // Note: In a complete implementation:
+    // 1. Load the UI Framework Plugin using the Plugin trait
+    // 2. Pass the systems to the plugin through its Context
+    // 3. The plugin uses the provided systems (NEVER creates its own)
+    // 4. The plugin uses systems/networking to handle WebSocket messages
+    
+    // Start the web server for the IDE interface
     tokio::spawn(async move {
-        tokio::signal::ctrl_c().await.ok();
-        shutdown_app.shutdown().await.ok();
-        std::process::exit(0);
+        // Serve static files for the Conversational IDE interface
+        let static_dir = "apps/playground-editor/static";
+        info!("Serving Conversational IDE interface from: {}", static_dir);
+        
+        let app = Router::new()
+            .nest_service("/", ServeDir::new(static_dir))
+            .layer(CorsLayer::permissive())
+            .layer(TraceLayer::new_for_http());
+        
+        let addr = SocketAddr::from(([127, 0, 0, 1], 3001));
+        info!("Web interface starting on: http://localhost:3001");
+        
+        let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
+        axum::serve(listener, app).await.unwrap();
     });
     
-    // Run the application
-    app_clone.run().await?;
+    info!("=========================================");
+    info!("Conversational IDE Architecture:");
+    info!("");
+    info!("  playground-editor (App)");
+    info!("      ↓ creates");
+    info!("  systems/logic (ECS)");
+    info!("      ↓ creates core/ecs internally");
+    info!("      ↓ initializes ALL systems");
+    info!("  systems/networking");
+    info!("      ↓ creates and manages");
+    info!("  core/server connection");
+    info!("");
+    info!("Web Interface: http://localhost:3001");
+    info!("WebSocket: ws://localhost:8080/ws");
+    info!("Channels: 1200-1209 (UI Framework)");
+    info!("=========================================");
+    
+    // Keep the application running
+    tokio::signal::ctrl_c().await?;
+    info!("Shutting down Conversational IDE...");
     
     Ok(())
 }

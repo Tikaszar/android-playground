@@ -217,13 +217,29 @@ impl World {
 /// The main ECS facade for plugins and apps
 pub struct ECS {
     world: Arc<World>,
+    systems: Option<Arc<crate::systems_manager::SystemsManager>>,
 }
 
 impl ECS {
     pub fn new() -> Self {
         Self {
             world: Arc::new(World::new()),
+            systems: None,
         }
+    }
+    
+    /// Initialize all engine systems
+    /// This must be called before using any system functionality
+    pub async fn initialize_systems(&mut self) -> crate::error::LogicResult<Arc<crate::systems_manager::SystemsManager>> {
+        let systems = crate::systems_manager::SystemsManager::initialize().await?;
+        let systems = Arc::new(systems);
+        self.systems = Some(systems.clone());
+        Ok(systems)
+    }
+    
+    /// Get the systems manager
+    pub fn systems(&self) -> Option<&Arc<crate::systems_manager::SystemsManager>> {
+        self.systems.as_ref()
     }
     
     pub fn world(&self) -> &World {

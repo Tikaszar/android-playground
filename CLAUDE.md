@@ -245,11 +245,12 @@ Plugins are reusable feature modules compiled as `.so` files and loaded dynamica
   - ⏳ Phase 6: Testing and optimization (pending)
 
 ### Architectural Rules
-1. **Apps** manage and coordinate collections of Plugins
-2. **Plugins** use ALL Systems APIs (systems/logic for game ECS, systems/ui for UI, etc.)
+1. **Apps** create systems/logic which initializes ALL other systems
+2. **Plugins** use Systems APIs provided by the App (NEVER create systems)
 3. **Systems** use Core APIs only (including core/ecs for internal state)
 4. **Core** provides foundational functionality
-5. **Exception**: Plugins may implement custom Systems internally that use Core
+5. **Systems/Logic** is special - it initializes all other systems
+6. **Exception**: Plugins may implement custom Systems internally that use Core
 
 ### ECS Usage Pattern
 - **Systems** use `core/ecs` for their internal state management
@@ -559,9 +560,43 @@ cd ../orchestrator && claude --continue  # Back to orchestrator
 - All conversations visible to human (no private channels)
 - Server-side persistence of all messages
 
+## Conversational IDE
+
+The Conversational IDE is the primary interface for interacting with the Android Playground engine. It provides a Discord-style chat interface where developers collaborate with AI agents to build games and applications.
+
+### Running the IDE
+
+```bash
+# Terminal 1: Start the core server
+cargo run -p playground-server
+
+# Terminal 2: Start the Playground Editor (Conversational IDE)
+cargo run -p playground-editor
+
+# Browser: Open http://localhost:3001
+```
+
+### Architecture
+- **apps/playground-editor**: The Conversational IDE application
+- **systems/logic**: Creates core/ecs AND initializes all other systems
+- **systems/networking**: Manages WebSocket connection to core/server
+- **plugins/ui-framework**: Uses systems provided by the App
+- **Flow**: App creates logic → logic initializes all systems → App passes systems to Plugins
+
+### Features
+- Discord-style chat with channels and DMs
+- Inline code editors, file browsers, terminals in chat bubbles
+- Three bubble states: Collapsed/Compressed/Expanded
+- Multi-agent orchestration with task queues
+- Real-time collaboration between human and AI agents
+
 ## Current Status
 
-✅ **Implemented (December 2024)**
+✅ **Implemented (December 2025)**
+- **Conversational IDE Application** - Full Discord-style IDE interface
+- **UI Framework Plugin** - Phase 1 & 2 complete with WebSocket integration
+
+✅ **Implemented (August 2025)**
 - Core layer (types, plugin, server, android, client, **ecs**)
 - **Core/ECS** with async, generational IDs, and batch-only API
 - **Core/Server** as both binary and library with channel management

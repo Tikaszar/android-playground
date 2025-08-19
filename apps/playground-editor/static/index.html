@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Conversational IDE</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div id="app">
+        <!-- Top Bar -->
+        <header class="top-bar">
+            <div class="logo">Conversational IDE</div>
+            <div class="status">
+                <span id="connection-status" class="status-indicator disconnected"></span>
+                <span id="connection-text">Disconnected</span>
+            </div>
+        </header>
+
+        <!-- Main Layout -->
+        <div class="main-layout">
+            <!-- Left Sidebar - Channels & Users -->
+            <aside class="sidebar left">
+                <div class="section">
+                    <h3>Channels</h3>
+                    <div id="channel-list" class="channel-list">
+                        <div class="channel active" data-channel="general">
+                            <span class="channel-icon">#</span>
+                            <span class="channel-name">general</span>
+                        </div>
+                        <div class="channel" data-channel="code-review">
+                            <span class="channel-icon">#</span>
+                            <span class="channel-name">code-review</span>
+                        </div>
+                        <div class="channel" data-channel="debugging">
+                            <span class="channel-icon">#</span>
+                            <span class="channel-name">debugging</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="section">
+                    <h3>Direct Messages</h3>
+                    <div id="dm-list" class="dm-list">
+                        <div class="dm" data-agent="claude">
+                            <span class="agent-status online"></span>
+                            <span class="agent-name">Claude Code</span>
+                        </div>
+                        <div class="dm" data-agent="orchestrator">
+                            <span class="agent-status idle"></span>
+                            <span class="agent-name">Orchestrator</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="section">
+                    <h3>Agents</h3>
+                    <div id="agent-list" class="agent-list">
+                        <!-- Dynamically populated -->
+                    </div>
+                </div>
+            </aside>
+
+            <!-- Center - Chat View -->
+            <main class="chat-container">
+                <!-- Channel Header -->
+                <div class="channel-header">
+                    <h2 id="current-channel"># general</h2>
+                    <div class="channel-actions">
+                        <button id="expand-all" title="Expand All">⬇</button>
+                        <button id="compress-all" title="Compress All">⬆</button>
+                        <button id="collapse-all" title="Collapse All">━</button>
+                    </div>
+                </div>
+
+                <!-- Messages -->
+                <div id="messages" class="messages">
+                    <!-- Messages will be added here dynamically -->
+                </div>
+
+                <!-- Input Area -->
+                <div class="input-area">
+                    <textarea 
+                        id="message-input" 
+                        placeholder="Type a message or request..."
+                        rows="3"
+                    ></textarea>
+                    <button id="send-button" class="send-button">Send</button>
+                </div>
+            </main>
+
+            <!-- Right Sidebar - IDE Tools -->
+            <aside class="sidebar right">
+                <div class="section">
+                    <h3>Active Files</h3>
+                    <div id="active-files" class="file-list">
+                        <!-- Dynamically populated -->
+                    </div>
+                </div>
+                
+                <div class="section">
+                    <h3>Tasks</h3>
+                    <div id="task-queue" class="task-list">
+                        <!-- Dynamically populated -->
+                    </div>
+                </div>
+
+                <div class="section">
+                    <h3>Terminal</h3>
+                    <div id="quick-terminal" class="quick-terminal">
+                        <div class="terminal-output"></div>
+                        <input type="text" class="terminal-input" placeholder="$">
+                    </div>
+                </div>
+            </aside>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>

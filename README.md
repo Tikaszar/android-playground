@@ -32,9 +32,34 @@ cargo build --workspace
 
 # Build with WebGL renderer (for browser IDE)
 cargo build -p playground-rendering --features webgl
+```
 
-# Run the development server
+### Running the Conversational IDE
+
+The Conversational IDE (playground-editor) is a Discord-style chat interface for interacting with AI agents:
+
+```bash
+# Step 1: Start the core server (runs on port 8080)
 cargo run -p playground-server
+
+# Step 2: In another terminal, start the Playground Editor (Conversational IDE)
+cargo run -p playground-editor
+
+# Step 3: Open your browser to:
+http://localhost:3001
+
+# The IDE will automatically connect to the core server at ws://localhost:8080/ws
+```
+
+### Connecting AI Agents (Claude Code, GPT, etc.)
+
+AI agents connect via MCP (Model Context Protocol) to the core server:
+
+```bash
+# The MCP endpoint is available at:
+http://localhost:8080/mcp
+
+# Configure your AI tool (e.g., Claude Code) to connect to this endpoint
 ```
 
 ## Architecture
@@ -73,16 +98,18 @@ core/           # Foundation (minimal dependencies)
 ```
 
 ### Architectural Rules
-- **Apps** use Plugins and coordinate them
-- **Plugins** use ALL Systems APIs (never Core directly)
+- **Apps** create systems/logic which initializes ALL other systems
+- **Plugins** use Systems APIs provided by the App (never create systems)
 - **Systems** use Core ONLY (including core/ecs for internal state)
+- **Systems/Logic** is special - it creates core/ecs and initializes all systems
 - **Exception**: Plugins may implement custom Systems internally
 
 ### ECS Architecture
 - **Core/ECS**: Minimal primitives for Systems' internal state management
-- **Systems/Logic**: Full game ECS for Plugins and Apps to use
+- **Systems/Logic**: Full game ECS that also initializes all other systems
+- **Initialization Flow**: App → systems/logic → all other systems
 - All Systems use core/ecs internally for state management
-- Plugins have access to all Systems including systems/logic for game ECS
+- Plugins receive systems from the App, never create their own
 
 ## 🤖 MCP Support - Universal LLM Integration
 

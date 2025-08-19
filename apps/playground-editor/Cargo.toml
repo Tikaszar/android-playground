@@ -10,16 +10,21 @@ name = "playground-editor"
 path = "src/main.rs"
 
 [dependencies]
-# Systems - Apps can use all systems
-playground-ui = { path = "../../systems/ui" }
-playground-networking = { path = "../../systems/networking" }
+# Systems - Apps primarily use systems/logic which initializes all others
 playground-logic = { path = "../../systems/logic" }
-playground-rendering = { path = "../../systems/rendering" }
 
 # Core dependencies for plugin management
 playground-plugin = { path = "../../core/plugin" }
 playground-types = { path = "../../core/types" }
 playground-server = { path = "../../core/server" }
+
+# Plugins
+playground-ui-framework = { path = "../../plugins/ui-framework" }
+
+# Web server
+axum = "0.7"
+tower = "0.4"
+tower-http = { version = "0.5", features = ["fs", "cors", "trace"] }
 
 # Standard dependencies
 tokio = { workspace = true, features = ["full"] }

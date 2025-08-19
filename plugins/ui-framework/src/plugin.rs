@@ -135,12 +135,16 @@ impl Plugin for UiFrameworkPlugin {
         
         // Load previous conversations from disk
         {
-            let ui_state = self.ui_state.read().await;
-            if let Err(e) = ui_state.channel_manager.write().await.load_from_disk().await {
+            let channel_manager = {
+                let ui_state = self.ui_state.read().await;
+                ui_state.channel_manager.clone()
+            };
+            
+            if let Err(e) = channel_manager.write().await.load_from_disk().await {
                 info!("No previous conversations loaded: {}", e);
             } else {
                 info!("Loaded previous conversations from disk");
-            }
+            };
         }
         
         // Initialize networking system
