@@ -2,6 +2,7 @@ use crate::{
     channel::ChannelManager,
     packet::{Packet, Priority, ControlMessageType},
     batcher::FrameBatcher,
+    dashboard::Dashboard,
 };
 use axum::{
     extract::{ws::{WebSocket, WebSocketUpgrade, Message}, State},
@@ -30,6 +31,7 @@ pub struct WebSocketState {
     pub batcher: Arc<FrameBatcher>,
     pub connections: Arc<RwLock<Vec<Arc<RwLock<Option<WebSocketConnection>>>>>>,
     pub mcp_tools: Arc<RwLock<HashMap<String, McpTool>>>, // Dynamic MCP tool registry
+    pub dashboard: Arc<Dashboard>,
 }
 
 struct WebSocketConnection {
@@ -39,11 +41,14 @@ struct WebSocketConnection {
 
 impl WebSocketState {
     pub fn new() -> Self {
+        let dashboard = Arc::new(Dashboard::new());
+        
         Self {
             channel_manager: Arc::new(RwLock::new(ChannelManager::new())),
             batcher: Arc::new(FrameBatcher::new(2000, 60)), // 60fps, support up to 2000 channels
             connections: Arc::new(RwLock::new(Vec::new())),
             mcp_tools: Arc::new(RwLock::new(HashMap::new())),
+            dashboard,
         }
     }
     
@@ -79,6 +84,9 @@ pub async fn websocket_handler(
 async fn handle_websocket(socket: WebSocket, state: Arc<WebSocketState>) {
     let (sender, mut receiver) = socket.split();
     
+    // Get client IP (placeholder - in real implementation, extract from request headers)
+    let client_ip = "127.0.0.1".to_string();
+    
     let connection_id = {
         let mut connections = state.connections.write().await;
         let id = connections.len();
@@ -89,7 +97,10 @@ async fn handle_websocket(socket: WebSocket, state: Arc<WebSocketState>) {
         id
     };
     
-    info!("WebSocket connection established: {}", connection_id);
+    // Add client to dashboard
+    state.dashboard.add_client(connection_id, client_ip.clone()).await;
+    
+    info!("🔌 Client #{:02} connected from {}", connection_id, client_ip);
     
     let state_clone = state.clone();
     let send_task = tokio::spawn(async move {
@@ -114,7 +125,11 @@ async fn handle_websocket(socket: WebSocket, state: Arc<WebSocketState>) {
             let mut conn = conn_lock.write().await;
             if let Some(connection) = conn.as_mut() {
                 for (channel_id, batch) in batches {
-                    debug!("Sending batch for channel {}: {} bytes", channel_id, batch.len());
+                    let batch_len = batch.len() as u64;
+                    debug!("Sending batch for channel {}: {} bytes", channel_id, batch_len);
+                    
+                    // Update dashboard with sent message
+                    state_clone.dashboard.update_client_activity(connection_id, false, batch_len).await;
                     
                     if let Err(e) = connection.sender.send(Message::Binary(batch)).await {
                         error!("Failed to send batch: {}", e);
@@ -131,16 +146,22 @@ async fn handle_websocket(socket: WebSocket, state: Arc<WebSocketState>) {
     while let Some(msg) = receiver.next().await {
         match msg {
             Ok(Message::Binary(data)) => {
+                let data_len = data.len() as u64;
+                // Update dashboard with received message
+                state.dashboard.update_client_activity(connection_id, true, data_len).await;
+                
                 if let Err(e) = handle_message(Bytes::from(data), &state).await {
-                    error!("Error handling message: {}", e);
+                    let error_msg = format!("Error handling message: {}", e);
+                    error!("❌ Client #{:02} - {}", connection_id, error_msg);
+                    state.dashboard.log_error(error_msg, Some(connection_id)).await;
                 }
             }
             Ok(Message::Close(_)) => {
-                info!("WebSocket connection {} closing", connection_id);
+                info!("🔻 Client #{:02} disconnecting", connection_id);
                 break;
             }
             Err(e) => {
-                error!("WebSocket error: {}", e);
+                error!("❌ Client #{:02} - WebSocket error: {}", connection_id, e);
                 break;
             }
             _ => {}
@@ -149,12 +170,15 @@ async fn handle_websocket(socket: WebSocket, state: Arc<WebSocketState>) {
     
     send_task.abort();
     
+    // Mark client as disconnected in dashboard
+    state.dashboard.remove_client(connection_id).await;
+    
     let connections = state.connections.write().await;
     if connection_id < connections.len() {
         *connections[connection_id].write().await = None;
     }
     
-    info!("WebSocket connection {} closed", connection_id);
+    info!("❌ Client #{:02} disconnected", connection_id);
 }
 
 async fn handle_message(data: Bytes, state: &WebSocketState) -> anyhow::Result<()> {

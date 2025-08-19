@@ -328,9 +328,36 @@ impl NetworkingSystem {
         
         let ws_state = Arc::new(WebSocketState::new());
         
+        // Initialize dashboard logging
+        if let Err(e) = ws_state.dashboard.init_log_file().await {
+            tracing::warn!("Failed to initialize log file: {}", e);
+        }
+        
+        // Start dashboard render loop
+        ws_state.dashboard.clone().start_render_loop().await;
+        
         // Create MCP server
         let mcp_server = McpServer::new();
         let mcp_router = mcp_server.router();
+        
+        let addr = SocketAddr::from(([127, 0, 0, 1], 8080));
+        
+        // Log to dashboard instead of console
+        ws_state.dashboard.log(
+            playground_core_server::dashboard::LogLevel::Info,
+            format!("Core server listening on {}", addr),
+            None
+        ).await;
+        ws_state.dashboard.log(
+            playground_core_server::dashboard::LogLevel::Info,
+            format!("WebSocket endpoint: ws://localhost:8080/ws"),
+            None
+        ).await;
+        ws_state.dashboard.log(
+            playground_core_server::dashboard::LogLevel::Info,
+            format!("MCP endpoint: http://localhost:8080/mcp"),
+            None
+        ).await;
         
         let app = Router::new()
             .route("/", get(root))
@@ -342,11 +369,6 @@ impl NetworkingSystem {
             .layer(CorsLayer::permissive())
             .layer(TraceLayer::new_for_http())
             .with_state(ws_state);
-        
-        let addr = SocketAddr::from(([127, 0, 0, 1], 8080));
-        tracing::info!("Core server listening on {}", addr);
-        tracing::info!("WebSocket endpoint: ws://localhost:8080/ws");
-        tracing::info!("MCP endpoint: http://localhost:8080/mcp");
         
         let listener = tokio::net::TcpListener::bind(addr).await?;
         axum::serve(listener, app).await?;

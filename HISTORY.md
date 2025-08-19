@@ -2,6 +2,31 @@
 
 This file tracks the detailed history of development sessions, including achievements, bug fixes, and implementation progress.
 
+## Session: 2025-08-19 - Major Architecture Refactoring, Async Overhaul & Dashboard
+
+### Evening: WebSocket Fixes & Terminal Dashboard
+1. **Fixed Browser WebSocket Connection**
+   - Removed channel registration (browser is client, not system)
+   - Fixed byte order mismatch (little-endian to big-endian)
+   - Added 100ms delay to avoid race condition
+   - Browser now connects cleanly without errors
+
+2. **Terminal Dashboard Implementation**
+   - Created comprehensive monitoring dashboard in core/server
+   - Shows real-time client connections with status emojis
+   - Displays server stats, MCP sessions, recent activity
+   - File logging for verbose output (logs directory)
+   - Dashboard updates every second
+   - Replaces scrolling logs with organized display
+
+3. **Dashboard Features**:
+   - Client tracking (connected/idle/disconnected)
+   - Message and byte counters per client
+   - Recent activity log (last 10 entries)
+   - MCP session monitoring
+   - Color-coded log levels
+   - Automatic log file creation with timestamps
+
 ## Session: 2025-08-19 - Major Architecture Refactoring & Async Overhaul
 
 ### Morning: Architecture Refactoring

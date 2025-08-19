@@ -11,10 +11,11 @@ use playground_systems_logic::{World, SystemsManager};
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    // Initialize tracing
+    // Initialize tracing temporarily for startup
     tracing_subscriber::fmt()
         .with_target(false)
-        .with_thread_ids(true)
+        .with_thread_ids(false)
+        .compact()
         .init();
     
     info!("===========================================");
@@ -65,21 +66,8 @@ async fn main() -> Result<()> {
     
     // Note: The IDE interface is served by core/server at /playground-editor/
     
-    info!("=========================================");
-    info!("Conversational IDE is running!");
-    info!("");
-    info!("Open your browser to: http://localhost:8080/playground-editor/");
-    info!("");
-    info!("Architecture:");
-    info!("  playground-editor (App)");
-    info!("      ↓ creates systems/logic World");
-    info!("      ↓ creates SystemsManager");
-    info!("      ↓ SystemsManager initializes all systems");
-    info!("      ↓ NetworkingSystem starts core/server internally");
-    info!("      ↓ Plugins register as Systems in World");
-    info!("");
-    info!("Everything is running in this single process.");
-    info!("=========================================");
+    // Dashboard will show all status - just wait 100ms for it to start
+    tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
     
     // Keep the application running
     tokio::signal::ctrl_c().await?;

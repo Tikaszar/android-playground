@@ -343,6 +343,39 @@ let guard = lock.read().await; // or write().await
 - Heat generation affects performance
 - Better user experience
 
+## Dashboard & Monitoring Decisions
+
+### Terminal Dashboard over Web UI
+**Decision**: Real-time terminal dashboard instead of web-based monitoring
+
+**Why**:
+- Immediate visibility without browser
+- Lower resource overhead
+- Better for mobile development
+- Clean, organized display
+- Works in Termux natively
+
+**Implementation**:
+- ANSI color codes for formatting
+- Emoji status indicators
+- 1-second refresh rate
+- Fits on single screen
+
+### Dual Logging Strategy
+**Decision**: Dashboard display + file logging
+
+**Why**:
+- Dashboard shows current state
+- Files preserve full history
+- Debugging needs verbose logs
+- Dashboard stays clean and focused
+
+**Implementation**:
+- Recent logs in dashboard (last 10)
+- Full logs to timestamped files
+- logs/ directory for organization
+- Automatic file rotation by session
+
 ## Future Architectural Decisions (Planned)
 
 ### APK Packaging
