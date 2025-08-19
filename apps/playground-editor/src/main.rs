@@ -3,12 +3,7 @@
 // mod layout;
 
 use anyhow::Result;
-use axum::Router;
-use std::net::SocketAddr;
 use std::sync::Arc;
-use tower_http::cors::CorsLayer;
-use tower_http::services::ServeDir;
-use tower_http::trace::TraceLayer;
 use tokio::sync::RwLock;
 use tracing::info;
 
@@ -61,28 +56,13 @@ async fn main() -> Result<()> {
     let ecs = Arc::new(RwLock::new(ecs));
     let systems = systems.clone();
     
-    // Start the web server for the IDE interface
-    tokio::spawn(async move {
-        // Serve static files for the Conversational IDE interface
-        let static_dir = "apps/playground-editor/static";
-        info!("Serving Conversational IDE interface from: {}", static_dir);
-        
-        let app = Router::new()
-            .nest_service("/", ServeDir::new(static_dir))
-            .layer(CorsLayer::permissive())
-            .layer(TraceLayer::new_for_http());
-        
-        let addr = SocketAddr::from(([127, 0, 0, 1], 3001));
-        info!("Web interface starting on: http://localhost:3001");
-        
-        let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
-        axum::serve(listener, app).await.unwrap();
-    });
+    // Note: The IDE interface is served by core/server at /playground-editor/
+    // No need for a separate web server here - that violates the architecture
     
     info!("=========================================");
     info!("Conversational IDE is running!");
     info!("");
-    info!("Open your browser to: http://localhost:3001");
+    info!("Open your browser to: http://localhost:8080/playground-editor/");
     info!("");
     info!("Architecture:");
     info!("  playground-editor (App)");
@@ -107,7 +87,11 @@ async fn run_core_server() -> Result<()> {
     use playground_server::mcp::McpServer;
     use playground_server::websocket::websocket_handler;
     use playground_server::handlers::{list_plugins, reload_plugin, root};
-    use axum::routing::{get, post};
+    use axum::{Router, routing::{get, post}};
+    use std::net::SocketAddr;
+    use tower_http::cors::CorsLayer;
+    use tower_http::services::ServeDir;
+    use tower_http::trace::TraceLayer;
     
     let ws_state = Arc::new(WebSocketState::new());
     
@@ -120,6 +104,7 @@ async fn run_core_server() -> Result<()> {
         .route("/ws", get(websocket_handler))
         .route("/api/plugins", get(list_plugins))
         .route("/api/reload", post(reload_plugin))
+        .nest_service("/playground-editor", ServeDir::new("apps/playground-editor/static"))
         .nest("/mcp", mcp_router)
         .layer(CorsLayer::permissive())
         .layer(TraceLayer::new_for_http())
@@ -129,6 +114,7 @@ async fn run_core_server() -> Result<()> {
     tracing::info!("Core server listening on {}", addr);
     tracing::info!("WebSocket endpoint: ws://localhost:8080/ws");
     tracing::info!("MCP endpoint: http://localhost:8080/mcp");
+    tracing::info!("Playground Editor: http://localhost:8080/playground-editor/");
     
     let listener = tokio::net::TcpListener::bind(addr).await?;
     axum::serve(listener, app).await?;

@@ -36,21 +36,21 @@ cargo build -p playground-rendering --features webgl
 
 ### Running the Conversational IDE
 
-The Conversational IDE (playground-editor) is a Discord-style chat interface for interacting with AI agents:
+The Conversational IDE (playground-editor) is a mobile-first Discord-style chat interface for interacting with AI agents:
 
 ```bash
 # Just run this single command:
 cargo run -p playground-editor
 
 # Then open your browser to:
-http://localhost:3001
+http://localhost:8080/playground-editor/
 ```
 
 This single command starts everything:
-- Core server (WebSocket on port 8080)
-- All engine systems (networking, ui, rendering)
-- Web interface (on port 3001)
-- MCP endpoint for AI agents
+- Core server with WebSocket and static file serving on port 8080
+- All engine systems (networking, ui, rendering) via systems/logic
+- UI Framework Plugin handling all mobile UI rendering
+- MCP endpoint for AI agents at `/mcp`
 
 ### Connecting AI Agents (Claude Code, GPT, etc.)
 

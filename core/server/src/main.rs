@@ -36,6 +36,7 @@ async fn main() -> anyhow::Result<()> {
         .route("/api/plugins", get(list_plugins))
         .route("/api/reload", post(reload_plugin))
         .nest_service("/test", ServeDir::new("."))
+        .nest_service("/playground-editor", ServeDir::new("apps/playground-editor/static"))
         .nest("/mcp", mcp_router)  // Mount MCP endpoints under /mcp
         .layer(CorsLayer::permissive())
         .layer(TraceLayer::new_for_http())
@@ -45,6 +46,7 @@ async fn main() -> anyhow::Result<()> {
     tracing::info!("Server listening on {}", addr);
     tracing::info!("WebSocket endpoint: ws://localhost:8080/ws");
     tracing::info!("MCP endpoint: http://localhost:8080/mcp");
+    tracing::info!("Playground Editor: http://localhost:8080/playground-editor/");
     tracing::info!("Connect LLMs with: --mcp http://localhost:8080/mcp");
     
     let listener = tokio::net::TcpListener::bind(addr).await?;

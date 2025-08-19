@@ -517,19 +517,19 @@ The MCP server provides UI-focused tools that LLMs call to update the browser:
 
 ### Usage
 
-1. **Start the server**:
+1. **Start the Playground Editor**:
    ```bash
-   cargo run -p playground-server  # Runs on port 8080
+   cargo run -p playground-editor  # Starts everything on port 8080
    ```
 
-2. **LLMs connect via settings.json**:
-   - Claude Code: `.claude/settings.json`
-   - Gemini: `.gemini/settings.json`
-   - Uses mcp-bridge.js to communicate
+2. **Access the Mobile-First IDE**:
+   - Open browser to `http://localhost:8080/playground-editor/`
+   - Mobile-optimized with touch gestures and safe areas
+   - UI Framework Plugin handles all rendering
 
-3. **Use the Conversational IDE**:
-   - Open browser to `http://localhost:8080/test/ide.html`
-   - Type requests in the chat interface
+3. **LLMs connect via MCP**:
+   - Claude Code: `.claude/settings.json`
+   - Connect to `http://localhost:8080/mcp`
    - LLM processes requests and updates UI via MCP tools
 
 ### Multi-Agent Orchestration System
@@ -570,13 +570,14 @@ The Conversational IDE is the primary interface for interacting with the Android
 # Just run this single command:
 cargo run -p playground-editor
 
-# Browser: Open http://localhost:3001
+# Browser: Open http://localhost:8080/playground-editor/
 ```
 
 This starts everything internally:
-- Core server with WebSocket and MCP
+- Core server with WebSocket and MCP on port 8080
 - All engine systems via systems/logic
-- Web interface on port 3001
+- UI Framework Plugin handling all rendering
+- Mobile-first interface with touch support
 
 ### Architecture
 - **apps/playground-editor**: The Conversational IDE application

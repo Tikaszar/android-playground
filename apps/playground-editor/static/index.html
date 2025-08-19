@@ -2,117 +2,130 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Conversational IDE</title>
-    <link rel="stylesheet" href="styles.css">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <title>Playground Editor - Android Playground</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        :root {
+            --safe-area-top: env(safe-area-inset-top);
+            --safe-area-bottom: env(safe-area-inset-bottom);
+            --safe-area-left: env(safe-area-inset-left);
+            --safe-area-right: env(safe-area-inset-right);
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+            background: #1a1a1a;
+            color: #e0e0e0;
+            height: 100vh;
+            height: -webkit-fill-available;
+            overflow: hidden;
+            touch-action: none;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        #app {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            padding-top: var(--safe-area-top);
+            padding-bottom: var(--safe-area-bottom);
+            padding-left: var(--safe-area-left);
+            padding-right: var(--safe-area-right);
+        }
+
+        #canvas {
+            flex: 1;
+            width: 100%;
+            touch-action: none;
+        }
+
+        .loading {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            font-size: 18px;
+            color: #888;
+        }
+
+        .loading-spinner {
+            width: 40px;
+            height: 40px;
+            margin: 20px auto;
+            border: 4px solid #333;
+            border-top-color: #5865f2;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .error {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: #2a2a2a;
+            padding: 20px;
+            border-radius: 12px;
+            max-width: 90%;
+            text-align: center;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+        }
+
+        .error h2 {
+            color: #ff5555;
+            margin-bottom: 10px;
+        }
+
+        .reconnect-btn {
+            margin-top: 15px;
+            padding: 12px 24px;
+            background: #5865f2;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            cursor: pointer;
+            touch-action: manipulation;
+        }
+
+        .reconnect-btn:active {
+            background: #4752c4;
+        }
+
+        /* Hide everything until UI Framework loads */
+        .ui-ready #loading { display: none; }
+        .ui-ready #canvas { display: block; }
+    </style>
 </head>
 <body>
     <div id="app">
-        <!-- Top Bar -->
-        <header class="top-bar">
-            <div class="logo">Conversational IDE</div>
-            <div class="status">
-                <span id="connection-status" class="status-indicator disconnected"></span>
-                <span id="connection-text">Disconnected</span>
-            </div>
-        </header>
+        <div id="loading" class="loading">
+            <div class="loading-spinner"></div>
+            <div>Connecting to UI Framework...</div>
+        </div>
 
-        <!-- Main Layout -->
-        <div class="main-layout">
-            <!-- Left Sidebar - Channels & Users -->
-            <aside class="sidebar left">
-                <div class="section">
-                    <h3>Channels</h3>
-                    <div id="channel-list" class="channel-list">
-                        <div class="channel active" data-channel="general">
-                            <span class="channel-icon">#</span>
-                            <span class="channel-name">general</span>
-                        </div>
-                        <div class="channel" data-channel="code-review">
-                            <span class="channel-icon">#</span>
-                            <span class="channel-name">code-review</span>
-                        </div>
-                        <div class="channel" data-channel="debugging">
-                            <span class="channel-icon">#</span>
-                            <span class="channel-name">debugging</span>
-                        </div>
-                    </div>
-                </div>
-                
-                <div class="section">
-                    <h3>Direct Messages</h3>
-                    <div id="dm-list" class="dm-list">
-                        <div class="dm" data-agent="claude">
-                            <span class="agent-status online"></span>
-                            <span class="agent-name">Claude Code</span>
-                        </div>
-                        <div class="dm" data-agent="orchestrator">
-                            <span class="agent-status idle"></span>
-                            <span class="agent-name">Orchestrator</span>
-                        </div>
-                    </div>
-                </div>
+        <canvas id="canvas" style="display: none;"></canvas>
 
-                <div class="section">
-                    <h3>Agents</h3>
-                    <div id="agent-list" class="agent-list">
-                        <!-- Dynamically populated -->
-                    </div>
-                </div>
-            </aside>
-
-            <!-- Center - Chat View -->
-            <main class="chat-container">
-                <!-- Channel Header -->
-                <div class="channel-header">
-                    <h2 id="current-channel"># general</h2>
-                    <div class="channel-actions">
-                        <button id="expand-all" title="Expand All">⬇</button>
-                        <button id="compress-all" title="Compress All">⬆</button>
-                        <button id="collapse-all" title="Collapse All">━</button>
-                    </div>
-                </div>
-
-                <!-- Messages -->
-                <div id="messages" class="messages">
-                    <!-- Messages will be added here dynamically -->
-                </div>
-
-                <!-- Input Area -->
-                <div class="input-area">
-                    <textarea 
-                        id="message-input" 
-                        placeholder="Type a message or request..."
-                        rows="3"
-                    ></textarea>
-                    <button id="send-button" class="send-button">Send</button>
-                </div>
-            </main>
-
-            <!-- Right Sidebar - IDE Tools -->
-            <aside class="sidebar right">
-                <div class="section">
-                    <h3>Active Files</h3>
-                    <div id="active-files" class="file-list">
-                        <!-- Dynamically populated -->
-                    </div>
-                </div>
-                
-                <div class="section">
-                    <h3>Tasks</h3>
-                    <div id="task-queue" class="task-list">
-                        <!-- Dynamically populated -->
-                    </div>
-                </div>
-
-                <div class="section">
-                    <h3>Terminal</h3>
-                    <div id="quick-terminal" class="quick-terminal">
-                        <div class="terminal-output"></div>
-                        <input type="text" class="terminal-input" placeholder="$">
-                    </div>
-                </div>
-            </aside>
+        <div id="error" class="error" style="display: none;">
+            <h2>Connection Lost</h2>
+            <p>Unable to connect to the UI Framework Plugin</p>
+            <button class="reconnect-btn" onclick="reconnect()">Reconnect</button>
         </div>
     </div>
 
