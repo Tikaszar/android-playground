@@ -4,8 +4,8 @@ use crate::{
     ConnectionComponent, ChannelComponent, PacketQueueComponent, NetworkStatsComponent,
     NetworkStats,
 };
-use playground_core::ecs::{World, EntityId};
-use playground_types::{ChannelId, Priority};
+use playground_core_ecs::{World, EntityId};
+use playground_core_types::{ChannelId, Priority};
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
@@ -126,22 +126,15 @@ impl NetworkingSystem {
     ) -> NetworkResult<()> {
         // Send directly through WebSocket if connected
         if let Some(ws) = &self.ws_client {
-            use playground_server::packet::Packet;
+            use playground_core_server::Packet;
             use bytes::Bytes;
             
-            // Convert Priority type
-            let server_priority = match priority {
-                Priority::Low => playground_server::Priority::Low,
-                Priority::Medium => playground_server::Priority::Medium,
-                Priority::High => playground_server::Priority::High,
-                Priority::Critical => playground_server::Priority::Critical,
-                Priority::Blocker => playground_server::Priority::Blocker,
-            };
+            // Priority types are the same now (both from core/types)
             
             let packet = Packet {
                 channel_id: channel,
                 packet_type,
-                priority: server_priority,
+                priority,  // Now both are the same Priority type from core/types
                 payload: Bytes::from(data.clone()),
             };
             
@@ -207,7 +200,7 @@ impl NetworkingSystem {
         };
         
         // Spawn entity with the component
-        let components: Vec<Box<dyn playground_core::ecs::Component>> = vec![
+        let components: Vec<Box<dyn playground_core_ecs::Component>> = vec![
             Box::new(connection),
         ];
         

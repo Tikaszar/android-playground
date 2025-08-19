@@ -1,5 +1,5 @@
 [package]
-name = "playground-ui-framework"
+name = "playground-systems-ui-framework"
 version = "0.1.0"
 edition = "2021"
 
@@ -7,12 +7,12 @@ edition = "2021"
 crate-type = ["dylib", "rlib"]
 
 [dependencies]
-playground-plugin = { path = "../../core/plugin" }
-playground-types = { path = "../../core/types" }
-playground-ui = { path = "../../systems/ui" }
-playground-logic = { path = "../../systems/logic" }
-playground-networking = { path = "../../systems/networking" }
-playground-rendering = { path = "../../systems/rendering" }
+playground-core-plugin = { path = "../../core/plugin" }
+playground-core-types = { path = "../../core/types" }
+playground-systems-ui = { path = "../../systems/ui" }
+playground-systems-logic = { path = "../../systems/logic" }
+playground-systems-networking = { path = "../../systems/networking" }
+playground-systems-rendering = { path = "../../systems/rendering" }
 
 anyhow = "1.0"
 async-trait = "0.1"

@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use playground_ui::input::Key;
+use playground_systems_ui::input::Key;
 
 /// Vim commands that can be executed
 #[derive(Debug, Clone, PartialEq)]

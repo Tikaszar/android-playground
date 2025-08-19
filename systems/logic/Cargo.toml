@@ -1,19 +1,19 @@
 [package]
-name = "playground-logic"
+name = "playground-systems-logic"
 version.workspace = true
 authors.workspace = true
 edition.workspace = true
 license.workspace = true
 
 [dependencies]
-playground-types = { path = "../../core/types" }
-playground-ecs = { path = "../../core/ecs" }
+playground-core-types = { path = "../../core/types" }
+playground-core-ecs = { path = "../../core/ecs" }
 
 # Other systems to initialize
-playground-networking = { path = "../networking" }
-playground-ui = { path = "../ui" }
-# playground-rendering = { path = "../rendering", features = ["webgl"] } # Browser-side only
-# playground-physics = { path = "../physics" } # Not yet implemented
+playground-systems-networking = { path = "../networking" }
+playground-systems-ui = { path = "../ui" }
+# playground-systems-rendering = { path = "../rendering", features = ["webgl"] } # Browser-side only
+# playground-systems-physics = { path = "../physics" } # Not yet implemented
 serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }

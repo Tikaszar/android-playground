@@ -1,4 +1,4 @@
-use playground_ui::layout::docking::{DockingLayout, DockNode, DockOrientation, TabInfo};
+use playground_systems_ui::layout::docking::{DockingLayout, DockNode, DockOrientation, TabInfo};
 use uuid::Uuid;
 
 /// IDE layout configuration

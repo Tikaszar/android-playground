@@ -46,7 +46,7 @@ pub enum LogicError {
     SerializationError(String),
     
     #[error("Core ECS error: {0}")]
-    CoreError(#[from] playground_ecs::EcsError),
+    CoreError(#[from] playground_core_ecs::EcsError),
     
     #[error("Initialization failed: {0}")]
     InitializationFailed(String),

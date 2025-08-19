@@ -1,12 +1,12 @@
-use playground_plugin::Plugin;
-use playground_types::{
+use playground_core_plugin::Plugin;
+use playground_core_types::{
     PluginMetadata, PluginId, Version, Event,
     context::Context,
     render_context::RenderContext,
     error::PluginError,
 };
-use playground_networking::NetworkingSystem;
-use playground_ui::ElementGraph;
+use playground_systems_networking::NetworkingSystem;
+use playground_systems_ui::ElementGraph;
 use std::path::PathBuf;
 use tokio::sync::mpsc;
 use tracing::{info, error, debug, warn};

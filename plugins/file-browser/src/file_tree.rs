@@ -1,4 +1,4 @@
-use playground_ui::{
+use playground_systems_ui::{
     element::{Element, ElementId, ElementBounds},
     input::{InputEvent, InputResult, EventHandled, PointerButton},
     layout::{LayoutConstraints, LayoutResult},

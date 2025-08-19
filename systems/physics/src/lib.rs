@@ -2,7 +2,7 @@
 //! 
 //! This crate provides physics simulation functionality for the playground system.
 
-use playground_types::*;
+use playground_core_types::*;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use thiserror::Error;

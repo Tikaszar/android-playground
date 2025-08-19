@@ -1,21 +1,21 @@
 [package]
-name = "playground-server"
+name = "playground-core-server"
 version.workspace = true
 authors.workspace = true
 edition.workspace = true
 license.workspace = true
 
 [lib]
-name = "playground_server"
+name = "playground_core_server"
 path = "src/lib.rs"
 
 [[bin]]
-name = "playground-server"
+name = "playground-core-server"
 path = "src/main.rs"
 
 [dependencies]
-playground-types = { path = "../../core/types" }
-playground-plugin = { path = "../../core/plugin" }
+playground-core-types = { path = "../../core/types" }
+playground-core-plugin = { path = "../../core/plugin" }
 axum = { workspace = true, features = ["ws", "macros"] }
 tower = { workspace = true }
 tower-http = { workspace = true, features = ["fs", "cors", "trace"] }

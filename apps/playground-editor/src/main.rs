@@ -7,7 +7,7 @@ use std::sync::Arc;
 use tokio::sync::RwLock;
 use tracing::info;
 
-use playground_logic::ECS;
+use playground_systems_logic::ECS;
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -58,10 +58,10 @@ async fn main() -> Result<()> {
     
     // Load and start the UI Framework Plugin
     info!("Loading UI Framework Plugin...");
-    use playground_ui_framework::UiFrameworkPlugin;
-    use playground_plugin::Plugin;
-    use playground_types::context::Context;
-    use playground_types::render_context::RenderContext;
+    use playground_systems_ui_framework::UiFrameworkPlugin;
+    use playground_core_plugin::Plugin;
+    use playground_core_types::context::Context;
+    use playground_core_types::render_context::RenderContext;
     
     let mut ui_plugin = UiFrameworkPlugin::new();
     
@@ -132,7 +132,7 @@ async fn main() -> Result<()> {
 
 // Run the core server internally
 async fn run_core_server() -> Result<()> {
-    use playground_server::{
+    use playground_core_server::{
         McpServer, WebSocketState, websocket_handler,
         list_plugins, reload_plugin, root
     };

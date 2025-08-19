@@ -1,5 +1,5 @@
-use playground_plugin::Plugin;
-use playground_types::{
+use playground_core_plugin::Plugin;
+use playground_core_types::{
     PluginMetadata, PluginId, Version, Event,
     context::Context,
     render_context::RenderContext,

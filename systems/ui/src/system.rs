@@ -13,11 +13,9 @@ use crate::messages::{
     TerminalStateMessage, RenderBatchMessage, serialize_message, deserialize_message,
 };
 use nalgebra::{Vector2, Vector4};
-use playground_ecs::{World, EntityId, ComponentRegistry};
-use playground_rendering::BaseRenderer;
-use playground_server::channel::ChannelManager;
-use playground_server::packet::{Packet, Priority};
-use playground_server::batcher::FrameBatcher;
+use playground_core_ecs::{World, EntityId, ComponentRegistry};
+use playground_systems_rendering::BaseRenderer;
+use playground_core_server::{ChannelManager, Packet, Priority, FrameBatcher};
 use bytes::Bytes;
 use std::sync::Arc;
 use std::collections::HashMap;
@@ -178,9 +176,9 @@ impl UiSystem {
         
         let entities = self.world.spawn_batch(vec![
             vec![
-                Box::new(root_element) as Box<dyn playground_ecs::Component>,
-                Box::new(root_layout) as Box<dyn playground_ecs::Component>,
-                Box::new(root_style) as Box<dyn playground_ecs::Component>,
+                Box::new(root_element) as Box<dyn playground_core_ecs::Component>,
+                Box::new(root_layout) as Box<dyn playground_core_ecs::Component>,
+                Box::new(root_style) as Box<dyn playground_core_ecs::Component>,
             ],
         ]).await
             .map_err(|e| UiError::InitializationFailed(format!("Failed to create root entity: {}", e)))?;
@@ -269,10 +267,10 @@ impl UiSystem {
         
         let entities = self.world.spawn_batch(vec![
             vec![
-                Box::new(element) as Box<dyn playground_ecs::Component>,
-                Box::new(layout) as Box<dyn playground_ecs::Component>,
-                Box::new(style) as Box<dyn playground_ecs::Component>,
-                Box::new(dirty) as Box<dyn playground_ecs::Component>,
+                Box::new(element) as Box<dyn playground_core_ecs::Component>,
+                Box::new(layout) as Box<dyn playground_core_ecs::Component>,
+                Box::new(style) as Box<dyn playground_core_ecs::Component>,
+                Box::new(dirty) as Box<dyn playground_core_ecs::Component>,
             ],
         ]).await
             .map_err(|e| UiError::Other(format!("Failed to create element: {}", e)))?;
@@ -353,7 +351,7 @@ impl UiSystem {
     }
     
     /// Get memory statistics from the ECS
-    pub async fn memory_stats(&self) -> UiResult<playground_ecs::MemoryStats> {
+    pub async fn memory_stats(&self) -> UiResult<playground_core_ecs::MemoryStats> {
         let stats = self.world.memory_stats().await;
         Ok(stats)
     }

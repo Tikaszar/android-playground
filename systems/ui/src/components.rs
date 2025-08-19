@@ -3,7 +3,7 @@
 use async_trait::async_trait;
 use bytes::{Bytes, BytesMut, BufMut};
 use nalgebra::{Vector2, Vector4};
-use playground_ecs::{Component, ComponentId, EcsResult, EcsError};
+use playground_core_ecs::{Component, ComponentId, EcsResult, EcsError};
 use std::collections::HashMap;
 use uuid::Uuid;
 use crate::element::ElementBounds;
@@ -17,8 +17,8 @@ pub struct UiElementComponent {
     pub name: String,
     pub tag: String,
     pub bounds: ElementBounds,
-    pub children: Vec<playground_ecs::EntityId>,
-    pub parent: Option<playground_ecs::EntityId>,
+    pub children: Vec<playground_core_ecs::EntityId>,
+    pub parent: Option<playground_core_ecs::EntityId>,
     pub visible: bool,
     pub interactive: bool,
     pub z_index: i32,

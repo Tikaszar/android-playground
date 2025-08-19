@@ -1,5 +1,5 @@
 [package]
-name = "playground-ui"
+name = "playground-systems-ui"
 version.workspace = true
 authors.workspace = true
 edition.workspace = true
@@ -7,10 +7,10 @@ license.workspace = true
 
 [dependencies]
 # Core dependencies
-playground-types = { path = "../../core/types" }
-playground-server = { path = "../../core/server" }
-playground-ecs = { path = "../../core/ecs" }
-playground-rendering = { path = "../rendering" }
+playground-core-types = { path = "../../core/types" }
+playground-core-server = { path = "../../core/server" }
+playground-core-ecs = { path = "../../core/ecs" }
+playground-systems-rendering = { path = "../rendering" }
 
 # Async runtime
 tokio = { workspace = true }

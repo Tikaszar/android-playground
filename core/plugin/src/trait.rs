@@ -1,10 +1,10 @@
 #![allow(improper_ctypes_definitions)]
 
-use playground_types::context::Context;
-use playground_types::error::PluginError;
-use playground_types::event::Event;
-use playground_types::plugin_metadata::PluginMetadata;
-use playground_types::render_context::RenderContext;
+use playground_core_types::context::Context;
+use playground_core_types::error::PluginError;
+use playground_core_types::event::Event;
+use playground_core_types::plugin_metadata::PluginMetadata;
+use playground_core_types::render_context::RenderContext;
 use async_trait::async_trait;
 
 #[async_trait]

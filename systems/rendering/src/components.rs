@@ -5,7 +5,7 @@
 
 use async_trait::async_trait;
 use bytes::{Bytes, BytesMut, BufMut};
-use playground_ecs::{Component, ComponentId, EcsResult, EcsError};
+use playground_core_ecs::{Component, ComponentId, EcsResult, EcsError};
 use std::collections::HashSet;
 use std::path::PathBuf;
 

@@ -1,12 +1,12 @@
 [package]
-name = "playground-android"
+name = "playground-core-android"
 version.workspace = true
 authors.workspace = true
 edition.workspace = true
 license.workspace = true
 
 [dependencies]
-playground-types = { path = "../types" }
+playground-core-types = { path = "../types" }
 jni = { workspace = true }
 anyhow = { workspace = true }
 tracing = { workspace = true }

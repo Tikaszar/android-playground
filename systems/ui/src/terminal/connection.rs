@@ -6,7 +6,7 @@ use crate::messages::{
     TerminalStateMessage, UiPacketType, serialize_message,
 };
 use crate::system::UiSystem;
-use playground_server::packet::{Packet, Priority};
+use playground_core_server::{Packet, Priority};
 use bytes::Bytes;
 use std::sync::Arc;
 use tokio::sync::{RwLock, mpsc};

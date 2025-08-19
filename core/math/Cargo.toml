@@ -1,5 +1,5 @@
 [package]
-name = "playground-math"
+name = "playground-core-math"
 version.workspace = true
 authors.workspace = true
 edition.workspace = true

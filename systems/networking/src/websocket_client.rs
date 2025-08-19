@@ -1,7 +1,7 @@
 use crate::{NetworkError, NetworkResult};
 use bytes::{Bytes, BytesMut, BufMut};
 use futures_util::{SinkExt, StreamExt};
-use playground_server::packet::{Packet, Priority};
+use playground_core_server::{Packet, Priority};
 use std::sync::Arc;
 use tokio::sync::{mpsc, RwLock};
 use tokio_tungstenite::{connect_async, tungstenite::Message};

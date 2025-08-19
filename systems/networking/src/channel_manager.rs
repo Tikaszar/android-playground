@@ -1,7 +1,7 @@
 //! Channel management for dynamic registration with core/server
 
 use crate::{NetworkError, NetworkResult};
-use playground_types::ChannelId;
+use playground_core_types::ChannelId;
 use dashmap::DashMap;
 use std::sync::atomic::{AtomicU16, Ordering};
 

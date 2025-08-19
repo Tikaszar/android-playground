@@ -1,12 +1,12 @@
 [package]
-name = "playground-plugin"
+name = "playground-core-plugin"
 version.workspace = true
 authors.workspace = true
 edition.workspace = true
 license.workspace = true
 
 [dependencies]
-playground-types = { path = "../types" }
+playground-core-types = { path = "../types" }
 libloading = { workspace = true }
 anyhow = { workspace = true }
 tracing = { workspace = true }

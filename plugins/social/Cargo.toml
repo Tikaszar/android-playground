@@ -1,5 +1,5 @@
 [package]
-name = "social"
+name = "playground-core-plugins-social"
 version.workspace = true
 authors.workspace = true
 edition.workspace = true
@@ -10,13 +10,13 @@ crate-type = ["cdylib"]
 
 [dependencies]
 # Systems - Plugins use Systems APIs only (never Core directly)
-playground-ui = { path = "../../systems/ui" }
-playground-logic = { path = "../../systems/logic" }
-playground-networking = { path = "../../systems/networking" }
+playground-systems-ui = { path = "../../systems/ui" }
+playground-systems-logic = { path = "../../systems/logic" }
+playground-systems-networking = { path = "../../systems/networking" }
 
 # Plugin trait (required for all plugins)
-playground-plugin = { path = "../../core/plugin" }
-playground-types = { path = "../../core/types" }
+playground-core-plugin = { path = "../../core/plugin" }
+playground-core-types = { path = "../../core/types" }
 
 # Standard dependencies
 serde = { workspace = true }

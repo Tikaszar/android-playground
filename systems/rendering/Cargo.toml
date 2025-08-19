@@ -1,13 +1,13 @@
 [package]
-name = "playground-rendering"
+name = "playground-systems-rendering"
 version.workspace = true
 authors.workspace = true
 edition.workspace = true
 license.workspace = true
 
 [dependencies]
-playground-types = { path = "../../core/types" }
-playground-ecs = { path = "../../core/ecs" }
+playground-core-types = { path = "../../core/types" }
+playground-core-ecs = { path = "../../core/ecs" }
 bytes = { workspace = true }
 async-trait = { workspace = true }
 serde = { workspace = true, features = ["derive"] }

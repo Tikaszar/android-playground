@@ -1,6 +1,6 @@
 //! Common types for the networking system
 
-use playground_types::ChannelId;
+use playground_core_types::ChannelId;
 
 /// Incoming packet from network
 #[derive(Debug, Clone)]

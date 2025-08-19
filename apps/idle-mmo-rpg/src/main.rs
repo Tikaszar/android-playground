@@ -1,9 +1,9 @@
 use anyhow::Result;
 use dashmap::DashMap;
-use playground_logic::{World, System};
-use playground_plugin::{Plugin, PluginLoader};
-use playground_server::{ChannelManager, FrameBatcher};
-use playground_ui::UiSystem;
+use playground_systems_logic::{World, System};
+use playground_core_plugin::{Plugin, PluginLoader};
+use playground_core_server::{ChannelManager, FrameBatcher};
+use playground_systems_ui::UiSystem;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::sync::RwLock;

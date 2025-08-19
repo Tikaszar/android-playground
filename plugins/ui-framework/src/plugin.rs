@@ -1,13 +1,13 @@
 use async_trait::async_trait;
-use playground_plugin::Plugin;
-use playground_types::{
+use playground_core_plugin::Plugin;
+use playground_core_types::{
     PluginMetadata, PluginId, Version, Event,
     context::Context,
     render_context::RenderContext,
     error::PluginError,
     Priority,
 };
-use playground_networking::NetworkingSystem;
+use playground_systems_networking::NetworkingSystem;
 use tracing::{info, debug, error};
 use std::sync::Arc;
 use tokio::sync::RwLock;

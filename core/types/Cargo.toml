@@ -1,5 +1,5 @@
 [package]
-name = "playground-types"
+name = "playground-core-types"
 version.workspace = true
 authors.workspace = true
 edition.workspace = true

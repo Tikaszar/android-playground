@@ -1,29 +1,8 @@
 use bytes::{Bytes, BytesMut, BufMut, Buf};
 use std::convert::TryFrom;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub enum Priority {
-    Low = 0,
-    Medium = 1,
-    High = 2,
-    Critical = 3,
-    Blocker = 4,
-}
-
-impl TryFrom<u8> for Priority {
-    type Error = String;
-    
-    fn try_from(value: u8) -> Result<Self, Self::Error> {
-        match value {
-            0 => Ok(Priority::Low),
-            1 => Ok(Priority::Medium),
-            2 => Ok(Priority::High),
-            3 => Ok(Priority::Critical),
-            4 => Ok(Priority::Blocker),
-            _ => Err(format!("Invalid priority value: {}", value)),
-        }
-    }
-}
+// Re-export Priority from core/types
+pub use playground_core_types::Priority;
 
 #[derive(Debug, Clone)]
 pub struct Packet {

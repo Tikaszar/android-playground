@@ -1,8 +1,8 @@
 use crate::state::{EditorState, OpenFile, CursorPosition};
-use playground_plugin::Plugin;
-use playground_types::{PluginMetadata, PluginId, Version, Event, Context, PluginError, RenderContext};
-use playground_logic::World;
-use playground_ui::UiSystem;
+use playground_core_plugin::Plugin;
+use playground_core_types::{PluginMetadata, PluginId, Version, Event, Context, PluginError, RenderContext};
+use playground_systems_logic::World;
+use playground_systems_ui::UiSystem;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use tracing::info;

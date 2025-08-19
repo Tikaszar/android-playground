@@ -1,7 +1,7 @@
 //! Packet queue for frame-based batching
 
 use crate::{NetworkResult, IncomingPacket};
-use playground_types::{ChannelId, Priority};
+use playground_core_types::{ChannelId, Priority};
 use std::collections::{HashMap, BinaryHeap, VecDeque};
 use std::cmp::Ordering;
 use bytes::Bytes;

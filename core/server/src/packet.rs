@@ -1,29 +1,8 @@
 use bytes::{Bytes, BytesMut, BufMut, Buf};
 use anyhow::{Result, bail};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub enum Priority {
-    Low = 0,
-    Medium = 1,
-    High = 2,
-    Critical = 3,
-    Blocker = 4,
-}
-
-impl TryFrom<u8> for Priority {
-    type Error = anyhow::Error;
-    
-    fn try_from(value: u8) -> Result<Self> {
-        match value {
-            0 => Ok(Priority::Low),
-            1 => Ok(Priority::Medium),
-            2 => Ok(Priority::High),
-            3 => Ok(Priority::Critical),
-            4 => Ok(Priority::Blocker),
-            _ => bail!("Invalid priority value: {}", value),
-        }
-    }
-}
+// Re-export Priority from core/types
+pub use playground_core_types::Priority;
 
 #[derive(Debug, Clone)]
 pub struct Packet {
@@ -68,7 +47,8 @@ impl Packet {
         
         let channel_id = data.get_u16();
         let packet_type = data.get_u16();
-        let priority = Priority::try_from(data.get_u8())?;
+        let priority = Priority::try_from(data.get_u8())
+            .map_err(|e| anyhow::anyhow!(e))?;
         let payload_size = data.get_u32() as usize;
         
         if data.len() < payload_size {

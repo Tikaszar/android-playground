@@ -1,5 +1,5 @@
 use axum::Json;
-use playground_types::server::plugin::PluginInfo;
+use playground_core_types::server::plugin::PluginInfo;
 
 pub async fn root() -> &'static str {
     "Android Playground Server"

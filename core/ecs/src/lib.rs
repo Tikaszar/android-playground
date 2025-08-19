@@ -11,3 +11,6 @@ pub use storage::*;
 pub use world::*;
 pub use query::*;
 pub use error::*;
+
+// Convenience alias
+pub type Result<T> = EcsResult<T>;

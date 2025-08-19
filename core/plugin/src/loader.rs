@@ -2,8 +2,8 @@ use std::collections::HashMap;
 use std::ffi::OsStr;
 use std::path::Path;
 
-use playground_types::error::PluginError;
-use playground_types::plugin_metadata::PluginId;
+use playground_core_types::error::PluginError;
+use playground_core_types::plugin_metadata::PluginId;
 
 use crate::r#trait::{CreatePluginFn, Plugin};
 

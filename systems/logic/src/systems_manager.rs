@@ -3,10 +3,10 @@ use tokio::sync::RwLock;
 use crate::error::{LogicResult, LogicError};
 
 // Import other systems
-use playground_networking::NetworkingSystem;
-use playground_ui::UiSystem;
-// use playground_rendering::RenderingSystem; // Browser-side only
-// use playground_physics::PhysicsSystem; // Not yet implemented
+use playground_systems_networking::NetworkingSystem;
+use playground_systems_ui::UiSystem;
+// use playground_systems_rendering::RenderingSystem; // Browser-side only
+// use playground_systems_physics::PhysicsSystem; // Not yet implemented
 
 /// Manages all system instances for the engine
 pub struct SystemsManager {

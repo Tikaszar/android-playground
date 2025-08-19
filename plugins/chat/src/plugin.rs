@@ -1,5 +1,5 @@
-use playground_plugin::{Plugin, PluginContext};
-use playground_types::{PluginMetadata, Event};
+use playground_core_plugin::{Plugin, PluginContext};
+use playground_core_types::{PluginMetadata, Event};
 use uuid::Uuid;
 
 pub struct ChatPlugin {
