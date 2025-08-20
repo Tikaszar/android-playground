@@ -17,10 +17,12 @@ This file contains critical memory for Claude Code when working with this reposi
 
 ## #architecture-rules
 - Apps → Plugins → Systems → Core (STRICT LAYERING)
+- Apps are THE AUTHORITY - control flow, state, and timing
 - Apps create systems/logic which initializes ALL other systems
-- Plugins use Systems APIs from App (NEVER create systems)
-- Systems use Core APIs only (including core/ecs for internal state)
-- Plugins may implement custom Systems internally that use Core
+- Plugins provide reusable features using Systems APIs
+- Systems provide generic engine capabilities
+- Core provides foundation (server, ecs, types)
+- Plugins customize Systems for specific use cases (e.g., Discord UI)
 
 ## #package-naming
 - Core: `playground-core-*` (e.g., playground-core-ecs)
@@ -39,10 +41,11 @@ This file contains critical memory for Claude Code when working with this reposi
 None! All architecture violations fixed ✅
 
 ## #immediate-goals
-1. Test running application ✅ COMPILES!
-2. Verify MCP integration with Claude Code
-3. Test browser connection at http://localhost:8080/playground-editor/
-4. Implement actual UI Framework Plugin functionality
+1. Fix UI rendering (currently black screen)
+2. Fix client tracking in Dashboard (remove disconnected)
+3. Complete UiSystem render() pipeline
+4. Implement WebGL rendering in browser
+5. Get Discord-style UI working
 
 ## #architecture-fixed
 ✅ Plugins ARE Systems - no separate Plugin trait

@@ -2,9 +2,9 @@
 
 This file tracks the detailed history of development sessions, including achievements, bug fixes, and implementation progress.
 
-## Session: 2025-08-20 - Dashboard Unification
+## Session: 2025-08-20 - Dashboard Unification & UI Framework Planning
 
-### Completed
+### Morning: Dashboard Unification
 1. **Unified Dashboard System**
    - Removed LoggingSystem from systems layer completely
    - Dashboard now owned by core/server where it belongs
@@ -22,10 +22,37 @@ This file tracks the detailed history of development sessions, including achieve
    - No violations of 4-layer architecture
    - Dashboard lifecycle managed by server
 
+### Afternoon: UI Framework Investigation & Planning
+1. **Root Cause Analysis**
+   - Discovered UI Framework Plugin exists but doesn't render anything
+   - Browser shows black screen after WebSocket connection
+   - Dashboard doesn't remove disconnected clients (only changes status)
+   - No actual render command pipeline exists
+
+2. **Architecture Understanding Refined**
+   - **Apps are THE AUTHORITY** - playground-editor controls everything
+   - **Plugins provide features** - ui-framework customizes generic systems
+   - **Systems are generic** - ui, rendering, networking are engine capabilities
+   - UI Framework should USE systems/ui, not implement its own rendering
+
+3. **Rendering Architecture Clarified**
+   - Browser uses WebGL/WebGPU for rendering (future: Vulkan)
+   - Server sends render commands, NOT HTML/DOM
+   - UiSystem generates render commands
+   - NetworkingSystem transmits them
+   - Browser executes commands on canvas
+
+4. **Comprehensive Implementation Plan Created**
+   - Fix client tracking (temp vs verified lists)
+   - Complete UiSystem render() method
+   - UI Framework creates Discord UI via UiSystem
+   - Browser implements WebGL command execution
+   - Maintain clean architecture
+
 ### Issues & Debugging
 - Dashboard render loop may not display output
-- Added debug message "Dashboard: Starting render loop"
-- Possible issue with tokio spawn context and stdout
+- Black screen in browser needs render pipeline
+- Client list grows indefinitely (never removes disconnected)
 
 ## Session: 2025-08-19 - Major Architecture Refactoring, Async Overhaul & Dashboard
 

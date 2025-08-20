@@ -268,6 +268,32 @@ let guard = lock.read().await; // or write().await
 - Clean separation of concerns
 - Apps orchestrate, Systems execute
 
+### Apps as Authority
+**Decision**: Apps are the complete authority over state and flow
+
+**Why**:
+- Apps are complete products (games, IDEs)
+- Apps control plugin loading and timing
+- Apps can override plugin behavior when needed
+- Apps own the main update loop
+- Prevents plugins from conflicting
+
+**Example**: playground-editor app loads ui-framework plugin but maintains control over when systems run and can override plugin decisions
+
+### Plugins as Feature Providers
+**Decision**: Plugins provide reusable features using generic Systems
+
+**Why**:
+- Plugins customize generic systems for specific use cases
+- Example: UI Framework Plugin uses generic systems/ui to create Discord-style interface
+- Plugins are modular and reusable across different apps
+- Maintains clean separation between generic capabilities and specific features
+
+**Examples**:
+- Inventory Plugin: Item management using ECS
+- UI Framework Plugin: Discord chat using systems/ui
+- Combat Plugin: Battle mechanics using systems/logic
+
 ### Async System Methods
 **Decision**: All System lifecycle methods are async
 
