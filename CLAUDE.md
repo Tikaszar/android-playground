@@ -5,6 +5,7 @@ This file contains critical memory for Claude Code when working with this reposi
 ## #strict-rules
 - **NO unsafe code** - Never use `unsafe` blocks anywhere
 - **NO std::any::Any** - Avoid runtime type casting
+- **NO super** - Explicit trait implementations only
 - **NO turbofish** - Use `.with_component(ComponentId)` instead of `::<T>`
 - **NO TODOs** - Complete all implementations fully
 - **NO incomplete code** - Everything must compile and work
@@ -14,6 +15,8 @@ This file contains critical memory for Claude Code when working with this reposi
 - **Batch operations** - APIs operate on collections, not singles
 - **NO dangling imports** - Remove unused imports immediately
 - **Async propagates** - If a function uses .await, it must be async
+- **Files under 1000 lines** - Split large files into directories
+- **lib.rs/mod.rs exports only** - No implementation code in these files
 
 ## #architecture-rules
 - Apps → Plugins → Systems → Core (STRICT LAYERING)
@@ -31,17 +34,20 @@ This file contains critical memory for Claude Code when working with this reposi
 - Apps: `playground-apps-*` (e.g., playground-apps-editor)
 
 ## #ecs-rules
-- Systems use `core/ecs` for internal state
+- Systems use `core/ecs` for internal state management
 - Plugins/Apps use `systems/logic` for game logic
 - NO playground_ecs (doesn't exist)
 - Query API: `.with_component(ComponentId)` - NO TURBOFISH!
 - systems/logic is SPECIAL - initializes all other systems
+- Plugins ARE systems/logic Systems (NOT core/ecs) - implement systems/logic::System trait
 
 ## #current-violations
 None! All architecture violations fixed ✅
 
 ## #immediate-goals
-1. Fix UI rendering (currently black screen)
+1. Fix UI rendering (currently black screen) - IN PROGRESS
+   - core/rendering created ✅
+   - Need: systems/rendering updates, UiSystem render pipeline
 2. Fix client tracking in Dashboard (remove disconnected)
 3. Complete UiSystem render() pipeline
 4. Implement WebGL rendering in browser
