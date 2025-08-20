@@ -13,7 +13,7 @@ use std::collections::HashMap;
 use tokio::sync::RwLock;
 use futures_util::{StreamExt, SinkExt};
 use bytes::{Bytes, BytesMut, BufMut};
-use tracing::{info, error, debug};
+// Dashboard logging is used instead of tracing
 use tokio::time;
 use serde_json::Value;
 
@@ -52,10 +52,24 @@ impl WebSocketState {
         }
     }
     
+    pub fn new_with_dashboard(dashboard: Arc<Dashboard>) -> Self {
+        Self {
+            channel_manager: Arc::new(RwLock::new(ChannelManager::new())),
+            batcher: Arc::new(FrameBatcher::new(2000, 60)), // 60fps, support up to 2000 channels
+            connections: Arc::new(RwLock::new(Vec::new())),
+            mcp_tools: Arc::new(RwLock::new(HashMap::new())),
+            dashboard,
+        }
+    }
+    
     /// Register an MCP tool that can be called by LLMs
     pub async fn register_mcp_tool(&self, tool: McpTool) {
         let mut tools = self.mcp_tools.write().await;
-        info!("Registering MCP tool: {} (handler: channel {})", tool.name, tool.handler_channel);
+        self.dashboard.log(
+            crate::dashboard::LogLevel::Info,
+            format!("Registering MCP tool: {} (handler: channel {})", tool.name, tool.handler_channel),
+            None
+        ).await;
         tools.insert(tool.name.clone(), tool);
     }
     
@@ -63,7 +77,11 @@ impl WebSocketState {
     pub async fn unregister_mcp_tool(&self, name: &str) {
         let mut tools = self.mcp_tools.write().await;
         if tools.remove(name).is_some() {
-            info!("Unregistered MCP tool: {}", name);
+            self.dashboard.log(
+                crate::dashboard::LogLevel::Info,
+                format!("Unregistered MCP tool: {}", name),
+                None
+            ).await;
         }
     }
     
@@ -100,7 +118,7 @@ async fn handle_websocket(socket: WebSocket, state: Arc<WebSocketState>) {
     // Add client to dashboard
     state.dashboard.add_client(connection_id, client_ip.clone()).await;
     
-    info!("🔌 Client #{:02} connected from {}", connection_id, client_ip);
+    // Connection logging handled by dashboard.add_client
     
     let state_clone = state.clone();
     let send_task = tokio::spawn(async move {
@@ -126,13 +144,13 @@ async fn handle_websocket(socket: WebSocket, state: Arc<WebSocketState>) {
             if let Some(connection) = conn.as_mut() {
                 for (channel_id, batch) in batches {
                     let batch_len = batch.len() as u64;
-                    debug!("Sending batch for channel {}: {} bytes", channel_id, batch_len);
+                    // Activity tracked by dashboard.update_client_activity
                     
                     // Update dashboard with sent message
                     state_clone.dashboard.update_client_activity(connection_id, false, batch_len).await;
                     
                     if let Err(e) = connection.sender.send(Message::Binary(batch)).await {
-                        error!("Failed to send batch: {}", e);
+                        state_clone.dashboard.log_error(format!("Failed to send batch: {}", e), Some(connection_id)).await;
                         *conn = None;
                         return;
                     }
@@ -152,16 +170,16 @@ async fn handle_websocket(socket: WebSocket, state: Arc<WebSocketState>) {
                 
                 if let Err(e) = handle_message(Bytes::from(data), &state).await {
                     let error_msg = format!("Error handling message: {}", e);
-                    error!("❌ Client #{:02} - {}", connection_id, error_msg);
+                    // Error logged to dashboard below
                     state.dashboard.log_error(error_msg, Some(connection_id)).await;
                 }
             }
             Ok(Message::Close(_)) => {
-                info!("🔻 Client #{:02} disconnecting", connection_id);
+                // Disconnection handled by dashboard.remove_client
                 break;
             }
             Err(e) => {
-                error!("❌ Client #{:02} - WebSocket error: {}", connection_id, e);
+                state.dashboard.log_error(format!("WebSocket error: {}", e), Some(connection_id)).await;
                 break;
             }
             _ => {}
@@ -178,7 +196,7 @@ async fn handle_websocket(socket: WebSocket, state: Arc<WebSocketState>) {
         *connections[connection_id].write().await = None;
     }
     
-    info!("❌ Client #{:02} disconnected", connection_id);
+    // Disconnection logged by dashboard.remove_client
 }
 
 async fn handle_message(data: Bytes, state: &WebSocketState) -> anyhow::Result<()> {
@@ -213,7 +231,11 @@ async fn handle_control_message(packet: Packet, state: &WebSocketState) -> anyho
             };
             
             state.register_mcp_tool(tool).await;
-            info!("Registered MCP tool '{}' for channel {}", name, handler_channel);
+            state.dashboard.log(
+                crate::dashboard::LogLevel::Info,
+                format!("Registered MCP tool '{}' for channel {}", name, handler_channel),
+                None
+            ).await;
         }
         return Ok(());
     } else if packet.packet_type == 101 {
@@ -222,7 +244,11 @@ async fn handle_control_message(packet: Packet, state: &WebSocketState) -> anyho
         
         if let Some(name) = unregistration.get("name").and_then(|v| v.as_str()) {
             state.unregister_mcp_tool(name).await;
-            info!("Unregistered MCP tool '{}'", name);
+            state.dashboard.log(
+                crate::dashboard::LogLevel::Info,
+                format!("Unregistered MCP tool '{}'", name),
+                None
+            ).await;
         }
         return Ok(());
     }
@@ -243,7 +269,11 @@ async fn handle_control_message(packet: Packet, state: &WebSocketState) -> anyho
                 Ok(id) => {
                     let response = create_register_response(id);
                     state.batcher.queue_packet(response).await;
-                    info!("Registered system '{}' on channel {}", name, id);
+                    state.dashboard.log(
+                        crate::dashboard::LogLevel::Info,
+                        format!("Registered system '{}' on channel {}", name, id),
+                        None
+                    ).await;
                 }
                 Err(e) => {
                     let error = create_error_response(format!("Failed to register system: {}", e));
@@ -258,7 +288,11 @@ async fn handle_control_message(packet: Packet, state: &WebSocketState) -> anyho
                 Ok(id) => {
                     let response = create_register_response(id);
                     state.batcher.queue_packet(response).await;
-                    info!("Registered plugin '{}' on channel {}", name, id);
+                    state.dashboard.log(
+                        crate::dashboard::LogLevel::Info,
+                        format!("Registered plugin '{}' on channel {}", name, id),
+                        None
+                    ).await;
                 }
                 Err(e) => {
                     let error = create_error_response(format!("Failed to register plugin: {}", e));
@@ -283,7 +317,7 @@ async fn handle_control_message(packet: Packet, state: &WebSocketState) -> anyho
             state.batcher.queue_packet(response).await;
         }
         _ => {
-            debug!("Ignoring control message type: {:?}", msg_type);
+            // Ignoring unhandled control message type
         }
     }
     

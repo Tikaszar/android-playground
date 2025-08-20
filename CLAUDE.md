@@ -108,7 +108,8 @@ http://localhost:8080/mcp
 - All RwLock converted to tokio::sync
 - 100+ functions made async
 - Browser WebSocket connection (FIXED!)
-- Terminal dashboard with real-time monitoring
+- Terminal dashboard (unified in core/server)
+- Dashboard owned by server, accessed by systems
 - File logging for verbose output
 
 🟡 **Needs Testing**:

@@ -1,29 +1,27 @@
 # CONTEXT.md - Current Session Context
 
-## Active Session - 2025-08-19
+## Active Session - 2025-08-20
 
 ### Current Status
-**FULLY FUNCTIONAL** ✅ - Server runs with real-time terminal dashboard!
+**DASHBOARD INTEGRATED** ✅ - Unified dashboard system owned by core/server
 
 ### What Was Done This Session
-- **Morning**: Fixed critical architecture violations
-  - Plugin trait moved from core/plugin to systems/logic
-  - Plugins now implement systems/logic::System trait
-  - NetworkingSystem starts core/server internally
-  - Fixed axum version mismatch (workspace version 0.8)
+- **Dashboard Unification**: 
+  - Removed duplicate LoggingSystem from systems layer
+  - Dashboard now owned by core/server (WebSocketState)
+  - NetworkingSystem wraps/accesses server's dashboard
+  - SystemsManager gets dashboard via NetworkingSystem
+  - Dashboard enabled by default for playground-editor app
+  
+- **Architecture Fixes**:
+  - Proper layer separation maintained (Systems can use Core)
+  - Server creates and owns dashboard
+  - Dashboard render loop starts with server
+  - No environment variables needed - dashboard is default
 
-- **Afternoon**: Massive async/await refactoring
-  - Replaced ALL `parking_lot::RwLock` with `tokio::sync::RwLock` 
-  - Fixed 69+ async/await errors systematically
-  - Created automation scripts for batch fixes
-  - Made 100+ functions async throughout systems/logic
-  - Resolved Send trait issues with RwLock guards
-
-- **Evening**: WebSocket fixes and Dashboard implementation
-  - Fixed browser WebSocket connection issues (byte order, race condition)
-  - Created comprehensive terminal dashboard for server monitoring
-  - Added file logging for verbose output
-  - Dashboard shows: clients, stats, MCP sessions, recent activity
+- **Known Issues**:
+  - Dashboard may not render properly - needs debugging
+  - Check if "Dashboard: Starting render loop" appears in stderr
 
 ### Architecture Now Correct
 ```

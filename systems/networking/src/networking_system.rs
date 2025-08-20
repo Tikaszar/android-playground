@@ -19,6 +19,8 @@ pub struct NetworkingSystem {
     channel_manager: Arc<RwLock<ChannelManager>>,
     // Packet queue for batching
     packet_queue: Arc<RwLock<PacketQueue>>,
+    // Dashboard reference (only available after server starts)
+    dashboard: Option<Arc<playground_core_server::Dashboard>>,
 }
 
 impl NetworkingSystem {
@@ -31,7 +33,13 @@ impl NetworkingSystem {
             ws_client: None,
             channel_manager: Arc::new(RwLock::new(ChannelManager::new())),
             packet_queue: Arc::new(RwLock::new(PacketQueue::new())),
+            dashboard: None,
         })
+    }
+    
+    /// Get dashboard reference if available
+    pub async fn get_dashboard(&self) -> Option<Arc<playground_core_server::Dashboard>> {
+        self.dashboard.clone()
     }
     
     /// Initialize and connect to core/server
@@ -39,14 +47,30 @@ impl NetworkingSystem {
         // Start the core server internally if not provided
         if server_url.is_none() {
             // Start core/server in the background
-            tokio::spawn(async {
-                if let Err(e) = Self::run_core_server().await {
-                    tracing::error!("Core server failed: {}", e);
+            // The server will create and own its dashboard
+            let (tx, rx) = tokio::sync::oneshot::channel();
+            
+            tokio::spawn(async move {
+                match Self::run_core_server().await {
+                    Ok(dashboard) => {
+                        let _ = tx.send(Ok(dashboard));
+                    }
+                    Err(e) => {
+                        eprintln!("Core server failed: {}", e);
+                        let _ = tx.send(Err(()));
+                    }
                 }
             });
             
-            // Give the server time to start
-            tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
+            // Wait for server to start and get dashboard reference
+            match tokio::time::timeout(tokio::time::Duration::from_secs(2), rx).await {
+                Ok(Ok(Ok(dashboard))) => {
+                    self.dashboard = Some(dashboard);
+                }
+                _ => {
+                    // Server started but no dashboard available or timeout
+                }
+            }
         }
         
         // Connect to core/server WebSocket endpoint
@@ -315,10 +339,11 @@ impl NetworkingSystem {
     }
     
     /// Run the core server internally (called by initialize)
-    async fn run_core_server() -> Result<(), Box<dyn std::error::Error>> {
+    async fn run_core_server() -> Result<Arc<playground_core_server::Dashboard>, Box<dyn std::error::Error>> {
         use playground_core_server::{
-            McpServer, WebSocketState, websocket_handler,
-            list_plugins, reload_plugin, root
+            Dashboard, McpServer, WebSocketState, websocket_handler,
+            list_plugins, reload_plugin, root,
+            dashboard::LogLevel,
         };
         use axum::{Router, routing::{get, post}};
         use std::net::SocketAddr;
@@ -326,15 +351,19 @@ impl NetworkingSystem {
         use tower_http::services::ServeDir;
         use tower_http::trace::TraceLayer;
         
-        let ws_state = Arc::new(WebSocketState::new());
+        // Server creates and owns the dashboard
+        let dashboard = Arc::new(Dashboard::new());
         
-        // Initialize dashboard logging
-        if let Err(e) = ws_state.dashboard.init_log_file().await {
-            tracing::warn!("Failed to initialize log file: {}", e);
+        // Initialize log file
+        if let Err(e) = dashboard.init_log_file().await {
+            eprintln!("Failed to initialize log file: {}", e);
         }
         
         // Start dashboard render loop
-        ws_state.dashboard.clone().start_render_loop().await;
+        dashboard.clone().start_render_loop().await;
+        
+        // Create WebSocketState with the dashboard
+        let ws_state = Arc::new(WebSocketState::new_with_dashboard(dashboard.clone()));
         
         // Create MCP server
         let mcp_server = McpServer::new();
@@ -342,19 +371,19 @@ impl NetworkingSystem {
         
         let addr = SocketAddr::from(([127, 0, 0, 1], 8080));
         
-        // Log to dashboard instead of console
-        ws_state.dashboard.log(
-            playground_core_server::dashboard::LogLevel::Info,
+        // Log to dashboard
+        dashboard.log(
+            LogLevel::Info,
             format!("Core server listening on {}", addr),
             None
         ).await;
-        ws_state.dashboard.log(
-            playground_core_server::dashboard::LogLevel::Info,
+        dashboard.log(
+            LogLevel::Info,
             format!("WebSocket endpoint: ws://localhost:8080/ws"),
             None
         ).await;
-        ws_state.dashboard.log(
-            playground_core_server::dashboard::LogLevel::Info,
+        dashboard.log(
+            LogLevel::Info,
             format!("MCP endpoint: http://localhost:8080/mcp"),
             None
         ).await;
@@ -370,9 +399,18 @@ impl NetworkingSystem {
             .layer(TraceLayer::new_for_http())
             .with_state(ws_state);
         
-        let listener = tokio::net::TcpListener::bind(addr).await?;
-        axum::serve(listener, app).await?;
+        // Return the dashboard reference before starting the server
+        let dashboard_clone = dashboard.clone();
         
-        Ok(())
+        let listener = tokio::net::TcpListener::bind(addr).await?;
+        
+        // Start server in background
+        tokio::spawn(async move {
+            if let Err(e) = axum::serve(listener, app).await {
+                eprintln!("Server error: {}", e);
+            }
+        });
+        
+        Ok(dashboard_clone)
     }
 }

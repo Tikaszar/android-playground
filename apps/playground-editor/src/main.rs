@@ -5,48 +5,25 @@
 use anyhow::Result;
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use tracing::info;
 
 use playground_systems_logic::{World, SystemsManager};
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    // Initialize tracing temporarily for startup
-    tracing_subscriber::fmt()
-        .with_target(false)
-        .with_thread_ids(false)
-        .compact()
-        .init();
-    
-    info!("===========================================");
-    info!("  Playground Editor - Conversational IDE  ");
-    info!("===========================================");
-    info!("");
-    
     // Create the World from systems/logic
-    info!("Creating World from systems/logic...");
     let world = Arc::new(RwLock::new(World::new()));
-    info!("✓ World created");
     
-    // Create SystemsManager which initializes ALL engine systems
-    info!("Initializing all engine systems...");
+    // Create SystemsManager
     let systems = Arc::new(SystemsManager::new(world.clone()).await?);
     systems.initialize_all().await?;
-    info!("✓ All systems initialized:");
-    info!("  - NetworkingSystem (starts core/server internally)");
-    info!("  - UiSystem (using core/ecs internally)");
-    info!("  - RenderingSystem (skipped - browser-side only)");
     
     // Load and register the UI Framework Plugin as a System
-    info!("Loading UI Framework Plugin...");
     use playground_plugins_ui_framework::UiFrameworkPlugin;
     
     let ui_plugin = Box::new(UiFrameworkPlugin::new(systems.clone()));
     
     // Register the plugin as a System in the World
     world.write().await.register_plugin_system(ui_plugin).await?;
-    info!("✓ UI Framework Plugin registered as System");
-    info!("✓ Plugin will register channels 1200-1209 during initialization");
     
     // Start the main update loop that runs all Systems
     let world_for_update = world.clone();
@@ -71,7 +48,7 @@ async fn main() -> Result<()> {
     
     // Keep the application running
     tokio::signal::ctrl_c().await?;
-    info!("Shutting down Conversational IDE...");
+    // Dashboard will handle shutdown message
     
     Ok(())
 }

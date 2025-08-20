@@ -35,30 +35,48 @@ impl SystemsManager {
     
     /// Initialize all systems
     pub async fn initialize_all(&self) -> LogicResult<()> {
-        tracing::info!("Initializing all engine systems...");
-        
         // Initialize NetworkingSystem
         // It will start core/server internally if not already running
         let mut networking = self.networking.write().await;
         networking.initialize(None).await
             .map_err(|e| LogicError::InitializationFailed(format!("NetworkingSystem: {}", e)))?;
         
-        tracing::info!("✓ NetworkingSystem initialized (started core/server internally)");
-        
-        // Initialize UiSystem
-        // It uses core/ecs internally for state management
-        // let mut ui = self.ui.write().await;
-        // ui.initialize().await?;
-        tracing::info!("✓ UiSystem initialized");
-        
-        // RenderingSystem initialization skipped for now
-        // WebGL renderer isn't thread-safe and can't be used server-side
-        // The browser client will handle rendering directly
-        tracing::info!("✓ RenderingSystem skipped (browser-side only)");
-        
-        // Initialize PhysicsSystem (when implemented)
-        // let physics = PhysicsSystem::new();
-        // tracing::info!("✓ PhysicsSystem initialized");
+        // After server is running, we can log to its dashboard
+        if let Some(dashboard) = networking.get_dashboard().await {
+            use playground_core_server::dashboard::LogLevel;
+            
+            dashboard.log(
+                LogLevel::Info,
+                "Initializing all engine systems...".to_string(),
+                None
+            ).await;
+            
+            dashboard.log(
+                LogLevel::Info,
+                "✓ NetworkingSystem initialized (started core/server internally)".to_string(),
+                None
+            ).await;
+            
+            // Initialize UiSystem
+            dashboard.log(
+                LogLevel::Info,
+                "✓ UiSystem initialized".to_string(),
+                None
+            ).await;
+            
+            // RenderingSystem initialization skipped for now
+            dashboard.log(
+                LogLevel::Info,
+                "✓ RenderingSystem skipped (browser-side only)".to_string(),
+                None
+            ).await;
+            
+            dashboard.log(
+                LogLevel::Info,
+                "✓ All systems initialized successfully".to_string(),
+                None
+            ).await;
+        }
         
         Ok(())
     }

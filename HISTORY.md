@@ -2,6 +2,31 @@
 
 This file tracks the detailed history of development sessions, including achievements, bug fixes, and implementation progress.
 
+## Session: 2025-08-20 - Dashboard Unification
+
+### Completed
+1. **Unified Dashboard System**
+   - Removed LoggingSystem from systems layer completely
+   - Dashboard now owned by core/server where it belongs
+   - NetworkingSystem creates dashboard and passes to WebSocketState
+   - SystemsManager accesses dashboard through NetworkingSystem
+   - Proper architecture: Server owns, Systems wrap/access
+
+2. **Default Dashboard Mode**
+   - No environment variables required
+   - Dashboard enabled by default for playground-editor
+   - Just run `cargo run -p playground-apps-editor`
+
+3. **Architecture Compliance**
+   - Systems can use Core (proper layering)
+   - No violations of 4-layer architecture
+   - Dashboard lifecycle managed by server
+
+### Issues & Debugging
+- Dashboard render loop may not display output
+- Added debug message "Dashboard: Starting render loop"
+- Possible issue with tokio spawn context and stdout
+
 ## Session: 2025-08-19 - Major Architecture Refactoring, Async Overhaul & Dashboard
 
 ### Evening: WebSocket Fixes & Terminal Dashboard

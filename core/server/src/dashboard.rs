@@ -276,6 +276,7 @@ impl Dashboard {
     pub async fn render(&self) {
         // Clear screen and move cursor to top
         print!("\x1b[2J\x1b[H");
+        io::stdout().flush().unwrap();
         
         let clients = self.clients.read().await;
         let total_conns = self.total_connections.read().await;
@@ -439,6 +440,12 @@ impl Dashboard {
     }
     
     pub async fn start_render_loop(self: Arc<Self>) {
+        // Debug: confirm we're starting
+        eprintln!("Dashboard: Starting render loop");
+        
+        // Render immediately first
+        self.render().await;
+        
         let dashboard = self.clone();
         tokio::spawn(async move {
             let mut interval = tokio::time::interval(Duration::from_secs(1));

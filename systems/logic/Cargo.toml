@@ -8,6 +8,7 @@ license.workspace = true
 [dependencies]
 playground-core-types = { path = "../../core/types" }
 playground-core-ecs = { path = "../../core/ecs" }
+playground-core-server = { path = "../../core/server" }
 
 # Other systems to initialize
 playground-systems-networking = { path = "../networking" }
