@@ -9,7 +9,9 @@ This file contains critical memory for Claude Code when working with this reposi
 - **NO turbofish** - Use `.with_component(ComponentId)` instead of `::<T>`
 - **NO TODOs** - Complete all implementations fully
 - **NO incomplete code** - Everything must compile and work
+- **Shared<T> for concurrency** - Use our Shared<T> type (Arc<tokio::sync::RwLock<T>>)
 - **tokio::sync::RwLock ONLY** - NEVER use parking_lot::RwLock (Send issues)
+- **NO DashMap** - Use Shared<HashMap> instead
 - **Result everywhere** - All fallible operations return Result<T, Error>
 - **Async by default** - All I/O must be async
 - **Batch operations** - APIs operate on collections, not singles
@@ -71,6 +73,13 @@ None! All architecture violations fixed ✅
 
 ## #key-apis
 ```rust
+// Shared type for concurrency
+use playground_systems_logic::{Shared, shared}; // For plugins/apps
+use playground_core_types::{Shared, shared};    // For core/systems
+
+let data: Shared<HashMap<String, Value>> = shared(HashMap::new());
+let guard = data.read().await;  // or write().await
+
 // ECS Query (NO TURBOFISH!)
 query.with_component(Position::component_id())
      .with_component(Velocity::component_id())
@@ -79,9 +88,6 @@ query.with_component(Position::component_id())
 #[async_trait]
 impl Plugin for MyPlugin {
     async fn update(&mut self, ctx: &Context) -> Result<()>
-
-// Thread-safe pattern
-Arc<RwLock<HashMap<K, V>>>
 ```
 
 ## #test-commands

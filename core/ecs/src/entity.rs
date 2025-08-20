@@ -1,6 +1,7 @@
 use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
 use std::fmt;
 use serde::{Serialize, Deserialize};
+use tokio::sync::Mutex;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct Generation(u32);
@@ -83,7 +84,7 @@ impl Entity {
 pub struct EntityAllocator {
     next_index: AtomicU32,
     generation_counter: AtomicU64,
-    free_list: parking_lot::Mutex<Vec<(u32, Generation)>>,
+    free_list: Mutex<Vec<(u32, Generation)>>,
 }
 
 impl EntityAllocator {
@@ -91,12 +92,12 @@ impl EntityAllocator {
         Self {
             next_index: AtomicU32::new(0),
             generation_counter: AtomicU64::new(0),
-            free_list: parking_lot::Mutex::new(Vec::new()),
+            free_list: Mutex::new(Vec::new()),
         }
     }
 
     pub async fn allocate(&self) -> EntityId {
-        let mut free_list = self.free_list.lock();
+        let mut free_list = self.free_list.lock().await;
         
         if let Some((index, old_gen)) = free_list.pop() {
             EntityId::new(index, old_gen.increment())
@@ -110,7 +111,7 @@ impl EntityAllocator {
 
     pub async fn allocate_batch(&self, count: usize) -> Vec<EntityId> {
         let mut result = Vec::with_capacity(count);
-        let mut free_list = self.free_list.lock();
+        let mut free_list = self.free_list.lock().await;
         
         for _ in 0..count {
             if let Some((index, old_gen)) = free_list.pop() {
@@ -134,12 +135,12 @@ impl EntityAllocator {
     }
 
     pub async fn free(&self, id: EntityId) {
-        let mut free_list = self.free_list.lock();
+        let mut free_list = self.free_list.lock().await;
         free_list.push((id.index(), id.generation()));
     }
 
     pub async fn free_batch(&self, ids: Vec<EntityId>) {
-        let mut free_list = self.free_list.lock();
+        let mut free_list = self.free_list.lock().await;
         for id in ids {
             free_list.push((id.index(), id.generation()));
         }

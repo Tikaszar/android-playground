@@ -21,8 +21,6 @@ thiserror = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }
 bytes = { workspace = true }
-dashmap = { workspace = true }
-parking_lot = { workspace = true }
 indexmap = { workspace = true }
 petgraph = { workspace = true }
 fnv = { workspace = true }

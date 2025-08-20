@@ -29,3 +29,6 @@ pub use storage::*;
 pub use system::*;
 pub use world::*;
 pub use systems_manager::SystemsManager;
+
+// Re-export Shared type for plugins and apps
+pub use playground_core_types::{Shared, shared};

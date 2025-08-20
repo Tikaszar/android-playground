@@ -210,6 +210,28 @@ This file documents key architectural decisions, why they were made, and how the
 
 ## Threading Model
 
+### Shared<T> Pattern for Concurrency
+**Decision**: Use Shared<T> type alias for ALL concurrent access
+
+**Implementation**:
+```rust
+// core/types/src/shared.rs
+pub type Shared<T> = Arc<RwLock<T>>;
+pub fn shared<T>(value: T) -> Shared<T> {
+    Arc::new(RwLock::new(value))
+}
+```
+
+**Why**:
+- Single source of truth for concurrent access patterns
+- Cleaner API than Arc<RwLock<T>> everywhere
+- Easy to audit - just search for "Shared<"
+- If implementation needs to change, one place to update
+
+**Usage**:
+- Core/Systems: `use playground_core_types::{Shared, shared};`
+- Plugins/Apps: `use playground_systems_logic::{Shared, shared};`
+
 ### tokio::sync::RwLock ONLY
 **Decision**: Use ONLY tokio::sync::RwLock, NEVER parking_lot::RwLock
 
@@ -225,20 +247,29 @@ This file documents key architectural decisions, why they were made, and how the
 - Incompatible with async/await patterns
 - Causes "cannot be sent between threads safely" errors
 
+### NO DashMap
+**Decision**: Use Shared<HashMap> instead of DashMap
+
+**Why**:
+- DashMap adds unnecessary complexity
+- Shared<HashMap> with tokio::sync::RwLock is cleaner
+- Consistent with our Shared<T> pattern
+- Better for our async-first architecture
+
 **Migration Pattern**:
 ```rust
 // OLD - WRONG
-use parking_lot::RwLock;
-let lock = RwLock::new(data);
-let guard = lock.read(); // or write()
+use dashmap::DashMap;
+let map = Arc::new(DashMap::new());
+map.insert(key, value);
 
 // NEW - CORRECT  
-use tokio::sync::RwLock;
-let lock = RwLock::new(data);
-let guard = lock.read().await; // or write().await
+use playground_core_types::{Shared, shared};
+let map: Shared<HashMap<K, V>> = shared(HashMap::new());
+map.write().await.insert(key, value);
 ```
 
-**Impact**: All functions using RwLock must be async
+**Impact**: All functions using these collections must be async
 
 ## Plugin System
 

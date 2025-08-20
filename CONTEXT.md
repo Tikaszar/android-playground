@@ -1,17 +1,28 @@
 # CONTEXT.md - Current Session Context
 
-## Active Session - 2025-08-20 (Evening)
+## Active Session - 2025-08-20 (Late Evening)
 
 ### Current Status
-**RENDERING ARCHITECTURE IN PROGRESS** - Creating proper rendering pipeline for UI
+**MAJOR ARCHITECTURE FIX COMPLETED** - Fixed all RwLock violations
 
-### What's Being Done Right Now
-- **Created core/rendering package** ✅
-  - Base rendering traits (Renderer, RenderTarget, CommandEncoder)
-  - RenderCommand enum with all drawing operations
-  - RenderCommandBatch for efficient frame batching
-  - Proper error handling with RenderError
-  - Package added to workspace
+### What Was Done This Session
+- **Created Shared<T> type alias** ✅
+  - Located in core/types/src/shared.rs
+  - `Shared<T> = Arc<RwLock<T>>` using ONLY tokio::sync::RwLock
+  - Helper function `shared()` for easy construction
+  - Re-exported through systems/logic for plugins/apps
+
+- **Fixed ALL parking_lot violations** ✅
+  - Replaced all parking_lot::RwLock with tokio::sync::RwLock
+  - Replaced all DashMap with Shared<HashMap>
+  - Updated core/ecs (world.rs, component.rs, storage.rs, entity.rs, query.rs)
+  - Updated core/server (mcp/session.rs)
+  - Made all necessary functions async with .await
+
+- **Removed bad dependencies** ✅
+  - Removed parking_lot from workspace Cargo.toml
+  - Removed dashmap from workspace Cargo.toml
+  - Cleaned all package dependencies
 
 ### Architecture Rules Clarified
 - **NO unsafe code** - Ever
@@ -45,12 +56,12 @@ Browser (app.js)
 4. **No Discord UI** - Will implement in UI Framework Plugin
 
 ### Next Immediate Steps (Next Session)
-1. Update systems/rendering to use core/rendering traits
-2. Split systems/ui/system.rs into smaller files
-3. Add render command generation to UiSystem
-4. Implement create_discord_ui in UI Framework Plugin
-5. Update browser to use WebGL renderer
-6. Fix client tracking in Dashboard
+1. Fix compilation errors in core/ecs (complex but isolated)
+2. Create systems/webgl to replace systems/rendering
+3. Update systems/ui to use core/rendering types
+4. Implement WebGL rendering in browser
+5. Fix UI rendering (black screen issue)
+6. Add pooling/recycling to GC for efficiency
 
 ### Build Command
 ```bash

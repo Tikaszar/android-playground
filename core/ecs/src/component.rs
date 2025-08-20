@@ -1,9 +1,8 @@
 use std::any::TypeId;
-use std::sync::Arc;
+use std::collections::HashMap;
 use async_trait::async_trait;
 use bytes::Bytes;
-use dashmap::DashMap;
-use parking_lot::RwLock;
+use playground_core_types::{Shared, shared};
 use crate::error::{EcsError, EcsResult};
 
 pub type ComponentId = TypeId;
@@ -36,7 +35,7 @@ pub struct ComponentInfo {
     pub size_hint: usize,
     pub version: u32,
     pub networked: bool,
-    pub migration_fn: Option<Arc<dyn Fn(&Bytes, u32) -> EcsResult<Bytes> + Send + Sync>>,
+    pub migration_fn: Option<Shared<dyn Fn(&Bytes, u32) -> EcsResult<Bytes> + Send + Sync>>,
 }
 
 impl ComponentInfo {
@@ -65,15 +64,15 @@ impl ComponentInfo {
     where
         F: Fn(&Bytes, u32) -> EcsResult<Bytes> + Send + Sync + 'static
     {
-        self.migration_fn = Some(Arc::new(f));
+        self.migration_fn = Some(shared(f));
         self
     }
 }
 
 pub struct ComponentRegistry {
-    components: Arc<DashMap<ComponentId, ComponentInfo>>,
-    name_to_id: Arc<DashMap<String, ComponentId>>,
-    pool_size: Arc<RwLock<usize>>,
+    components: Shared<HashMap<ComponentId, ComponentInfo>>,
+    name_to_id: Shared<HashMap<String, ComponentId>>,
+    pool_size: Shared<usize>,
     pool_limit: usize,
 }
 
@@ -84,9 +83,9 @@ impl ComponentRegistry {
     
     pub fn with_pool_limit(limit: usize) -> Self {
         Self {
-            components: Arc::new(DashMap::new()),
-            name_to_id: Arc::new(DashMap::new()),
-            pool_size: Arc::new(RwLock::new(0)),
+            components: shared(HashMap::new()),
+            name_to_id: shared(HashMap::new()),
+            pool_size: shared(0),
             pool_limit: limit,
         }
     }
@@ -99,28 +98,31 @@ impl ComponentRegistry {
         let id = info.id;
         let name = info.name.clone();
         
-        if self.components.contains_key(&id) {
+        if self.components.read().await.contains_key(&id) {
             return Ok(());
         }
         
-        self.components.insert(id, info.clone());
-        self.name_to_id.insert(name, id);
+        self.components.write().await.insert(id, info.clone());
+        self.name_to_id.write().await.insert(name, id);
         
         Ok(())
     }
     
     pub async fn get_info(&self, id: ComponentId) -> Option<ComponentInfo> {
-        self.components.get(&id).map(|entry| entry.clone())
+        self.components.read().await.get(&id).cloned()
     }
     
     pub async fn get_info_by_name(&self, name: &str) -> Option<ComponentInfo> {
-        self.name_to_id.get(name)
-            .and_then(|id| self.components.get(&id.clone()))
-            .map(|entry| entry.clone())
+        let name_to_id = self.name_to_id.read().await;
+        if let Some(id) = name_to_id.get(name) {
+            self.components.read().await.get(id).cloned()
+        } else {
+            None
+        }
     }
     
     pub async fn allocate_pool_space(&self, size: usize) -> EcsResult<()> {
-        let mut pool_size = self.pool_size.write();
+        let mut pool_size = self.pool_size.write().await;
         let new_size = *pool_size + size;
         
         if new_size > self.pool_limit {
@@ -135,12 +137,12 @@ impl ComponentRegistry {
     }
     
     pub async fn free_pool_space(&self, size: usize) {
-        let mut pool_size = self.pool_size.write();
+        let mut pool_size = self.pool_size.write().await;
         *pool_size = pool_size.saturating_sub(size);
     }
     
-    pub fn current_pool_usage(&self) -> usize {
-        *self.pool_size.read()
+    pub async fn current_pool_usage(&self) -> usize {
+        *self.pool_size.read().await
     }
     
     pub fn pool_limit(&self) -> usize {

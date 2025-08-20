@@ -1,8 +1,8 @@
 use chrono::{DateTime, Utc};
-use dashmap::DashMap;
+use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use std::sync::Arc;
+use playground_core_types::{Shared, shared};
 use tokio::sync::mpsc;
 use tracing::info;
 use uuid::Uuid;
@@ -67,37 +67,37 @@ impl Session {
 /// Manages all active sessions
 #[derive(Clone)]
 pub struct SessionManager {
-    sessions: Arc<DashMap<SessionId, Session>>,
-    sse_senders: Arc<DashMap<SessionId, mpsc::UnboundedSender<Value>>>,
+    sessions: Shared<HashMap<SessionId, Session>>,
+    sse_senders: Shared<HashMap<SessionId, mpsc::UnboundedSender<Value>>>,
 }
 
 impl SessionManager {
     pub fn new() -> Self {
         Self {
-            sessions: Arc::new(DashMap::new()),
-            sse_senders: Arc::new(DashMap::new()),
+            sessions: shared(HashMap::new()),
+            sse_senders: shared(HashMap::new()),
         }
     }
     
-    pub fn register_sse_sender(&self, session_id: String, sender: mpsc::UnboundedSender<Value>) {
-        self.sse_senders.insert(session_id, sender);
+    pub async fn register_sse_sender(&self, session_id: String, sender: mpsc::UnboundedSender<Value>) {
+        self.sse_senders.write().await.insert(session_id, sender);
     }
     
-    pub fn get_last_sse_session(&self) -> Option<String> {
+    pub async fn get_last_sse_session(&self) -> Option<String> {
         // Get the most recently added SSE session
-        self.sse_senders.iter().next().map(|entry| entry.key().clone())
+        self.sse_senders.read().await.iter().next().map(|(key, _)| key.clone())
     }
     
-    pub fn update_session_id(&self, old_id: &str, new_id: String) {
+    pub async fn update_session_id(&self, old_id: &str, new_id: String) {
         // Move the SSE sender from old ID to new ID
-        if let Some((_, sender)) = self.sse_senders.remove(old_id) {
-            self.sse_senders.insert(new_id.clone(), sender);
+        if let Some(sender) = self.sse_senders.write().await.remove(old_id) {
+            self.sse_senders.write().await.insert(new_id.clone(), sender);
             info!("Updated session ID from {} to {}", old_id, new_id);
         }
     }
     
-    pub fn send_to_sse(&self, session_id: &str, message: Value) -> Result<(), String> {
-        if let Some(sender) = self.sse_senders.get(session_id) {
+    pub async fn send_to_sse(&self, session_id: &str, message: Value) -> Result<(), String> {
+        if let Some(sender) = self.sse_senders.read().await.get(session_id) {
             sender.send(message)
                 .map_err(|_| "Failed to send SSE message".to_string())
         } else {
@@ -105,22 +105,22 @@ impl SessionManager {
         }
     }
 
-    pub fn create_session(&self, id: Option<String>) -> (SessionId, mpsc::UnboundedReceiver<McpMessage>) {
+    pub async fn create_session(&self, id: Option<String>) -> (SessionId, mpsc::UnboundedReceiver<McpMessage>) {
         let (session, rx) = Session::new(id);
         let session_id = session.id.clone();
-        self.sessions.insert(session_id.clone(), session);
+        self.sessions.write().await.insert(session_id.clone(), session);
         (session_id, rx)
     }
 
-    pub fn get_session(&self, id: &str) -> Option<Session> {
-        self.sessions.get(id).map(|s| s.clone())
+    pub async fn get_session(&self, id: &str) -> Option<Session> {
+        self.sessions.read().await.get(id).map(|s| s.clone())
     }
 
-    pub fn update_session<F>(&self, id: &str, f: F) -> Result<(), String>
+    pub async fn update_session<F>(&self, id: &str, f: F) -> Result<(), String>
     where
         F: FnOnce(&mut Session),
     {
-        if let Some(mut session) = self.sessions.get_mut(id) {
+        if let Some(session) = self.sessions.write().await.get_mut(id) {
             f(&mut session);
             session.update_activity();
             Ok(())
@@ -129,15 +129,16 @@ impl SessionManager {
         }
     }
 
-    pub fn remove_session(&self, id: &str) -> Option<Session> {
-        self.sessions.remove(id).map(|(_, s)| s)
+    pub async fn remove_session(&self, id: &str) -> Option<Session> {
+        self.sessions.write().await.remove(id)
     }
 
-    pub fn list_sessions(&self) -> Vec<SessionInfo> {
+    pub async fn list_sessions(&self) -> Vec<SessionInfo> {
         self.sessions
+            .read()
+            .await
             .iter()
-            .map(|entry| {
-                let session = entry.value();
+            .map(|(_, session)| {
                 SessionInfo {
                     id: session.id.clone(),
                     client_name: session.client_info.as_ref().map(|c| c.name.clone()),
@@ -149,22 +150,24 @@ impl SessionManager {
             .collect()
     }
 
-    pub fn broadcast_to_all(&self, message: McpMessage) {
-        for session in self.sessions.iter() {
+    pub async fn broadcast_to_all(&self, message: McpMessage) {
+        for (_, session) in self.sessions.read().await.iter() {
             let _ = session.send_message(message.clone());
         }
     }
 
-    pub fn cleanup_inactive(&self, timeout_minutes: i64) {
+    pub async fn cleanup_inactive(&self, timeout_minutes: i64) {
         let cutoff = Utc::now() - chrono::Duration::minutes(timeout_minutes);
         let inactive: Vec<_> = self.sessions
+            .read()
+            .await
             .iter()
-            .filter(|s| s.last_activity < cutoff)
-            .map(|s| s.id.clone())
+            .filter(|(_, s)| s.last_activity < cutoff)
+            .map(|(_, s)| s.id.clone())
             .collect();
         
         for id in inactive {
-            self.remove_session(&id);
+            self.remove_session(&id).await;
         }
     }
 }

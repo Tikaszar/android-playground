@@ -2,6 +2,38 @@
 
 This file tracks the detailed history of development sessions, including achievements, bug fixes, and implementation progress.
 
+## Session: 2025-08-20 (Late Evening) - Major Architecture Fix: Shared<T> Pattern
+
+### Critical Architecture Violation Fixed
+1. **Created Shared<T> Type Alias**
+   - New file: core/types/src/shared.rs
+   - `type Shared<T> = Arc<RwLock<T>>` using tokio::sync::RwLock
+   - Helper function `shared()` for construction
+   - Single source of truth for all concurrent access
+
+2. **Replaced ALL parking_lot Usage**
+   - core/ecs: world.rs, component.rs, storage.rs, entity.rs, query.rs
+   - All parking_lot::RwLock → tokio::sync::RwLock via Shared<T>
+   - All parking_lot::Mutex → tokio::sync::Mutex
+   - Functions made async where needed
+
+3. **Replaced ALL DashMap Usage**  
+   - All DashMap<K, V> → Shared<HashMap<K, V>>
+   - Fixed in core/ecs and core/server
+   - Proper async access patterns with .read().await and .write().await
+
+4. **Architecture Compliance**
+   - Plugins/Apps use `playground_systems_logic::{Shared, shared}`
+   - Core/Systems use `playground_core_types::{Shared, shared}`
+   - Removed parking_lot and dashmap from all Cargo.toml files
+   - Complete compliance with architecture rules
+
+### Why This Matters
+- parking_lot::RwLock guards don't implement Send trait
+- This caused "cannot be sent between threads safely" errors
+- DashMap adds complexity and isn't needed with proper async patterns
+- Shared<T> provides clean, consistent API throughout codebase
+
 ## Session: 2025-08-20 (Evening) - Rendering Architecture Implementation
 
 ### Created core/rendering Package

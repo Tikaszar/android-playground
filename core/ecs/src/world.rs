@@ -1,7 +1,5 @@
-use std::sync::Arc;
-use std::collections::VecDeque;
-use dashmap::DashMap;
-use parking_lot::RwLock;
+use std::collections::{HashMap, VecDeque};
+use playground_core_types::{Shared, shared};
 use crate::entity::{EntityId, EntityAllocator};
 use crate::component::{Component, ComponentId, ComponentRegistry, ComponentBox};
 use crate::storage::{ComponentStorage, SparseStorage, DenseStorage, StorageType};
@@ -17,7 +15,7 @@ pub struct MemoryStats {
 }
 
 pub struct GarbageCollector {
-    dead_entities: Arc<RwLock<VecDeque<EntityId>>>,
+    dead_entities: Shared<VecDeque<EntityId>>,
     frame_budget_ms: u64,
     enabled: bool,
 }
@@ -25,14 +23,14 @@ pub struct GarbageCollector {
 impl GarbageCollector {
     pub fn new() -> Self {
         Self {
-            dead_entities: Arc::new(RwLock::new(VecDeque::new())),
+            dead_entities: shared(VecDeque::new()),
             frame_budget_ms: 2,
             enabled: true,
         }
     }
     
-    pub fn queue_for_collection(&self, entity: EntityId) {
-        self.dead_entities.write().push_back(entity);
+    pub async fn queue_for_collection(&self, entity: EntityId) {
+        self.dead_entities.write().await.push_back(entity);
     }
     
     pub async fn collect_incremental(&self, world: &World) -> EcsResult<usize> {
@@ -45,7 +43,7 @@ impl GarbageCollector {
         
         while start.elapsed().as_millis() < self.frame_budget_ms as u128 {
             let entity = {
-                let mut dead = self.dead_entities.write();
+                let mut dead = self.dead_entities.write().await;
                 dead.pop_front()
             };
             
@@ -70,33 +68,33 @@ impl GarbageCollector {
 }
 
 pub struct World {
-    entities: Arc<DashMap<EntityId, Vec<ComponentId>>>,
-    storages: Arc<DashMap<ComponentId, Arc<dyn ComponentStorage>>>,
-    allocator: Arc<EntityAllocator>,
-    registry: Arc<ComponentRegistry>,
-    gc: Arc<RwLock<GarbageCollector>>,
-    memory_stats: Arc<RwLock<MemoryStats>>,
+    entities: Shared<HashMap<EntityId, Vec<ComponentId>>>,
+    storages: Shared<HashMap<ComponentId, Box<dyn ComponentStorage>>>,
+    allocator: Shared<EntityAllocator>,
+    registry: Shared<ComponentRegistry>,
+    gc: Shared<GarbageCollector>,
+    memory_stats: Shared<MemoryStats>,
 }
 
 impl World {
     pub fn new() -> Self {
-        Self::with_registry(Arc::new(ComponentRegistry::new()))
+        Self::with_registry(shared(ComponentRegistry::new()))
     }
     
-    pub fn with_registry(registry: Arc<ComponentRegistry>) -> Self {
+    pub fn with_registry(registry: Shared<ComponentRegistry>) -> Self {
         Self {
-            entities: Arc::new(DashMap::new()),
-            storages: Arc::new(DashMap::new()),
-            allocator: Arc::new(EntityAllocator::new()),
+            entities: shared(HashMap::new()),
+            storages: shared(HashMap::new()),
+            allocator: shared(EntityAllocator::new()),
             registry,
-            gc: Arc::new(RwLock::new(GarbageCollector::new())),
-            memory_stats: Arc::new(RwLock::new(MemoryStats {
+            gc: shared(GarbageCollector::new()),
+            memory_stats: shared(MemoryStats {
                 total_entities: 0,
                 total_components: 0,
                 pool_usage: 0,
                 pool_limit: 100 * 1024 * 1024,
                 growth_rate: 0.0,
-            })),
+            }),
         }
     }
     
@@ -104,9 +102,9 @@ impl World {
         self.registry.register::<T>().await?;
         
         let component_id = T::component_id();
-        if !self.storages.contains_key(&component_id) {
-            let storage: Arc<dyn ComponentStorage> = Arc::new(SparseStorage::new(component_id));
-            self.storages.insert(component_id, storage);
+        if !self.storages.read().await.contains_key(&component_id) {
+            let storage: Box<dyn ComponentStorage> = Box::new(SparseStorage::new(component_id));
+            self.storages.write().await.insert(component_id, storage);
         }
         
         Ok(())
@@ -116,12 +114,12 @@ impl World {
         self.registry.register::<T>().await?;
         
         let component_id = T::component_id();
-        if !self.storages.contains_key(&component_id) {
-            let storage: Arc<dyn ComponentStorage> = match storage_type {
-                StorageType::Dense => Arc::new(DenseStorage::new(component_id)),
-                StorageType::Sparse | StorageType::Pooled => Arc::new(SparseStorage::new(component_id)),
+        if !self.storages.read().await.contains_key(&component_id) {
+            let storage: Box<dyn ComponentStorage> = match storage_type {
+                StorageType::Dense => Box::new(DenseStorage::new(component_id)),
+                StorageType::Sparse | StorageType::Pooled => Box::new(SparseStorage::new(component_id)),
             };
-            self.storages.insert(component_id, storage);
+            self.storages.write().await.insert(component_id, storage);
         }
         
         Ok(())
@@ -142,17 +140,17 @@ impl World {
                 
                 component_ids.push(component_id);
                 
-                if let Some(storage) = self.storages.get(&component_id) {
+                if let Some(storage) = self.storages.read().await.get(&component_id) {
                     storage.insert(*entity, component).await?;
                 } else {
                     return Err(EcsError::ComponentNotRegistered(type_name.to_string()));
                 }
             }
             
-            self.entities.insert(*entity, component_ids);
+            self.entities.write().await.insert(*entity, component_ids);
         }
         
-        let mut stats = self.memory_stats.write();
+        let mut stats = self.memory_stats.write().await;
         stats.total_entities += count;
         
         Ok(entities)
@@ -160,22 +158,22 @@ impl World {
     
     pub async fn despawn_batch(&self, entities: Vec<EntityId>) -> EcsResult<()> {
         for entity in entities {
-            self.gc.read().queue_for_collection(entity);
+            self.gc.read().await.queue_for_collection(entity).await;
         }
         Ok(())
     }
     
     async fn despawn_immediate(&self, entity: EntityId) -> EcsResult<()> {
-        if let Some((_, component_ids)) = self.entities.remove(&entity) {
+        if let Some((_, component_ids)) = self.entities.write().await.remove(&entity) {
             for component_id in component_ids {
-                if let Some(storage) = self.storages.get(&component_id) {
+                if let Some(storage) = self.storages.read().await.get(&component_id) {
                     let _ = storage.remove(entity).await;
                 }
             }
             
             self.allocator.free(entity).await;
             
-            let mut stats = self.memory_stats.write();
+            let mut stats = self.memory_stats.write().await;
             stats.total_entities = stats.total_entities.saturating_sub(1);
         }
         
@@ -183,10 +181,10 @@ impl World {
     }
     
     pub async fn add_component_raw(&self, entity: EntityId, component: ComponentBox, component_id: ComponentId) -> EcsResult<()> {
-        if let Some(storage) = self.storages.get(&component_id) {
+        if let Some(storage) = self.storages.read().await.get(&component_id) {
             storage.insert(entity, component).await?;
             
-            if let Some(mut components) = self.entities.get_mut(&entity) {
+            if let Some(mut components) = self.entities.write().await.get_mut(&entity) {
                 if !components.contains(&component_id) {
                     components.push(component_id);
                 }
@@ -199,10 +197,10 @@ impl World {
     }
     
     pub async fn remove_component_raw(&self, entity: EntityId, component_id: ComponentId) -> EcsResult<ComponentBox> {
-        if let Some(storage) = self.storages.get(&component_id) {
+        if let Some(storage) = self.storages.read().await.get(&component_id) {
             let component_box = storage.remove(entity).await?;
             
-            if let Some(mut components) = self.entities.get_mut(&entity) {
+            if let Some(mut components) = self.entities.write().await.get_mut(&entity) {
                 components.retain(|&id| id != component_id);
             }
             
@@ -213,7 +211,7 @@ impl World {
     }
     
     pub async fn get_component_raw(&self, entity: EntityId, component_id: ComponentId) -> EcsResult<ComponentBox> {
-        if let Some(storage) = self.storages.get(&component_id) {
+        if let Some(storage) = self.storages.read().await.get(&component_id) {
             storage.get_raw(entity).await
         } else {
             Err(EcsError::ComponentNotRegistered(format!("{:?}", component_id)))
@@ -228,7 +226,7 @@ impl World {
     }
     
     pub async fn has_component(&self, entity: EntityId, component_id: ComponentId) -> bool {
-        if let Some(storage) = self.storages.get(&component_id) {
+        if let Some(storage) = self.storages.read().await.get(&component_id) {
             storage.contains(entity).await
         } else {
             false
@@ -244,13 +242,13 @@ impl World {
     }
     
     pub async fn run_gc(&self) -> EcsResult<usize> {
-        self.gc.read().collect_incremental(self).await
+        self.gc.read().await.collect_incremental(self).await
     }
     
     pub async fn get_dirty_entities(&self) -> Vec<(EntityId, Vec<ComponentId>)> {
         let mut result: Vec<(EntityId, Vec<ComponentId>)> = Vec::new();
         
-        for storage_entry in self.storages.iter() {
+        for storage_entry in self.storages.read().await.iter() {
             let component_id = *storage_entry.key();
             let storage = storage_entry.value();
             
@@ -268,19 +266,19 @@ impl World {
     }
     
     pub async fn clear_dirty(&self) -> EcsResult<()> {
-        for storage_entry in self.storages.iter() {
+        for storage_entry in self.storages.read().await.iter() {
             storage_entry.value().clear_dirty().await?;
         }
         Ok(())
     }
     
     pub async fn memory_stats(&self) -> MemoryStats {
-        let stats = self.memory_stats.read();
+        let stats = self.memory_stats.read().await;
         MemoryStats {
             total_entities: stats.total_entities,
-            total_components: self.storages.len(),
-            pool_usage: self.registry.current_pool_usage(),
-            pool_limit: self.registry.pool_limit(),
+            total_components: self.storages.read().await.len(),
+            pool_usage: self.registry.read().await.current_pool_usage().await,
+            pool_limit: self.registry.read().await.pool_limit(),
             growth_rate: stats.growth_rate,
         }
     }
@@ -301,7 +299,7 @@ impl World {
     }
     
     pub async fn is_empty(&self) -> bool {
-        self.entities.is_empty()
+        self.entities.read().await.is_empty()
     }
 }
 

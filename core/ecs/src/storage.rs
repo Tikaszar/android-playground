@@ -1,7 +1,6 @@
 use async_trait::async_trait;
-use dashmap::DashMap;
-use parking_lot::RwLock;
-use std::sync::Arc;
+use std::collections::HashMap;
+use playground_core_types::{Shared, shared};
 use crate::entity::EntityId;
 use crate::component::{ComponentBox, ComponentId};
 use crate::error::{EcsError, EcsResult};
@@ -47,16 +46,16 @@ pub trait ComponentStorage: Send + Sync {
 }
 
 pub struct SparseStorage {
-    components: Arc<DashMap<EntityId, ComponentBox>>,
-    dirty: Arc<DashMap<EntityId, ()>>,
+    components: Shared<HashMap<EntityId, ComponentBox>>,
+    dirty: Shared<HashMap<EntityId, ()>>,
     component_id: ComponentId,
 }
 
 impl SparseStorage {
     pub fn new(component_id: ComponentId) -> Self {
         Self {
-            components: Arc::new(DashMap::new()),
-            dirty: Arc::new(DashMap::new()),
+            components: shared(HashMap::new()),
+            dirty: shared(HashMap::new()),
             component_id,
         }
     }
@@ -69,22 +68,22 @@ impl ComponentStorage for SparseStorage {
     }
     
     async fn insert(&self, entity: EntityId, component: ComponentBox) -> EcsResult<()> {
-        self.components.insert(entity, component);
-        self.dirty.insert(entity, ());
+        self.components.write().await.insert(entity, component);
+        self.dirty.write().await.insert(entity, ());
         Ok(())
     }
     
     async fn insert_batch(&self, components: Vec<(EntityId, ComponentBox)>) -> EcsResult<()> {
         for (entity, component) in components {
-            self.components.insert(entity, component);
-            self.dirty.insert(entity, ());
+            self.components.write().await.insert(entity, component);
+            self.dirty.write().await.insert(entity, ());
         }
         Ok(())
     }
     
     async fn remove(&self, entity: EntityId) -> EcsResult<ComponentBox> {
-        self.dirty.remove(&entity);
-        self.components.remove(&entity)
+        self.dirty.write().await.remove(&entity);
+        self.components.write().await.remove(&entity)
             .map(|(_, component)| component)
             .ok_or_else(|| EcsError::ComponentNotFound {
                 entity,
@@ -95,8 +94,8 @@ impl ComponentStorage for SparseStorage {
     async fn remove_batch(&self, entities: Vec<EntityId>) -> EcsResult<Vec<ComponentBox>> {
         let mut results = Vec::with_capacity(entities.len());
         for entity in entities {
-            self.dirty.remove(&entity);
-            if let Some((_, component)) = self.components.remove(&entity) {
+            self.dirty.write().await.remove(&entity);
+            if let Some((_, component)) = self.components.write().await.remove(&entity) {
                 results.push(component);
             }
         }
@@ -104,7 +103,7 @@ impl ComponentStorage for SparseStorage {
     }
     
     async fn get_raw(&self, entity: EntityId) -> EcsResult<ComponentBox> {
-        self.components.get(&entity)
+        self.components.read().await.get(&entity)
             .map(|entry| {
                 let bytes = futures::executor::block_on(entry.value().serialize())
                     .unwrap_or_else(|_| bytes::Bytes::new());
@@ -117,28 +116,28 @@ impl ComponentStorage for SparseStorage {
     }
     
     async fn contains(&self, entity: EntityId) -> bool {
-        self.components.contains_key(&entity)
+        self.components.read().await.contains_key(&entity)
     }
     
     async fn clear(&self) -> EcsResult<()> {
-        self.components.clear();
-        self.dirty.clear();
+        self.components.write().await.clear();
+        self.dirty.write().await.clear();
         Ok(())
     }
     
     async fn len(&self) -> usize {
-        self.components.len()
+        self.components.read().await.len()
     }
     
     async fn entities(&self) -> Vec<EntityId> {
-        self.components.iter()
+        self.components.read().await.iter()
             .map(|entry| *entry.key())
             .collect()
     }
     
     async fn mark_dirty(&self, entity: EntityId) -> EcsResult<()> {
-        if self.components.contains_key(&entity) {
-            self.dirty.insert(entity, ());
+        if self.components.read().await.contains_key(&entity) {
+            self.dirty.write().await.insert(entity, ());
             Ok(())
         } else {
             Err(EcsError::EntityNotFound(entity))
@@ -146,32 +145,32 @@ impl ComponentStorage for SparseStorage {
     }
     
     async fn get_dirty(&self) -> Vec<EntityId> {
-        self.dirty.iter()
+        self.dirty.read().await.iter()
             .map(|entry| *entry.key())
             .collect()
     }
     
     async fn clear_dirty(&self) -> EcsResult<()> {
-        self.dirty.clear();
+        self.dirty.write().await.clear();
         Ok(())
     }
 }
 
 pub struct DenseStorage {
-    entities: Arc<RwLock<Vec<EntityId>>>,
-    components: Arc<RwLock<Vec<ComponentBox>>>,
-    entity_to_index: Arc<DashMap<EntityId, usize>>,
-    dirty: Arc<DashMap<EntityId, ()>>,
+    entities: Shared<Vec<EntityId>>,
+    components: Shared<Vec<ComponentBox>>,
+    entity_to_index: Shared<HashMap<EntityId, usize>>,
+    dirty: Shared<HashMap<EntityId, ()>>,
     component_id: ComponentId,
 }
 
 impl DenseStorage {
     pub fn new(component_id: ComponentId) -> Self {
         Self {
-            entities: Arc::new(RwLock::new(Vec::new())),
-            components: Arc::new(RwLock::new(Vec::new())),
-            entity_to_index: Arc::new(DashMap::new()),
-            dirty: Arc::new(DashMap::new()),
+            entities: shared(Vec::new()),
+            components: shared(Vec::new()),
+            entity_to_index: shared(HashMap::new()),
+            dirty: shared(HashMap::new()),
             component_id,
         }
     }
@@ -184,32 +183,32 @@ impl ComponentStorage for DenseStorage {
     }
     
     async fn insert(&self, entity: EntityId, component: ComponentBox) -> EcsResult<()> {
-        if let Some(index) = self.entity_to_index.get(&entity).map(|e| *e.value()) {
-            let mut components = self.components.write();
+        if let Some(index) = self.entity_to_index.read().await.get(&entity).map(|e| *e.value()) {
+            let mut components = self.components.write().await;
             if index < components.len() {
                 components[index] = component;
             }
-            self.dirty.insert(entity, ());
+            self.dirty.write().await.insert(entity, ());
         } else {
-            let mut entities = self.entities.write();
-            let mut components = self.components.write();
+            let mut entities = self.entities.write().await;
+            let mut components = self.components.write().await;
             let index = entities.len();
             entities.push(entity);
             components.push(component);
             drop(entities);
             drop(components);
-            self.entity_to_index.insert(entity, index);
-            self.dirty.insert(entity, ());
+            self.entity_to_index.write().await.insert(entity, index);
+            self.dirty.write().await.insert(entity, ());
         }
         Ok(())
     }
     
     async fn insert_batch(&self, batch: Vec<(EntityId, ComponentBox)>) -> EcsResult<()> {
-        let mut entities = self.entities.write();
-        let mut components = self.components.write();
+        let mut entities = self.entities.write().await;
+        let mut components = self.components.write().await;
         
         for (entity, component) in batch {
-            if let Some(index) = self.entity_to_index.get(&entity).map(|e| *e.value()) {
+            if let Some(index) = self.entity_to_index.read().await.get(&entity).map(|e| *e.value()) {
                 if index < components.len() {
                     components[index] = component;
                 }
@@ -217,20 +216,20 @@ impl ComponentStorage for DenseStorage {
                 let index = entities.len();
                 entities.push(entity);
                 components.push(component);
-                self.entity_to_index.insert(entity, index);
+                self.entity_to_index.write().await.insert(entity, index);
             }
-            self.dirty.insert(entity, ());
+            self.dirty.write().await.insert(entity, ());
         }
         
         Ok(())
     }
     
     async fn remove(&self, entity: EntityId) -> EcsResult<ComponentBox> {
-        self.dirty.remove(&entity);
+        self.dirty.write().await.remove(&entity);
         
-        if let Some((_, index)) = self.entity_to_index.remove(&entity) {
-            let mut entities = self.entities.write();
-            let mut components = self.components.write();
+        if let Some((_, index)) = self.entity_to_index.write().await.remove(&entity) {
+            let mut entities = self.entities.write().await;
+            let mut components = self.components.write().await;
             
             if index >= entities.len() {
                 return Err(EcsError::ComponentNotFound {
@@ -275,9 +274,9 @@ impl ComponentStorage for DenseStorage {
     }
     
     async fn get_raw(&self, entity: EntityId) -> EcsResult<ComponentBox> {
-        if let Some(index) = self.entity_to_index.get(&entity).map(|e| *e.value()) {
+        if let Some(index) = self.entity_to_index.read().await.get(&entity).map(|e| *e.value()) {
             let component_clone = {
-                let components = self.components.read();
+                let components = self.components.read().await;
                 if index < components.len() {
                     let bytes = futures::executor::block_on(components[index].serialize())
                         .unwrap_or_else(|_| bytes::Bytes::new());
@@ -304,28 +303,28 @@ impl ComponentStorage for DenseStorage {
     }
     
     async fn contains(&self, entity: EntityId) -> bool {
-        self.entity_to_index.contains_key(&entity)
+        self.entity_to_index.read().await.contains_key(&entity)
     }
     
     async fn clear(&self) -> EcsResult<()> {
-        self.entities.write().clear();
-        self.components.write().clear();
-        self.entity_to_index.clear();
-        self.dirty.clear();
+        self.entities.write().await.clear();
+        self.components.write().await.clear();
+        self.entity_to_index.write().await.clear();
+        self.dirty.write().await.clear();
         Ok(())
     }
     
     async fn len(&self) -> usize {
-        self.entities.read().len()
+        self.entities.read().await.len()
     }
     
     async fn entities(&self) -> Vec<EntityId> {
-        self.entities.read().clone()
+        self.entities.read().await.clone()
     }
     
     async fn mark_dirty(&self, entity: EntityId) -> EcsResult<()> {
-        if self.entity_to_index.contains_key(&entity) {
-            self.dirty.insert(entity, ());
+        if self.entity_to_index.read().await.contains_key(&entity) {
+            self.dirty.write().await.insert(entity, ());
             Ok(())
         } else {
             Err(EcsError::EntityNotFound(entity))
@@ -333,13 +332,13 @@ impl ComponentStorage for DenseStorage {
     }
     
     async fn get_dirty(&self) -> Vec<EntityId> {
-        self.dirty.iter()
+        self.dirty.read().await.iter()
             .map(|entry| *entry.key())
             .collect()
     }
     
     async fn clear_dirty(&self) -> EcsResult<()> {
-        self.dirty.clear();
+        self.dirty.write().await.clear();
         Ok(())
     }
 }
