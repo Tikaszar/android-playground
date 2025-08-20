@@ -46,6 +46,7 @@ None! All architecture violations fixed ✅
 3. Complete UiSystem render() pipeline
 4. Implement WebGL rendering in browser
 5. Get Discord-style UI working
+6. Design and implement idle-mmo-rpg game mechanics
 
 ## #architecture-fixed
 ✅ Plugins ARE Systems - no separate Plugin trait
@@ -100,7 +101,7 @@ http://localhost:8080/mcp
 ✅ **Complete**:
 - Core infrastructure (all 6 modules)
 - Systems (all 5 with ECS integration) 
-- 18 plugins created with structure
+- 8 IDE plugins created with structure
 - WebSocket multiplexer with binary protocol (FIXED!)
 - MCP server with tool system (WORKING!)
 - UI Framework Plugin (3000+ lines)
@@ -114,14 +115,16 @@ http://localhost:8080/mcp
 - Terminal dashboard (unified in core/server)
 - Dashboard owned by server, accessed by systems
 - File logging for verbose output
+- playground-editor IDE builds and runs!
 
 🟡 **Needs Testing**:
 - UI Framework Plugin rendering
 - Multiple concurrent clients
-- Game plugin functionality
+- IDE plugin functionality
 
 🔴 **Not Started**:
-- Actual game logic implementation
+- Game plugins (inventory, combat, etc.)
+- idle-mmo-rpg game design and implementation
 - Production deployment
 
 ## #workflow

@@ -135,7 +135,7 @@ impl IdleMmoRpgApp {
         
         // Register plugin channels
         for i in 0..10 {
-            self.channel_manager.register_channel(
+            self.channel_manager.write().await.register_channel(
                 base_channel + i,
                 format!("{}-{}", name, i),
             );

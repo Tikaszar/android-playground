@@ -93,6 +93,7 @@ impl LogLevel {
 
 pub struct Dashboard {
     clients: Arc<RwLock<HashMap<usize, ClientInfo>>>,
+    temp_clients: Arc<RwLock<HashMap<usize, ClientInfo>>>,  // Unverified connections
     server_start: Instant,
     total_connections: Arc<RwLock<u64>>,
     total_messages: Arc<RwLock<u64>>,
@@ -108,6 +109,7 @@ impl Dashboard {
     pub fn new() -> Self {
         Self {
             clients: Arc::new(RwLock::new(HashMap::new())),
+            temp_clients: Arc::new(RwLock::new(HashMap::new())),
             server_start: Instant::now(),
             total_connections: Arc::new(RwLock::new(0)),
             total_messages: Arc::new(RwLock::new(0)),
@@ -176,7 +178,7 @@ impl Dashboard {
     }
     
     pub async fn add_client(&self, id: usize, ip: String) -> ClientInfo {
-        let mut clients = self.clients.write().await;
+        let mut temp_clients = self.temp_clients.write().await;
         let mut total = self.total_connections.write().await;
         *total += 1;
         
@@ -190,36 +192,70 @@ impl Dashboard {
             bytes_received: 0,
             ip_address: ip.clone(),
             user_agent: None,
-            status: ClientStatus::Connected,
+            status: ClientStatus::Connecting,  // Start as connecting
         };
         
-        clients.insert(id, info.clone());
+        // Add to temp_clients first (unverified)
+        temp_clients.insert(id, info.clone());
         
-        // Log the connection
+        // Log the connection attempt
         self.log(
             LogLevel::Info,
-            format!("Client connected from {}", ip),
+            format!("Client connecting from {} (unverified)", ip),
             Some(id)
         ).await;
         
         info
     }
     
-    pub async fn remove_client(&self, id: usize) {
+    /// Verify a client after first valid message
+    pub async fn verify_client(&self, id: usize) {
+        let mut temp_clients = self.temp_clients.write().await;
         let mut clients = self.clients.write().await;
-        if let Some(mut client) = clients.get_mut(&id) {
-            client.status = ClientStatus::Disconnected;
+        
+        if let Some(mut client) = temp_clients.remove(&id) {
+            client.status = ClientStatus::Connected;
+            clients.insert(id, client);
             
+            self.log(
+                LogLevel::Info,
+                format!("Client verified and connected"),
+                Some(id)
+            ).await;
+        }
+    }
+    
+    pub async fn remove_client(&self, id: usize) {
+        // Try to remove from both temp and verified clients
+        let mut temp_clients = self.temp_clients.write().await;
+        let mut clients = self.clients.write().await;
+        
+        let was_temp = temp_clients.remove(&id).is_some();
+        let was_verified = clients.remove(&id).is_some();
+        
+        if was_temp || was_verified {
             // Log the disconnection
             self.log(
                 LogLevel::Info,
-                format!("Client disconnected"),
+                format!("Client disconnected ({})", 
+                    if was_verified { "verified" } else { "unverified" }
+                ),
                 Some(id)
             ).await;
         }
     }
     
     pub async fn update_client_activity(&self, id: usize, received: bool, bytes: u64) {
+        // First check if this is an unverified client's first activity
+        {
+            let temp_clients = self.temp_clients.read().await;
+            if temp_clients.contains_key(&id) {
+                drop(temp_clients);
+                // Verify the client on first activity
+                self.verify_client(id).await;
+            }
+        }
+        
         let mut clients = self.clients.write().await;
         let mut total_msgs = self.total_messages.write().await;
         let mut total_bytes = self.total_bytes.write().await;
@@ -230,6 +266,7 @@ impl Dashboard {
             
             if received {
                 client.messages_received += 1;
+                client.bytes_received += bytes;
             } else {
                 client.messages_sent += 1;
                 client.bytes_sent += bytes;
@@ -284,6 +321,7 @@ impl Dashboard {
         print!("\x1b[2J\x1b[H");
         let _ = io::stdout().flush();
         
+        let temp_clients = self.temp_clients.read().await;
         let clients = self.clients.read().await;
         let total_conns = self.total_connections.read().await;
         let total_msgs = self.total_messages.read().await;
@@ -291,9 +329,7 @@ impl Dashboard {
         let mcp_sessions = self.mcp_sessions.read().await;
         
         let uptime = self.server_start.elapsed();
-        let active_clients = clients.values()
-            .filter(|c| c.status != ClientStatus::Disconnected)
-            .count();
+        let active_clients = clients.len() + temp_clients.len();
         
         // Header
         println!("\x1b[1;36m╔════════════════════════════════════════════════════════════════════╗\x1b[0m");
@@ -329,43 +365,55 @@ impl Dashboard {
         // Client Connections
         println!("\x1b[1;34m🔌 Client Connections\x1b[0m");
         
-        if clients.is_empty() {
+        // Combine temp and verified clients for display
+        let mut all_clients: Vec<_> = Vec::new();
+        for client in temp_clients.values() {
+            all_clients.push((client, false)); // false = unverified
+        }
+        for client in clients.values() {
+            all_clients.push((client, true)); // true = verified
+        }
+        
+        if all_clients.is_empty() {
             println!("└─ \x1b[90mNo clients connected\x1b[0m");
         } else {
-            let mut sorted_clients: Vec<_> = clients.values().collect();
-            sorted_clients.sort_by_key(|c| c.id);
+            all_clients.sort_by_key(|(c, _)| c.id);
             
-            for (i, client) in sorted_clients.iter().enumerate() {
-                let is_last = i == sorted_clients.len() - 1;
+            for (i, (client, is_verified)) in all_clients.iter().enumerate() {
+                let is_last = i == all_clients.len() - 1;
                 let prefix = if is_last { "└─" } else { "├─" };
                 
                 let duration = client.connected_at.elapsed();
                 let idle_time = client.last_activity.elapsed();
                 
                 // Update status based on idle time
-                let status = if client.status == ClientStatus::Disconnected {
-                    ClientStatus::Disconnected
+                let status = if !is_verified {
+                    ClientStatus::Connecting
                 } else if idle_time > Duration::from_secs(30) {
                     ClientStatus::Idle
                 } else {
                     ClientStatus::Active
                 };
                 
-                println!("{} {} Client #{:02} {}{}[{}]\x1b[0m",
+                let verification_marker = if !is_verified { " ⚠️" } else { "" };
+                
+                println!("{} {} Client #{:02}{} {}{}[{}]\x1b[0m",
                     prefix,
                     status.as_emoji(),
                     client.id,
+                    verification_marker,
                     status.as_color_code(),
                     client.ip_address,
                     format_duration(duration)
                 );
                 
                 let sub_prefix = if is_last { "  " } else { "│ " };
-                println!("{}  📤 {} msgs / {} | 📥 {} msgs",
+                println!("{}  📤 {} msgs / {} | 📥 {} msgs / {}",
                     sub_prefix,
                     format_number(client.messages_sent),
                     format_bytes(client.bytes_sent),
-                    format_number(client.messages_received)
+                    format_number(client.messages_received),
+                    format_bytes(client.bytes_received)
                 );
                 
                 if idle_time < Duration::from_secs(60) {
@@ -459,19 +507,59 @@ impl Dashboard {
         let dashboard = self.clone();
         tokio::spawn(async move {
             let mut interval = tokio::time::interval(Duration::from_secs(1));
+            let mut cleanup_counter = 0u32;
             
             loop {
                 interval.tick().await;
                 dashboard.render().await;
+                cleanup_counter += 1;
                 
-                // Mark idle clients
+                // Clean up idle clients every 30 seconds
+                if cleanup_counter >= 30 {
+                    cleanup_counter = 0;
+                    
+                    // Find and remove clients idle for >5 minutes
+                    let mut to_remove = Vec::new();
+                    
+                    // Check temp clients
+                    {
+                        let temp_clients = dashboard.temp_clients.read().await;
+                        for (id, client) in temp_clients.iter() {
+                            if client.last_activity.elapsed() > Duration::from_secs(300) {
+                                to_remove.push(*id);
+                            }
+                        }
+                    }
+                    
+                    // Check verified clients
+                    {
+                        let clients = dashboard.clients.read().await;
+                        for (id, client) in clients.iter() {
+                            if client.last_activity.elapsed() > Duration::from_secs(300) {
+                                to_remove.push(*id);
+                            }
+                        }
+                    }
+                    
+                    // Remove idle clients
+                    for id in to_remove {
+                        dashboard.log(
+                            LogLevel::Info,
+                            format!("Removing idle client (>5 min)"),
+                            Some(id)
+                        ).await;
+                        dashboard.remove_client(id).await;
+                    }
+                }
+                
+                // Mark idle clients (every second)
                 let mut clients = dashboard.clients.write().await;
                 for client in clients.values_mut() {
-                    if client.status != ClientStatus::Disconnected {
-                        let idle_time = client.last_activity.elapsed();
-                        if idle_time > Duration::from_secs(30) {
-                            client.status = ClientStatus::Idle;
-                        }
+                    let idle_time = client.last_activity.elapsed();
+                    if idle_time > Duration::from_secs(30) && client.status != ClientStatus::Idle {
+                        client.status = ClientStatus::Idle;
+                    } else if idle_time <= Duration::from_secs(30) && client.status == ClientStatus::Idle {
+                        client.status = ClientStatus::Active;
                     }
                 }
             }

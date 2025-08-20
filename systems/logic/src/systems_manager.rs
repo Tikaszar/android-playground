@@ -42,7 +42,7 @@ impl SystemsManager {
             .map_err(|e| LogicError::InitializationFailed(format!("NetworkingSystem: {}", e)))?;
         
         // After server is running, we can log to its dashboard
-        if let Some(dashboard) = networking.get_dashboard().await {
+        let dashboard = if let Some(dashboard) = networking.get_dashboard().await {
             use playground_core_server::dashboard::LogLevel;
             
             dashboard.log(
@@ -57,10 +57,26 @@ impl SystemsManager {
                 None
             ).await;
             
-            // Initialize UiSystem
+            Some(dashboard)
+        } else {
+            None
+        };
+        
+        // Initialize UiSystem with headless mode (no renderer needed on server)
+        let mut ui = self.ui.write().await;
+        ui.initialize_headless().await
+            .map_err(|e| LogicError::InitializationFailed(format!("UiSystem: {}", e)))?;
+        
+        // TODO: Set up channel connection for UiSystem
+        // This would need access to the WebSocketState from core/server
+        // For now, the UI system won't be able to send render commands
+        
+        if let Some(ref dashboard) = dashboard {
+            use playground_core_server::dashboard::LogLevel;
+            
             dashboard.log(
                 LogLevel::Info,
-                "✓ UiSystem initialized".to_string(),
+                "✓ UiSystem initialized (headless mode)".to_string(),
                 None
             ).await;
             

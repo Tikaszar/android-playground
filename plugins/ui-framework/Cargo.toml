@@ -10,6 +10,7 @@ crate-type = ["dylib", "rlib"]
 [dependencies]
 tracing-subscriber = { workspace = true }
 playground-core-types = { path = "../../core/types" }
+playground-core-ecs = { path = "../../core/ecs" }
 playground-systems-ui = { path = "../../systems/ui" }
 playground-systems-logic = { path = "../../systems/logic" }
 playground-systems-networking = { path = "../../systems/networking" }
@@ -25,3 +26,4 @@ uuid = { version = "1.5", features = ["v4", "serde"] }
 bytes = "1.5"
 dashmap = "5.5"
 chrono = { version = "0.4", features = ["serde"] }
+nalgebra = { workspace = true }

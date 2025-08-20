@@ -1,24 +1,29 @@
 //! Simplified UI system implementation using core/ecs for internal state
 
 use crate::error::{UiError, UiResult};
-use crate::components::*;
+use crate::components::{
+    UiElementComponent, UiLayoutComponent, UiStyleComponent, 
+    UiDirtyComponent, UiInputComponent, UiWebSocketComponent, 
+    UiTextComponent, AlignSelf, JustifySelf
+};
 use crate::element::ElementBounds;
 use crate::layout::LayoutConstraints;
 use crate::input::InputManager;
 use crate::rendering::UiRenderer;
 use crate::theme::{ThemeManager, ThemeId};
+use std::collections::HashMap;
+use std::default::Default;
 use crate::messages::{
     UiPacketType, CreateElementMessage, UpdateElementMessage, InputEventMessage,
     TerminalInputMessage, TerminalOutputMessage, TerminalConnectMessage,
-    TerminalStateMessage, RenderBatchMessage, serialize_message, deserialize_message,
+    TerminalStateMessage, RenderBatchMessage, RenderCommand, serialize_message, deserialize_message,
 };
 use nalgebra::{Vector2, Vector4};
-use playground_core_ecs::{World, EntityId, ComponentRegistry};
+use playground_core_ecs::{World, EntityId, ComponentRegistry, Component};
 use playground_systems_rendering::BaseRenderer;
 use playground_core_server::{ChannelManager, Packet, Priority, FrameBatcher};
 use bytes::Bytes;
 use std::sync::Arc;
-use std::collections::HashMap;
 use tokio::sync::RwLock;
 use uuid::Uuid;
 
@@ -62,6 +67,25 @@ impl UiSystem {
         }
     }
 
+    /// Initialize the UI system without a renderer (for server-side command generation)
+    pub async fn initialize_headless(&mut self) -> UiResult<()> {
+        if self.initialized {
+            return Err(UiError::InitializationFailed("Already initialized".to_string()));
+        }
+        
+        // Register UI components with ECS
+        self.register_components().await?;
+        
+        // Initialize theme manager with default themes
+        self.theme_manager.load_default_themes()?;
+        
+        // Create root UI entity
+        self.root_entity = Some(self.create_root_entity().await?);
+        
+        self.initialized = true;
+        Ok(())
+    }
+    
     /// Initialize the UI system with a renderer and register components
     pub async fn initialize<R: BaseRenderer + 'static>(&mut self, renderer: R) -> UiResult<()> {
         if self.initialized {
@@ -82,6 +106,13 @@ impl UiSystem {
         
         self.initialized = true;
         Ok(())
+    }
+    
+    /// Set up the WebSocket channel connection for sending render commands
+    pub async fn setup_channel(&mut self, channel_manager: Arc<RwLock<ChannelManager>>, batcher: Arc<FrameBatcher>) {
+        self.channel_manager = Some(channel_manager);
+        self.batcher = Some(batcher);
+        self.channel_id = Some(10); // UI system uses channel 10
     }
     
     /// Register all UI components with the ECS registry
@@ -133,8 +164,51 @@ impl UiSystem {
         Ok(())
     }
     
+    /// Create a UI element
+    pub async fn create_element(&self, name: String, tag: String, parent: Option<EntityId>) -> UiResult<EntityId> {
+        // Create empty entity
+        let entities = self.world.spawn_batch(vec![vec![]]).await
+            .map_err(|e| UiError::Other(format!("Failed to spawn entity: {}", e)))?;
+        
+        let entity = entities[0];
+        
+        // Add element component
+        let element = UiElementComponent {
+            id: Uuid::new_v4(),
+            name,
+            tag,
+            bounds: ElementBounds {
+                position: Vector2::new(0.0, 0.0),
+                size: Vector2::new(100.0, 100.0),
+            },
+            children: Vec::new(),
+            parent,
+            visible: true,
+            interactive: true,
+            z_index: 0,
+        };
+        
+        let component_box = Box::new(element) as Box<dyn playground_core_ecs::Component>;
+        let component_id = <UiElementComponent as Component>::component_id();
+        self.world.add_component_raw(entity, component_box, component_id).await
+            .map_err(|e| UiError::Other(format!("Failed to add element component: {}", e)))?;
+        
+        // Mark as dirty to trigger render
+        self.mark_dirty(entity).await?;
+        
+        Ok(entity)
+    }
+    
     /// Create the root UI entity
     async fn create_root_entity(&self) -> UiResult<EntityId> {
+        // For now, just create an empty entity since spawn_batch has issues with boxed components
+        // We'll add components later when we have proper typed methods
+        let entities = self.world.spawn_batch(vec![vec![]]).await
+            .map_err(|e| UiError::InitializationFailed(format!("Failed to create root entity: {}", e)))?;
+        
+        let root_entity = entities[0];
+        
+        // Add root element component
         let root_element = UiElementComponent {
             id: Uuid::new_v4(),
             name: "root".to_string(),
@@ -150,22 +224,15 @@ impl UiSystem {
             z_index: 0,
         };
         
-        let root_layout = UiLayoutComponent {
-            constraints: LayoutConstraints::new(self.screen_size),
-            computed_size: self.screen_size,
-            computed_position: Vector2::new(0.0, 0.0),
-            padding: Vector4::zeros(),
-            margin: Vector4::zeros(),
-            flex_grow: 0.0,
-            flex_shrink: 0.0,
-            flex_basis: 0.0,
-            align_self: AlignSelf::Auto,
-            justify_self: JustifySelf::Auto,
-        };
+        let component_box = Box::new(root_element) as Box<dyn playground_core_ecs::Component>;
+        let component_id = <UiElementComponent as Component>::component_id();
+        self.world.add_component_raw(root_entity, component_box, component_id).await
+            .map_err(|e| UiError::InitializationFailed(format!("Failed to add root element: {}", e)))?;
         
+        // Add root style
         let root_style = UiStyleComponent {
             theme_id: ThemeId(0),
-            background_color: Vector4::new(0.0, 0.0, 0.0, 1.0),
+            background_color: Vector4::new(0.137, 0.145, 0.161, 1.0), // Discord dark
             border_color: Vector4::new(0.0, 0.0, 0.0, 0.0),
             text_color: Vector4::new(1.0, 1.0, 1.0, 1.0),
             border_width: 0.0,
@@ -174,16 +241,12 @@ impl UiSystem {
             custom_properties: Default::default(),
         };
         
-        let entities = self.world.spawn_batch(vec![
-            vec![
-                Box::new(root_element) as Box<dyn playground_core_ecs::Component>,
-                Box::new(root_layout) as Box<dyn playground_core_ecs::Component>,
-                Box::new(root_style) as Box<dyn playground_core_ecs::Component>,
-            ],
-        ]).await
-            .map_err(|e| UiError::InitializationFailed(format!("Failed to create root entity: {}", e)))?;
+        let component_box = Box::new(root_style) as Box<dyn playground_core_ecs::Component>;
+        let component_id = <UiStyleComponent as Component>::component_id();
+        self.world.add_component_raw(root_entity, component_box, component_id).await
+            .map_err(|e| UiError::InitializationFailed(format!("Failed to add root style: {}", e)))?;
         
-        Ok(entities[0])
+        Ok(root_entity)
     }
     
     /// Register UI system with core/server for WebSocket communication
@@ -211,80 +274,6 @@ impl UiSystem {
     pub fn set_screen_size(&mut self, width: f32, height: f32) {
         self.screen_size = Vector2::new(width, height);
     }
-    
-    /// Create a new UI element entity
-    pub async fn create_element(
-        &self,
-        name: String,
-        tag: String,
-        parent: Option<EntityId>,
-    ) -> UiResult<EntityId> {
-        let element = UiElementComponent {
-            id: Uuid::new_v4(),
-            name,
-            tag,
-            bounds: ElementBounds {
-                position: Vector2::zeros(),
-                size: Vector2::new(100.0, 100.0),
-            },
-            children: Vec::new(),
-            parent,
-            visible: true,
-            interactive: true,
-            z_index: 0,
-        };
-        
-        let layout = UiLayoutComponent {
-            constraints: LayoutConstraints::new(self.screen_size),
-            computed_size: Vector2::new(100.0, 100.0),
-            computed_position: Vector2::zeros(),
-            padding: Vector4::zeros(),
-            margin: Vector4::zeros(),
-            flex_grow: 0.0,
-            flex_shrink: 1.0,
-            flex_basis: 0.0,
-            align_self: AlignSelf::Auto,
-            justify_self: JustifySelf::Auto,
-        };
-        
-        let style = UiStyleComponent {
-            theme_id: ThemeId(0),
-            background_color: Vector4::new(1.0, 1.0, 1.0, 1.0),
-            border_color: Vector4::new(0.2, 0.2, 0.2, 1.0),
-            text_color: Vector4::new(0.0, 0.0, 0.0, 1.0),
-            border_width: 1.0,
-            border_radius: 0.0,
-            opacity: 1.0,
-            custom_properties: Default::default(),
-        };
-        
-        let dirty = UiDirtyComponent {
-            layout_dirty: true,
-            style_dirty: true,
-            content_dirty: true,
-            last_render_frame: 0,
-        };
-        
-        let entities = self.world.spawn_batch(vec![
-            vec![
-                Box::new(element) as Box<dyn playground_core_ecs::Component>,
-                Box::new(layout) as Box<dyn playground_core_ecs::Component>,
-                Box::new(style) as Box<dyn playground_core_ecs::Component>,
-                Box::new(dirty) as Box<dyn playground_core_ecs::Component>,
-            ],
-        ]).await
-            .map_err(|e| UiError::Other(format!("Failed to create element: {}", e)))?;
-        
-        let entity = entities[0];
-        
-        // Add to parent's children if specified
-        if let Some(parent_id) = parent {
-            // For now, we'll need to implement a different approach for updating parent-child relationships
-            // since we can't easily query and modify components with the current core/ecs API
-        }
-        
-        Ok(entity)
-    }
 
     /// Perform layout for all elements
     pub async fn perform_layout(&mut self) -> UiResult<()> {
@@ -306,8 +295,74 @@ impl UiSystem {
         
         self.current_frame += 1;
         
-        // Simplified rendering without complex queries
-        // This would need proper dirty element tracking
+        // Build query for dirty elements
+        let query = self.world.query()
+            .with_component(<UiDirtyComponent as playground_core_ecs::Component>::component_id())
+            .with_component(<UiElementComponent as playground_core_ecs::Component>::component_id())
+            .build();
+        
+        let dirty_entities = self.world.execute_query(query.as_ref()).await
+            .map_err(|e| UiError::Other(format!("Query failed: {}", e)))?;
+        
+        // Generate render commands
+        let mut commands = Vec::new();
+        
+        // Clear screen with Discord dark background
+        commands.push(RenderCommand::Clear { 
+            color: Vector4::new(0.137, 0.145, 0.161, 1.0)  // #2f3136
+        });
+        
+        // Render each dirty element
+        for entity in dirty_entities {
+            // Get element component
+            if let Ok(element) = self.world.get_component::<UiElementComponent>(entity).await {
+                if !element.visible {
+                    continue;
+                }
+                
+                // Get style component if it exists
+                let style = self.world.get_component::<UiStyleComponent>(entity).await.ok();
+                
+                // Draw element background
+                if let Some(ref style) = style {
+                    commands.push(RenderCommand::DrawQuad {
+                        position: element.bounds.position,
+                        size: element.bounds.size,
+                        color: style.background_color,
+                    });
+                }
+                
+                // Draw text if present
+                if let Ok(text) = self.world.get_component::<UiTextComponent>(entity).await {
+                    let text_color = style.as_ref()
+                        .map(|s| s.text_color)
+                        .unwrap_or_else(|| Vector4::new(1.0, 1.0, 1.0, 1.0));
+                    
+                    commands.push(RenderCommand::DrawText {
+                        position: element.bounds.position + Vector2::new(10.0, 10.0), // Padding
+                        text: text.text.clone(),
+                        size: text.font_size,
+                        color: text_color,
+                    });
+                }
+            }
+            
+            // Clear dirty flag after rendering
+            // TODO: Add remove_component method to World
+            // self.world.remove_component::<UiDirtyComponent>(entity).await
+            //     .ok(); // Ignore error if component doesn't exist
+        }
+        
+        // Send render batch if we have commands
+        if !commands.is_empty() {
+            let batch = RenderBatchMessage {
+                frame_id: self.current_frame,
+                commands,
+            };
+            
+            let payload = serialize_message(&batch)?;
+            self.send_packet(UiPacketType::RenderBatch, payload).await?;
+        }
         
         Ok(())
     }
@@ -326,6 +381,9 @@ impl UiSystem {
         if let Some(_channel_id) = self.channel_id {
             // Process messages through channel manager
         }
+        
+        // Render the UI each frame
+        self.render().await?;
         
         Ok(())
     }
@@ -354,6 +412,25 @@ impl UiSystem {
     pub async fn memory_stats(&self) -> UiResult<playground_core_ecs::MemoryStats> {
         let stats = self.world.memory_stats().await;
         Ok(stats)
+    }
+    
+    /// Mark an element as dirty for rendering
+    pub async fn mark_dirty(&self, entity: EntityId) -> UiResult<()> {
+        let dirty = UiDirtyComponent {
+            layout_dirty: true,
+            style_dirty: true,
+            content_dirty: true,
+            last_render_frame: self.current_frame,
+        };
+        
+        // Use add_component_raw with the component boxed
+        let component_box = Box::new(dirty) as Box<dyn playground_core_ecs::Component>;
+        let component_id = <UiDirtyComponent as Component>::component_id();
+        
+        self.world.add_component_raw(entity, component_box, component_id).await
+            .map_err(|e| UiError::Other(format!("Failed to mark dirty: {}", e)))?;
+        
+        Ok(())
     }
     
     /// Send a packet through the WebSocket channel

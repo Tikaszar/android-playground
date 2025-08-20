@@ -1,10 +1,3 @@
-mod handlers;
-mod channel;
-mod packet;
-mod batcher;
-mod websocket;
-mod mcp;
-
 use axum::{
     routing::{get, post},
     Router,
@@ -16,9 +9,11 @@ use tower_http::services::ServeDir;
 use tower_http::trace::TraceLayer;
 use tracing_subscriber;
 
-use handlers::{list_plugins, reload_plugin, root};
-use websocket::{websocket_handler, WebSocketState};
-use mcp::McpServer;
+use playground_core_server::{
+    list_plugins, reload_plugin, root,
+    websocket_handler, WebSocketState,
+    McpServer,
+};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {

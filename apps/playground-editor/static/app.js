@@ -153,9 +153,21 @@ class UIFrameworkClient {
         const priority = view.getUint8(4);
         const payloadSize = view.getUint32(5, false);  // Note: offset 5 is correct per Rust code
         
+        // Check if this is the UI channel (channel 10)
+        if (channelId === 10) {
+            // Extract payload
+            const payload = new Uint8Array(data, 9, payloadSize);
+            
+            // Handle UI system packets (RenderBatch is type 104)
+            if (packetType === 104) {
+                this.renderFrame(payload);
+            } else {
+                console.log(`UI packet type ${packetType} on channel ${channelId}`);
+            }
+        }
         // Check if this is a UI Framework channel
-        if (channelId >= this.UI_FRAMEWORK_BASE && 
-            channelId < this.UI_FRAMEWORK_BASE + this.UI_FRAMEWORK_CHANNELS) {
+        else if (channelId >= this.UI_FRAMEWORK_BASE && 
+                 channelId < this.UI_FRAMEWORK_BASE + this.UI_FRAMEWORK_CHANNELS) {
             
             // Extract payload
             const payload = new Uint8Array(data, 9, payloadSize);
@@ -189,15 +201,70 @@ class UIFrameworkClient {
     }
     
     renderFrame(payload) {
-        // The UI Framework sends rendered frames as image data
-        // For now, we'll just log that we received a frame
-        console.log('Received render frame from UI Framework');
-        
-        // In a real implementation, this would decode and draw the frame
-        // The UI Framework would send either:
-        // 1. Raw pixel data to blit
-        // 2. Draw commands to execute
-        // 3. WebGL commands for GPU rendering
+        // Parse the render batch message
+        try {
+            const decoder = new TextDecoder();
+            const batch = JSON.parse(decoder.decode(payload));
+            
+            if (batch.commands) {
+                this.executeRenderCommands(batch.commands);
+            }
+        } catch (e) {
+            console.error('Failed to parse render batch:', e);
+        }
+    }
+    
+    executeRenderCommands(commands) {
+        // Execute each render command on the canvas
+        for (const cmd of commands) {
+            switch(cmd.Clear ? 'Clear' : 
+                   cmd.DrawQuad ? 'DrawQuad' : 
+                   cmd.DrawText ? 'DrawText' : 
+                   cmd.DrawImage ? 'DrawImage' :
+                   cmd.SetClipRect ? 'SetClipRect' :
+                   cmd.ClearClipRect ? 'ClearClipRect' : null) {
+                
+                case 'Clear':
+                    const clear = cmd.Clear;
+                    // Convert color array to CSS rgba
+                    const clearColor = `rgba(${Math.floor(clear.color[0] * 255)}, ${Math.floor(clear.color[1] * 255)}, ${Math.floor(clear.color[2] * 255)}, ${clear.color[3]})`;
+                    this.ctx.fillStyle = clearColor;
+                    this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+                    break;
+                    
+                case 'DrawQuad':
+                    const quad = cmd.DrawQuad;
+                    const quadColor = `rgba(${Math.floor(quad.color[0] * 255)}, ${Math.floor(quad.color[1] * 255)}, ${Math.floor(quad.color[2] * 255)}, ${quad.color[3]})`;
+                    this.ctx.fillStyle = quadColor;
+                    this.ctx.fillRect(quad.position[0], quad.position[1], quad.size[0], quad.size[1]);
+                    break;
+                    
+                case 'DrawText':
+                    const text = cmd.DrawText;
+                    const textColor = `rgba(${Math.floor(text.color[0] * 255)}, ${Math.floor(text.color[1] * 255)}, ${Math.floor(text.color[2] * 255)}, ${text.color[3]})`;
+                    this.ctx.fillStyle = textColor;
+                    this.ctx.font = `${text.size}px sans-serif`;
+                    this.ctx.fillText(text.text, text.position[0], text.position[1]);
+                    break;
+                    
+                case 'DrawImage':
+                    // Image drawing would require texture management
+                    console.log('DrawImage not yet implemented:', cmd.DrawImage);
+                    break;
+                    
+                case 'SetClipRect':
+                    const clip = cmd.SetClipRect;
+                    this.ctx.save();
+                    this.ctx.beginPath();
+                    this.ctx.rect(clip.position[0], clip.position[1], clip.size[0], clip.size[1]);
+                    this.ctx.clip();
+                    break;
+                    
+                case 'ClearClipRect':
+                    this.ctx.restore();
+                    break;
+            }
+        }
     }
     
     updateUI(payload) {

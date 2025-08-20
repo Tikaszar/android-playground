@@ -17,7 +17,7 @@ members = [
     
     # Apps layer
     "apps/playground-editor",
-    "apps/idle-mmo-rpg",
+    # "apps/idle-mmo-rpg",  # Commented out - not designed yet
     
     # Plugins layer - IDE plugins
     "plugins/editor-core",
@@ -29,17 +29,17 @@ members = [
     "plugins/version-control",
     "plugins/theme-manager",
     
-    # Plugins layer - Game plugins
-    "plugins/inventory",
-    "plugins/combat",
-    "plugins/chat",
-    "plugins/crafting",
-    "plugins/quests",
-    "plugins/skills",
-    "plugins/economy",
-    "plugins/guild",
-    "plugins/progression",
-    "plugins/social",
+    # Plugins layer - Game plugins (commented out - not designed yet)
+    # "plugins/inventory",
+    # "plugins/combat",
+    # "plugins/chat",
+    # "plugins/crafting",
+    # "plugins/quests",
+    # "plugins/skills",
+    # "plugins/economy",
+    # "plugins/guild",
+    # "plugins/progression",
+    # "plugins/social",
     
     # Infrastructure plugins
     "plugins/ui-framework",
