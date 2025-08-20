@@ -5,6 +5,7 @@ use std::collections::{HashMap, VecDeque};
 use std::io::{self, Write};
 use tokio::fs::OpenOptions;
 use tokio::io::AsyncWriteExt;
+use chrono;
 
 #[derive(Clone, Debug)]
 pub struct ClientInfo {
@@ -62,7 +63,7 @@ pub struct LogEntry {
     pub client_id: Option<usize>,
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum LogLevel {
     Info,
     Warning,
@@ -132,11 +133,14 @@ impl Dashboard {
             .append(true)
             .open(&log_path)
             .await?;
-            
-        let mut log_file = self.log_file.write().await;
-        *log_file = Some(file);
         
-        // Log the startup
+        // Store the file - use a scope to drop the lock before calling log()
+        {
+            let mut log_file = self.log_file.write().await;
+            *log_file = Some(file);
+        } // Lock is dropped here
+        
+        // Log the startup - now the lock is free
         self.log(LogLevel::Info, format!("Server started - Log file: {}", log_path), None).await;
         
         Ok(())
@@ -157,9 +161,11 @@ impl Dashboard {
             logs.pop_front();
         }
         logs.push_back(entry.clone());
+        drop(logs); // Explicitly drop the lock
         
         // Write to log file
-        if let Some(file) = &mut *self.log_file.write().await {
+        let mut log_file_lock = self.log_file.write().await;
+        if let Some(file) = &mut *log_file_lock {
             let timestamp = chrono::Local::now().format("%Y-%m-%d %H:%M:%S%.3f");
             let client_str = client_id.map_or(String::new(), |id| format!(" [Client #{}]", id));
             let log_line = format!("[{}] {:?}{}: {}\n", timestamp, level, client_str, message);
@@ -276,7 +282,7 @@ impl Dashboard {
     pub async fn render(&self) {
         // Clear screen and move cursor to top
         print!("\x1b[2J\x1b[H");
-        io::stdout().flush().unwrap();
+        let _ = io::stdout().flush();
         
         let clients = self.clients.read().await;
         let total_conns = self.total_connections.read().await;
@@ -393,32 +399,39 @@ impl Dashboard {
                     .duration_since(entry.timestamp)
                     .unwrap_or_default();
                 let time_str = if duration.as_secs() < 60 {
-                    format!("{}s ago", duration.as_secs())
+                    format!("[{}s]", duration.as_secs())
                 } else if duration.as_secs() < 3600 {
-                    format!("{}m ago", duration.as_secs() / 60)
+                    format!("[{}m]", duration.as_secs() / 60)
                 } else {
-                    format!("{}h ago", duration.as_secs() / 3600)
+                    format!("[{}h]", duration.as_secs() / 3600)
                 };
                 
                 // Format client ID if present
                 let client_str = entry.client_id
-                    .map(|id| format!(" #{}:", id))
-                    .unwrap_or_default();
+                    .map(|id| format!("[#{}]", id))
+                    .unwrap_or_else(|| "    ".to_string());
                 
                 // Truncate message if too long
-                let msg = if entry.message.len() > 50 {
-                    format!("{}...", &entry.message[..47])
+                let msg = if entry.message.len() > 45 {
+                    format!("{}...", &entry.message[..42])
                 } else {
                     entry.message.clone()
                 };
                 
-                println!("{} {} {}{}{} \x1b[90m[{}]\x1b[0m",
+                // Center single-width emojis, left-align info emoji
+                let emoji_with_spacing = if entry.level == LogLevel::Info {
+                    format!("{}   ", entry.level.as_emoji()) // Info emoji left-aligned with 3 spaces after
+                } else {
+                    format!(" {} ", entry.level.as_emoji())  // Other emojis centered with space before and after
+                };
+                
+                println!("{} {} {:>6} {:>5} {}{}\x1b[0m",
                     prefix,
-                    entry.level.as_emoji(),
-                    entry.level.as_color_code(),
+                    emoji_with_spacing,
+                    time_str,
                     client_str,
-                    msg,
-                    time_str
+                    entry.level.as_color_code(),
+                    msg
                 );
             }
         }
@@ -436,13 +449,10 @@ impl Dashboard {
         println!("\x1b[90mPress Ctrl+C to stop server | Dashboard updates every second\x1b[0m");
         
         // Flush output
-        io::stdout().flush().unwrap();
+        let _ = io::stdout().flush();
     }
     
     pub async fn start_render_loop(self: Arc<Self>) {
-        // Debug: confirm we're starting
-        eprintln!("Dashboard: Starting render loop");
-        
         // Render immediately first
         self.render().await;
         

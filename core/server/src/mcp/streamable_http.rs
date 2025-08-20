@@ -48,7 +48,7 @@ pub async fn handle_streamable_http(
 /// Handle GET request - establish SSE stream
 async fn handle_get(
     headers: HeaderMap,
-    _ws_state: Arc<WebSocketState>,
+    ws_state: Arc<WebSocketState>,
     session_manager: Arc<SessionManager>,
 ) -> Response {
     info!("=== MCP GET Request ===");
@@ -89,6 +89,9 @@ async fn handle_get(
     
     // Register the sender
     session_manager.register_sse_sender(session_id.clone(), tx.clone());
+    
+    // Add to dashboard as MCP session
+    ws_state.dashboard.add_mcp_session(session_id.clone()).await;
 
     // Send initial "endpoint-ready" message per streamable-http spec
     // This tells the client that the SSE connection is established and ready

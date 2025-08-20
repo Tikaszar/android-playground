@@ -46,29 +46,14 @@ impl NetworkingSystem {
     pub async fn initialize(&mut self, server_url: Option<String>) -> NetworkResult<()> {
         // Start the core server internally if not provided
         if server_url.is_none() {
-            // Start core/server in the background
-            // The server will create and own its dashboard
-            let (tx, rx) = tokio::sync::oneshot::channel();
-            
-            tokio::spawn(async move {
-                match Self::run_core_server().await {
-                    Ok(dashboard) => {
-                        let _ = tx.send(Ok(dashboard));
-                    }
-                    Err(e) => {
-                        eprintln!("Core server failed: {}", e);
-                        let _ = tx.send(Err(()));
-                    }
-                }
-            });
-            
-            // Wait for server to start and get dashboard reference
-            match tokio::time::timeout(tokio::time::Duration::from_secs(2), rx).await {
-                Ok(Ok(Ok(dashboard))) => {
+            // Start core/server and get dashboard reference
+            match Self::start_core_server().await {
+                Ok(dashboard) => {
                     self.dashboard = Some(dashboard);
                 }
-                _ => {
-                    // Server started but no dashboard available or timeout
+                Err(e) => {
+                    eprintln!("Core server startup failed: {}", e);
+                    return Err(NetworkError::ConnectionFailed(format!("Failed to start core server: {}", e)));
                 }
             }
         }
@@ -77,7 +62,7 @@ impl NetworkingSystem {
         let url = server_url.unwrap_or_else(|| "ws://localhost:8080/ws".to_string());
         
         // Create and connect WebSocket client
-        let client = Arc::new(WebSocketClient::new(url));
+        let client = Arc::new(WebSocketClient::new(url.clone()));
         client.connect().await?;
         
         // Store the client
@@ -338,8 +323,9 @@ impl NetworkingSystem {
         Ok(total_stats)
     }
     
-    /// Run the core server internally (called by initialize)
-    async fn run_core_server() -> Result<Arc<playground_core_server::Dashboard>, Box<dyn std::error::Error>> {
+    /// Start the core server internally (called by initialize)
+    /// This version starts the server and returns immediately with the dashboard reference
+    async fn start_core_server() -> Result<Arc<playground_core_server::Dashboard>, Box<dyn std::error::Error>> {
         use playground_core_server::{
             Dashboard, McpServer, WebSocketState, websocket_handler,
             list_plugins, reload_plugin, root,
@@ -404,12 +390,15 @@ impl NetworkingSystem {
         
         let listener = tokio::net::TcpListener::bind(addr).await?;
         
-        // Start server in background
+        // Start server in background - MUST spawn or it blocks
         tokio::spawn(async move {
             if let Err(e) = axum::serve(listener, app).await {
                 eprintln!("Server error: {}", e);
             }
         });
+        
+        // Give server a moment to fully start
+        tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
         
         Ok(dashboard_clone)
     }
