@@ -66,7 +66,8 @@ systems/        # Engine components
 ├── logic       # ECS and system initialization
 ├── networking  # WebSocket channels
 ├── ui          # UI framework
-├── rendering   # WebGL/Vulkan renderer
+├── rendering   # Legacy renderer (deprecated)
+├── webgl       # WebGL2 renderer implementation
 └── physics     # 2D/3D physics (planned)
 
 core/           # Foundation layer
@@ -112,8 +113,8 @@ core/           # Foundation layer
 
 ## 📊 Project Stats
 
-- **Lines of Code**: ~45,000+
-- **Packages**: 21 active (1 app, 8 IDE plugins, 6 systems, 6 core)
+- **Lines of Code**: ~46,000+
+- **Packages**: 22 active (1 app, 8 IDE plugins, 7 systems, 6 core)
 - **Zero Unsafe Code**: 100% safe Rust
 - **WASM Size**: 431KB optimized
 - **Compilation**: < 30s on modern Android
@@ -185,10 +186,12 @@ This is an experimental project between AI agents and developers. Each session b
 
 ## 🎮 Roadmap
 
-### Current Focus
-- Fix UI rendering (black screen issue)
-- Complete Discord-style UI implementation
-- Test IDE plugin functionality
+### Current Focus (2025-08-21)
+- ✅ Created WebGL2 renderer in systems/webgl
+- 🔄 Integrating renderer with systems/ui
+- 🔄 Fix UI rendering (black screen issue)
+- ⏳ Update browser to use WebGL instead of Canvas2D
+- ⏳ Complete Discord-style UI implementation
 
 ### Next Up
 - WebGL rendering pipeline

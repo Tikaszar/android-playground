@@ -336,23 +336,70 @@ map.write().await.insert(key, value);
 
 ## Rendering Decisions
 
-### BaseRenderer Trait
-**Decision**: Abstract trait with WebGL/Vulkan implementations
+### Separate core/rendering and systems/webgl
+**Decision**: Split rendering into contract layer (core) and implementation layer (systems)
 
 **Why**:
-- Platform flexibility
-- WebGL for browser IDE
-- Vulkan for production games
-- Shared high-level interface
+- core/rendering defines traits and commands only
+- systems/webgl provides WebGL2 implementation
+- systems/vulkan can be added later for native
+- Clean separation of interface from implementation
+- Allows multiple renderer backends
 
-### Single Draw Call Target
-**Decision**: Batch everything into one draw call
+**Evolution**:
+1. Initially had systems/rendering with mixed concerns
+2. Created core/rendering for base contracts
+3. Created systems/webgl as pure WebGL implementation
+4. Removed old systems/rendering to avoid confusion
+
+### RenderCommand Enum Design
+**Decision**: Simple enum with array-based data instead of complex types
 
 **Why**:
-- Critical for mobile GPU performance
-- Reduces driver overhead
-- Better battery life
-- Simpler render pipeline
+- Easy to serialize for network transmission
+- No dependency on math libraries in core
+- Simple [f32; N] arrays for positions, colors, etc.
+- Reduces compilation dependencies
+- Better for WASM compatibility
+
+**Implementation**:
+```rust
+RenderCommand::DrawQuad {
+    position: [f32; 2],
+    size: [f32; 2], 
+    color: [f32; 4],
+}
+```
+
+### WebGL2 as Primary Target
+**Decision**: Target WebGL2 instead of WebGL1 or WebGPU
+
+**Why**:
+- WebGL2 has excellent browser support (95%+)
+- Supports instancing and other modern features
+- WebGPU still experimental in many browsers
+- Better than WebGL1's limited capabilities
+- Good balance of features vs compatibility
+
+### Vertex/Index Buffer Batching
+**Decision**: Batch all geometry into large buffers
+
+**Why**:
+- Reduces draw calls dramatically
+- Better mobile GPU performance
+- Flush at 100 commands or frame end
+- Pre-allocated 64K vertices, 192K indices
+- Amortizes allocation cost
+
+### Transform Stack Architecture
+**Decision**: Matrix3 transform stack with push/pop
+
+**Why**:
+- 2D rendering needs only 3x3 matrices
+- Supports hierarchical transformations
+- Efficient for UI element nesting
+- Matches Canvas2D mental model
+- Smaller than 4x4 matrices
 
 ## Development Principles
 
