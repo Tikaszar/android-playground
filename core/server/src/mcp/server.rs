@@ -105,7 +105,7 @@ async fn handle_streamable(
 async fn list_sessions(
     axum::extract::Extension(mcp_state): axum::extract::Extension<Arc<McpState>>,
 ) -> Json<Value> {
-    let sessions = mcp_state.session_manager.list_sessions();
+    let sessions = mcp_state.session_manager.list_sessions().await;
     Json(json!({
         "sessions": sessions
     }))
@@ -120,7 +120,7 @@ async fn create_session(
         .and_then(|v| v.as_str())
         .map(|s| s.to_string());
     
-    let (session_id, _rx) = mcp_state.session_manager.create_session(session_id);
+    let (session_id, _rx) = mcp_state.session_manager.create_session(session_id).await;
     
     Json(json!({
         "sessionId": session_id
@@ -132,7 +132,7 @@ async fn end_session(
     Path(id): Path<String>,
     axum::extract::Extension(mcp_state): axum::extract::Extension<Arc<McpState>>,
 ) -> StatusCode {
-    if mcp_state.session_manager.remove_session(&id).is_some() {
+    if mcp_state.session_manager.remove_session(&id).await.is_some() {
         StatusCode::NO_CONTENT
     } else {
         StatusCode::NOT_FOUND

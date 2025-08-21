@@ -215,7 +215,7 @@ mod tests {
         
         async fn deserialize(bytes: &Bytes) -> EcsResult<Self> {
             if bytes.len() < 4 {
-                return Err(EcsError::SerializationError("Invalid data".into()));
+                return Err(EcsError::SerializationFailed("Invalid data".into()));
             }
             let value = i32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]);
             Ok(Self { value })

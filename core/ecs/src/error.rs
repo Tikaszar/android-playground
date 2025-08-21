@@ -26,8 +26,11 @@ pub enum EcsError {
     #[error("Query error: {0}")]
     QueryError(String),
     
-    #[error("Serialization error: {0}")]
-    SerializationError(String),
+    #[error("Serialization failed: {0}")]
+    SerializationFailed(String),
+    
+    #[error("Deserialization failed: {0}")]
+    DeserializationFailed(String),
     
     #[error("Memory limit exceeded: {current}/{limit} bytes")]
     MemoryLimitExceeded {

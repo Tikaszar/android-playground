@@ -1,10 +1,31 @@
-//! Theme definitions
-
 use nalgebra::Vector4;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use crate::error::{UiError, UiResult};
 
-/// UI theme
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum ThemeId {
+    Dark,
+    Light,
+    Custom(u32),
+}
+
+impl Default for ThemeId {
+    fn default() -> Self {
+        ThemeId::Dark
+    }
+}
+
+impl std::fmt::Display for ThemeId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ThemeId::Dark => write!(f, "Dark"),
+            ThemeId::Light => write!(f, "Light"),
+            ThemeId::Custom(id) => write!(f, "Custom({})", id),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Theme {
     pub name: String,
@@ -15,7 +36,6 @@ pub struct Theme {
 }
 
 impl Theme {
-    /// Create dark theme
     pub fn dark() -> Self {
         Self {
             name: "Dark".to_string(),
@@ -26,7 +46,6 @@ impl Theme {
         }
     }
     
-    /// Create light theme
     pub fn light() -> Self {
         Self {
             name: "Light".to_string(),
@@ -38,7 +57,6 @@ impl Theme {
     }
 }
 
-/// Theme colors
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ThemeColors {
     pub background: Vector4<f32>,
@@ -54,12 +72,10 @@ pub struct ThemeColors {
     pub warning: Vector4<f32>,
     pub success: Vector4<f32>,
     pub info: Vector4<f32>,
-    // Editor specific colors
     pub editor_background: Vector4<f32>,
     pub line_number: Vector4<f32>,
     pub highlight: Vector4<f32>,
     pub cursor: Vector4<f32>,
-    // Syntax highlighting colors
     pub keyword: Vector4<f32>,
     pub string: Vector4<f32>,
     pub number: Vector4<f32>,
@@ -85,12 +101,10 @@ impl ThemeColors {
             warning: Vector4::new(1.0, 0.7, 0.3, 1.0),
             success: Vector4::new(0.3, 1.0, 0.3, 1.0),
             info: Vector4::new(0.3, 0.7, 1.0, 1.0),
-            // Editor colors
             editor_background: Vector4::new(0.08, 0.08, 0.08, 1.0),
             line_number: Vector4::new(0.5, 0.5, 0.5, 1.0),
             highlight: Vector4::new(0.2, 0.3, 0.5, 0.3),
             cursor: Vector4::new(1.0, 1.0, 1.0, 1.0),
-            // Syntax colors
             keyword: Vector4::new(0.8, 0.4, 0.9, 1.0),
             string: Vector4::new(0.4, 0.8, 0.4, 1.0),
             number: Vector4::new(0.4, 0.7, 1.0, 1.0),
@@ -106,22 +120,20 @@ impl ThemeColors {
             background: Vector4::new(0.98, 0.98, 0.98, 1.0),
             surface: Vector4::new(1.0, 1.0, 1.0, 1.0),
             surface_variant: Vector4::new(0.95, 0.95, 0.95, 1.0),
-            primary: Vector4::new(0.1, 0.5, 0.9, 1.0),
-            secondary: Vector4::new(0.9, 0.3, 0.6, 1.0),
+            primary: Vector4::new(0.0, 0.4, 0.8, 1.0),
+            secondary: Vector4::new(0.8, 0.2, 0.5, 1.0),
             text: Vector4::new(0.1, 0.1, 0.1, 1.0),
             text_secondary: Vector4::new(0.4, 0.4, 0.4, 1.0),
             border: Vector4::new(0.8, 0.8, 0.8, 1.0),
             hover: Vector4::new(0.9, 0.9, 0.9, 1.0),
-            error: Vector4::new(0.9, 0.2, 0.2, 1.0),
-            warning: Vector4::new(0.9, 0.6, 0.2, 1.0),
-            success: Vector4::new(0.2, 0.9, 0.2, 1.0),
-            info: Vector4::new(0.2, 0.6, 0.9, 1.0),
-            // Editor colors
+            error: Vector4::new(0.8, 0.1, 0.1, 1.0),
+            warning: Vector4::new(0.8, 0.5, 0.1, 1.0),
+            success: Vector4::new(0.1, 0.7, 0.1, 1.0),
+            info: Vector4::new(0.1, 0.5, 0.8, 1.0),
             editor_background: Vector4::new(1.0, 1.0, 1.0, 1.0),
             line_number: Vector4::new(0.6, 0.6, 0.6, 1.0),
-            highlight: Vector4::new(0.9, 0.9, 0.3, 0.3),
+            highlight: Vector4::new(0.8, 0.9, 1.0, 0.3),
             cursor: Vector4::new(0.0, 0.0, 0.0, 1.0),
-            // Syntax colors
             keyword: Vector4::new(0.6, 0.2, 0.7, 1.0),
             string: Vector4::new(0.2, 0.6, 0.2, 1.0),
             number: Vector4::new(0.2, 0.5, 0.8, 1.0),
@@ -133,76 +145,127 @@ impl ThemeColors {
     }
 }
 
-/// Theme typography
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ThemeTypography {
     pub font_family: String,
-    pub font_family_mono: String,
-    pub size_small: f32,
-    pub size_normal: f32,
-    pub size_large: f32,
-    pub size_heading: f32,
+    pub font_size_base: f32,
+    pub font_size_small: f32,
+    pub font_size_large: f32,
+    pub font_size_heading: f32,
     pub line_height: f32,
+    pub letter_spacing: f32,
 }
 
 impl Default for ThemeTypography {
     fn default() -> Self {
         Self {
-            font_family: "system-ui".to_string(),
-            font_family_mono: "monospace".to_string(),
-            size_small: 12.0,
-            size_normal: 14.0,
-            size_large: 18.0,
-            size_heading: 24.0,
+            font_family: "monospace".to_string(),
+            font_size_base: 14.0,
+            font_size_small: 12.0,
+            font_size_large: 16.0,
+            font_size_heading: 20.0,
             line_height: 1.5,
+            letter_spacing: 0.0,
         }
     }
 }
 
-/// Theme spacing
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ThemeSpacing {
-    pub xs: f32,
-    pub sm: f32,
-    pub md: f32,
-    pub lg: f32,
-    pub xl: f32,
+    pub unit: f32,
+    pub padding_small: f32,
+    pub padding_medium: f32,
+    pub padding_large: f32,
+    pub margin_small: f32,
+    pub margin_medium: f32,
+    pub margin_large: f32,
 }
 
 impl Default for ThemeSpacing {
     fn default() -> Self {
         Self {
-            xs: 4.0,
-            sm: 8.0,
-            md: 16.0,
-            lg: 24.0,
-            xl: 32.0,
+            unit: 8.0,
+            padding_small: 4.0,
+            padding_medium: 8.0,
+            padding_large: 16.0,
+            margin_small: 4.0,
+            margin_medium: 8.0,
+            margin_large: 16.0,
         }
     }
 }
 
-/// Theme borders
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ThemeBorders {
-    pub width_thin: f32,
-    pub width_normal: f32,
-    pub width_thick: f32,
     pub radius_small: f32,
-    pub radius_normal: f32,
+    pub radius_medium: f32,
     pub radius_large: f32,
-    pub radius_round: f32,
+    pub width_thin: f32,
+    pub width_medium: f32,
+    pub width_thick: f32,
 }
 
 impl Default for ThemeBorders {
     fn default() -> Self {
         Self {
-            width_thin: 1.0,
-            width_normal: 2.0,
-            width_thick: 4.0,
             radius_small: 2.0,
-            radius_normal: 4.0,
+            radius_medium: 4.0,
             radius_large: 8.0,
-            radius_round: 999.0,
+            width_thin: 1.0,
+            width_medium: 2.0,
+            width_thick: 4.0,
         }
+    }
+}
+
+pub struct ThemeManager {
+    themes: HashMap<ThemeId, Theme>,
+    current: ThemeId,
+}
+
+impl ThemeManager {
+    pub fn new() -> Self {
+        let mut themes = HashMap::new();
+        themes.insert(ThemeId::Dark, Theme::dark());
+        themes.insert(ThemeId::Light, Theme::light());
+        
+        Self {
+            themes,
+            current: ThemeId::Dark,
+        }
+    }
+    
+    pub fn load_default_themes(&mut self) -> UiResult<()> {
+        self.themes.insert(ThemeId::Dark, Theme::dark());
+        self.themes.insert(ThemeId::Light, Theme::light());
+        Ok(())
+    }
+    
+    pub fn add_theme(&mut self, theme: Theme) -> ThemeId {
+        let id = ThemeId::Custom(self.themes.len() as u32);
+        self.themes.insert(id, theme);
+        id
+    }
+    
+    pub fn get_theme(&self, id: ThemeId) -> UiResult<&Theme> {
+        self.themes.get(&id)
+            .ok_or_else(|| UiError::ThemeNotFound(id.to_string()))
+    }
+    
+    pub fn has_theme(&self, id: ThemeId) -> bool {
+        self.themes.contains_key(&id)
+    }
+    
+    pub fn set_current(&mut self, id: ThemeId) -> UiResult<()> {
+        if self.has_theme(id) {
+            self.current = id;
+            Ok(())
+        } else {
+            Err(UiError::ThemeNotFound(id.to_string()))
+        }
+    }
+    
+    pub fn current(&self) -> ThemeId {
+        self.current
     }
 }

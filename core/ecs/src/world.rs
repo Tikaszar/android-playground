@@ -331,7 +331,7 @@ mod tests {
         
         async fn deserialize(bytes: &Bytes) -> EcsResult<Self> {
             if bytes.len() < 8 {
-                return Err(EcsError::SerializationError("Invalid data".into()));
+                return Err(EcsError::SerializationFailed("Invalid data".into()));
             }
             Ok(Self {
                 x: f32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]),

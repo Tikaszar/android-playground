@@ -1,595 +1,420 @@
-//! Simplified UI system implementation using core/ecs for internal state
-
+use playground_core_rendering::{RenderCommand, RenderCommandBatch, Viewport};
+use playground_core_ecs::{World, EntityId, ComponentRegistry};
+use playground_core_types::{Shared, shared};
+use playground_core_server::{ChannelManager, Packet, Priority};
 use crate::error::{UiError, UiResult};
-use crate::components::{
-    UiElementComponent, UiLayoutComponent, UiStyleComponent, 
-    UiDirtyComponent, UiInputComponent, UiWebSocketComponent, 
-    UiTextComponent, AlignSelf, JustifySelf
-};
-use crate::element::ElementBounds;
-use crate::layout::LayoutConstraints;
-use crate::input::InputManager;
-use crate::rendering::UiRenderer;
-use crate::theme::{ThemeManager, ThemeId};
+use crate::element::{ElementGraph, ElementId};
+use crate::components::*;
+use crate::layout::LayoutEngine;
+use crate::input::{InputManager, InputEvent};
+use crate::theme::{ThemeManager, Theme, ThemeId};
+use crate::terminal::TerminalManager;
+use crate::mobile::MobileFeatures;
+use crate::rendering::ui_to_render_commands;
 use std::collections::HashMap;
-use std::default::Default;
-use crate::messages::{
-    UiPacketType, CreateElementMessage, UpdateElementMessage, InputEventMessage,
-    TerminalInputMessage, TerminalOutputMessage, TerminalConnectMessage,
-    TerminalStateMessage, RenderBatchMessage, RenderCommand, serialize_message, deserialize_message,
-};
-use nalgebra::{Vector2, Vector4};
-use playground_core_ecs::{World, EntityId, ComponentRegistry, Component};
-use playground_systems_rendering::BaseRenderer;
-use playground_core_server::{ChannelManager, Packet, Priority, FrameBatcher};
-use bytes::Bytes;
-use std::sync::Arc;
-use tokio::sync::RwLock;
 use uuid::Uuid;
 
-/// Simplified UI system struct using ECS for internal state management
 pub struct UiSystem {
-    initialized: bool,
-    world: Arc<World>,
-    registry: Arc<ComponentRegistry>,
-    input_manager: InputManager,
-    renderer: Option<Box<dyn UiRenderer>>,
-    theme_manager: ThemeManager,
-    screen_size: Vector2<f32>,
+    // Core ECS
+    world: Shared<World>,
+    registry: Shared<ComponentRegistry>,
+    
+    // Element management
+    element_graph: Shared<ElementGraph>,
     root_entity: Option<EntityId>,
-    channel_id: Option<u16>,
-    channel_manager: Option<Arc<RwLock<ChannelManager>>>,
-    batcher: Option<Arc<FrameBatcher>>,
-    terminal_connections: Arc<RwLock<HashMap<Uuid, EntityId>>>,
-    current_frame: u64,
+    
+    // Layout
+    layout_engine: Shared<LayoutEngine>,
+    
+    // Input handling
+    input_manager: Shared<InputManager>,
+    
+    // Theme management
+    theme_manager: Shared<ThemeManager>,
+    current_theme: ThemeId,
+    
+    // Terminal support
+    terminal_manager: Shared<TerminalManager>,
+    terminal_connections: Shared<HashMap<Uuid, EntityId>>,
+    
+    // Mobile features
+    mobile_features: Shared<MobileFeatures>,
+    
+    // Rendering
+    viewport: Viewport,
+    frame_id: u64,
+    dirty_elements: Shared<Vec<EntityId>>,
+    
+    // Networking
+    channel_manager: Option<Shared<ChannelManager>>,
+    channel_id: u16,
+    
+    // State
+    initialized: bool,
+    screen_size: [f32; 2],
 }
 
 impl UiSystem {
-    /// Create a new UI system with ECS backing
     pub fn new() -> Self {
-        let registry = Arc::new(ComponentRegistry::new());
-        let world = Arc::new(World::with_registry(Arc::clone(&registry)));
+        let registry = shared(ComponentRegistry::new());
+        let world = shared(World::with_registry(registry.clone()));
         
         Self {
-            initialized: false,
             world,
             registry,
-            input_manager: InputManager::new(),
-            renderer: None,
-            theme_manager: ThemeManager::new(),
-            screen_size: Vector2::new(1920.0, 1080.0),
+            element_graph: shared(ElementGraph::new()),
             root_entity: None,
-            channel_id: None,
+            layout_engine: shared(LayoutEngine::new()),
+            input_manager: shared(InputManager::new()),
+            theme_manager: shared(ThemeManager::new()),
+            current_theme: ThemeId::Dark,
+            terminal_manager: shared(TerminalManager::new()),
+            terminal_connections: shared(HashMap::new()),
+            mobile_features: shared(MobileFeatures::new()),
+            viewport: Viewport { x: 0, y: 0, width: 1920, height: 1080 },
+            frame_id: 0,
+            dirty_elements: shared(Vec::new()),
             channel_manager: None,
-            batcher: None,
-            terminal_connections: Arc::new(RwLock::new(HashMap::new())),
-            current_frame: 0,
+            channel_id: 10,
+            initialized: false,
+            screen_size: [1920.0, 1080.0],
         }
     }
-
-    /// Initialize the UI system without a renderer (for server-side command generation)
-    pub async fn initialize_headless(&mut self) -> UiResult<()> {
+    
+    pub async fn initialize(&mut self) -> UiResult<()> {
         if self.initialized {
-            return Err(UiError::InitializationFailed("Already initialized".to_string()));
+            return Err(UiError::AlreadyInitialized);
         }
         
-        // Register UI components with ECS
+        // Register all component types
         self.register_components().await?;
         
-        // Initialize theme manager with default themes
-        self.theme_manager.load_default_themes()?;
+        // Load default themes
+        let mut theme_mgr = self.theme_manager.write().await;
+        theme_mgr.load_default_themes()?;
+        drop(theme_mgr);
         
-        // Create root UI entity
-        self.root_entity = Some(self.create_root_entity().await?);
+        // Create root element
+        self.root_entity = Some(self.create_root().await?);
+        
+        // Initialize mobile features if on mobile
+        let mut mobile = self.mobile_features.write().await;
+        mobile.initialize().await?;
+        drop(mobile);
         
         self.initialized = true;
         Ok(())
     }
     
-    /// Initialize the UI system with a renderer and register components
-    pub async fn initialize<R: BaseRenderer + 'static>(&mut self, renderer: R) -> UiResult<()> {
-        if self.initialized {
-            return Err(UiError::InitializationFailed("Already initialized".to_string()));
+    pub async fn set_channel_manager(&mut self, manager: Shared<ChannelManager>) {
+        self.channel_manager = Some(manager);
+    }
+    
+    pub async fn set_viewport(&mut self, viewport: Viewport) {
+        self.viewport = viewport;
+        self.screen_size = [viewport.width as f32, viewport.height as f32];
+        
+        // Mark all elements as dirty for relayout
+        if let Some(root) = self.root_entity {
+            self.mark_subtree_dirty(root).await.ok();
+        }
+    }
+    
+    pub async fn render(&mut self) -> UiResult<RenderCommandBatch> {
+        if !self.initialized {
+            return Err(UiError::NotInitialized);
         }
         
-        // Register UI components with ECS
-        self.register_components().await?;
+        let mut batch = RenderCommandBatch::new(self.frame_id);
+        batch.set_viewport(self.viewport);
         
-        // Initialize theme manager with default themes
-        self.theme_manager.load_default_themes()?;
+        // Get current theme
+        let theme_mgr = self.theme_manager.read().await;
+        let theme = theme_mgr.get_theme(self.current_theme)?;
         
-        // Set up the renderer
-        // self.renderer = Some(Box::new(UiRendererImpl::new(renderer)));
+        // Clear with theme background
+        batch.push(RenderCommand::Clear {
+            color: [
+                theme.colors.background.x,
+                theme.colors.background.y,
+                theme.colors.background.z,
+                theme.colors.background.w,
+            ]
+        });
         
-        // Create root UI entity
-        self.root_entity = Some(self.create_root_entity().await?);
+        // Update layout for dirty elements
+        self.update_layout().await?;
         
-        self.initialized = true;
-        Ok(())
+        // Render element tree
+        if let Some(root) = self.root_entity {
+            self.render_element_tree(root, &mut batch, &theme).await?;
+        }
+        
+        // Render mobile UI if active
+        let mobile = self.mobile_features.read().await;
+        mobile.render(&mut batch, &theme)?;
+        drop(mobile);
+        
+        // Send via WebSocket
+        if let Some(ref manager) = self.channel_manager {
+            self.send_batch(&batch).await?;
+        }
+        
+        // Clear dirty list
+        self.dirty_elements.write().await.clear();
+        
+        self.frame_id += 1;
+        Ok(batch)
     }
     
-    /// Set up the WebSocket channel connection for sending render commands
-    pub async fn setup_channel(&mut self, channel_manager: Arc<RwLock<ChannelManager>>, batcher: Arc<FrameBatcher>) {
-        self.channel_manager = Some(channel_manager);
-        self.batcher = Some(batcher);
-        self.channel_id = Some(10); // UI system uses channel 10
+    pub async fn handle_input(&mut self, event: InputEvent) -> UiResult<bool> {
+        let mut input_mgr = self.input_manager.write().await;
+        let handled = input_mgr.process_event(event, &self.element_graph, &self.world).await?;
+        
+        // If input changed element state, mark as dirty
+        if handled {
+            if let Some(focused) = input_mgr.get_focused_element() {
+                self.dirty_elements.write().await.push(focused);
+            }
+        }
+        
+        Ok(handled)
     }
     
-    /// Register all UI components with the ECS registry
-    async fn register_components(&mut self) -> UiResult<()> {
-        // Register components with the registry (async)
-        self.registry.register::<UiElementComponent>().await
-            .map_err(|e| UiError::InitializationFailed(format!("Failed to register UiElementComponent: {}", e)))?;
+    pub async fn create_element(
+        &mut self,
+        element_type: &str,
+        parent: Option<EntityId>,
+    ) -> UiResult<EntityId> {
+        let mut world = self.world.write().await;
         
-        self.registry.register::<UiLayoutComponent>().await
-            .map_err(|e| UiError::InitializationFailed(format!("Failed to register UiLayoutComponent: {}", e)))?;
+        // Create element with all components
+        let components: Vec<Box<dyn playground_core_ecs::Component>> = vec![
+            Box::new(UiElementComponent::new(element_type)),
+            Box::new(UiLayoutComponent::default()),
+            Box::new(UiStyleComponent::default()),
+            Box::new(UiInputComponent::default()),
+        ];
         
-        self.registry.register::<UiStyleComponent>().await
-            .map_err(|e| UiError::InitializationFailed(format!("Failed to register UiStyleComponent: {}", e)))?;
-        
-        self.registry.register::<UiDirtyComponent>().await
-            .map_err(|e| UiError::InitializationFailed(format!("Failed to register UiDirtyComponent: {}", e)))?;
-        
-        self.registry.register::<UiInputComponent>().await
-            .map_err(|e| UiError::InitializationFailed(format!("Failed to register UiInputComponent: {}", e)))?;
-        
-        self.registry.register::<UiWebSocketComponent>().await
-            .map_err(|e| UiError::InitializationFailed(format!("Failed to register UiWebSocketComponent: {}", e)))?;
-        
-        self.registry.register::<UiTextComponent>().await
-            .map_err(|e| UiError::InitializationFailed(format!("Failed to register UiTextComponent: {}", e)))?;
-        
-        // Now register the components with the world's storage
-        self.world.register_component::<UiElementComponent>().await
-            .map_err(|e| UiError::InitializationFailed(format!("Failed to register UiElementComponent with world: {}", e)))?;
-        
-        self.world.register_component::<UiLayoutComponent>().await
-            .map_err(|e| UiError::InitializationFailed(format!("Failed to register UiLayoutComponent with world: {}", e)))?;
-        
-        self.world.register_component::<UiStyleComponent>().await
-            .map_err(|e| UiError::InitializationFailed(format!("Failed to register UiStyleComponent with world: {}", e)))?;
-        
-        self.world.register_component::<UiDirtyComponent>().await
-            .map_err(|e| UiError::InitializationFailed(format!("Failed to register UiDirtyComponent with world: {}", e)))?;
-        
-        self.world.register_component::<UiInputComponent>().await
-            .map_err(|e| UiError::InitializationFailed(format!("Failed to register UiInputComponent with world: {}", e)))?;
-        
-        self.world.register_component::<UiWebSocketComponent>().await
-            .map_err(|e| UiError::InitializationFailed(format!("Failed to register UiWebSocketComponent with world: {}", e)))?;
-        
-        self.world.register_component::<UiTextComponent>().await
-            .map_err(|e| UiError::InitializationFailed(format!("Failed to register UiTextComponent with world: {}", e)))?;
-        
-        Ok(())
-    }
-    
-    /// Create a UI element
-    pub async fn create_element(&self, name: String, tag: String, parent: Option<EntityId>) -> UiResult<EntityId> {
-        // Create empty entity
-        let entities = self.world.spawn_batch(vec![vec![]]).await
-            .map_err(|e| UiError::Other(format!("Failed to spawn entity: {}", e)))?;
-        
-        let entity = entities[0];
-        
-        // Add element component
-        let element = UiElementComponent {
-            id: Uuid::new_v4(),
-            name,
-            tag,
-            bounds: ElementBounds {
-                position: Vector2::new(0.0, 0.0),
-                size: Vector2::new(100.0, 100.0),
-            },
-            children: Vec::new(),
-            parent,
-            visible: true,
-            interactive: true,
-            z_index: 0,
+        // Add text component for text elements
+        let components = if element_type == "text" || element_type == "input" {
+            let mut comps = components;
+            comps.push(Box::new(UiTextComponent::new(String::new())));
+            comps
+        } else {
+            components
         };
         
-        let component_box = Box::new(element) as Box<dyn playground_core_ecs::Component>;
-        let component_id = <UiElementComponent as Component>::component_id();
-        self.world.add_component_raw(entity, component_box, component_id).await
-            .map_err(|e| UiError::Other(format!("Failed to add element component: {}", e)))?;
+        let entities = world.spawn_batch(vec![components]).await
+            .map_err(|e| UiError::EcsError(e.to_string()))?;
         
-        // Mark as dirty to trigger render
-        self.mark_dirty(entity).await?;
+        let entity = entities.into_iter().next()
+            .ok_or_else(|| UiError::CreationFailed("Failed to create element".into()))?;
+        
+        drop(world);
+        
+        // Add to element graph
+        if let Some(parent) = parent {
+            let mut graph = self.element_graph.write().await;
+            graph.add_child(parent, entity)?;
+        }
+        
+        // Mark as dirty for layout
+        self.dirty_elements.write().await.push(entity);
         
         Ok(entity)
     }
     
-    /// Create the root UI entity
-    async fn create_root_entity(&self) -> UiResult<EntityId> {
-        // For now, just create an empty entity since spawn_batch has issues with boxed components
-        // We'll add components later when we have proper typed methods
-        let entities = self.world.spawn_batch(vec![vec![]]).await
-            .map_err(|e| UiError::InitializationFailed(format!("Failed to create root entity: {}", e)))?;
+    pub async fn remove_element(&mut self, element: EntityId) -> UiResult<()> {
+        // Remove from graph
+        let mut graph = self.element_graph.write().await;
+        graph.remove_element(element);
+        drop(graph);
         
-        let root_entity = entities[0];
+        // Remove from world
+        let mut world = self.world.write().await;
+        world.despawn(element).await
+            .map_err(|e| UiError::EcsError(e.to_string()))?;
         
-        // Add root element component
-        let root_element = UiElementComponent {
-            id: Uuid::new_v4(),
-            name: "root".to_string(),
-            tag: "div".to_string(),
-            bounds: ElementBounds {
-                position: Vector2::new(0.0, 0.0),
-                size: self.screen_size,
-            },
-            children: Vec::new(),
-            parent: None,
-            visible: true,
-            interactive: false,
-            z_index: 0,
-        };
-        
-        let component_box = Box::new(root_element) as Box<dyn playground_core_ecs::Component>;
-        let component_id = <UiElementComponent as Component>::component_id();
-        self.world.add_component_raw(root_entity, component_box, component_id).await
-            .map_err(|e| UiError::InitializationFailed(format!("Failed to add root element: {}", e)))?;
-        
-        // Add root style
-        let root_style = UiStyleComponent {
-            theme_id: ThemeId(0),
-            background_color: Vector4::new(0.137, 0.145, 0.161, 1.0), // Discord dark
-            border_color: Vector4::new(0.0, 0.0, 0.0, 0.0),
-            text_color: Vector4::new(1.0, 1.0, 1.0, 1.0),
-            border_width: 0.0,
-            border_radius: 0.0,
-            opacity: 1.0,
-            custom_properties: Default::default(),
-        };
-        
-        let component_box = Box::new(root_style) as Box<dyn playground_core_ecs::Component>;
-        let component_id = <UiStyleComponent as Component>::component_id();
-        self.world.add_component_raw(root_entity, component_box, component_id).await
-            .map_err(|e| UiError::InitializationFailed(format!("Failed to add root style: {}", e)))?;
-        
-        Ok(root_entity)
+        Ok(())
     }
     
-    /// Register UI system with core/server for WebSocket communication
-    pub async fn register_with_server(&mut self, channel_manager: Arc<RwLock<ChannelManager>>) -> UiResult<()> {
-        // Register UI system on channel 10
-        let channel_id = channel_manager.write().await.register_system("ui".to_string(), 10).await
-            .map_err(|e| UiError::InitializationFailed(format!("Failed to register UI channel: {}", e)))?;
+    pub async fn set_element_text(&mut self, element: EntityId, text: String) -> UiResult<()> {
+        let mut world = self.world.write().await;
         
-        // Create frame batcher for packet batching (60fps)
-        let batcher = Arc::new(FrameBatcher::new(1024, 60));
+        // Update element component
+        if let Ok(mut elem) = world.get_component_mut::<UiElementComponent>(element).await {
+            elem.text_content = Some(text.clone());
+        }
         
-        self.channel_id = Some(channel_id);
-        self.channel_manager = Some(channel_manager);
-        self.batcher = Some(batcher);
+        // Update text component if exists
+        if let Ok(mut text_comp) = world.get_component_mut::<UiTextComponent>(element).await {
+            text_comp.text = text;
+        }
+        
+        drop(world);
+        
+        // Mark as dirty
+        self.dirty_elements.write().await.push(element);
         
         Ok(())
     }
-
-    /// Check if the UI system is initialized
-    pub fn is_initialized(&self) -> bool {
-        self.initialized
-    }
-
-    /// Set screen size for layout calculations
-    pub fn set_screen_size(&mut self, width: f32, height: f32) {
-        self.screen_size = Vector2::new(width, height);
-    }
-
-    /// Perform layout for all elements
-    pub async fn perform_layout(&mut self) -> UiResult<()> {
-        if !self.initialized {
-            return Err(UiError::InitializationFailed("UI system not initialized".to_string()));
-        }
+    
+    pub async fn create_terminal(&mut self, parent: EntityId) -> UiResult<Uuid> {
+        let terminal_id = Uuid::new_v4();
+        let entity = self.create_element("terminal", Some(parent)).await?;
         
-        // For now, simplified layout without complex queries
-        // This would need to be expanded with proper component access
+        // Register terminal connection
+        self.terminal_connections.write().await.insert(terminal_id, entity);
+        
+        // Create terminal instance
+        let mut term_mgr = self.terminal_manager.write().await;
+        term_mgr.create_terminal(terminal_id).await?;
+        
+        Ok(terminal_id)
+    }
+    
+    pub async fn set_theme(&mut self, theme_id: ThemeId) -> UiResult<()> {
+        let theme_mgr = self.theme_manager.read().await;
+        if !theme_mgr.has_theme(theme_id) {
+            return Err(UiError::ThemeNotFound(theme_id.to_string()));
+        }
+        drop(theme_mgr);
+        
+        self.current_theme = theme_id;
+        
+        // Mark all elements as dirty to re-render with new theme
+        if let Some(root) = self.root_entity {
+            self.mark_subtree_dirty(root).await?;
+        }
         
         Ok(())
     }
-
-    /// Render the UI
-    pub async fn render(&mut self) -> UiResult<()> {
-        if !self.initialized {
-            return Err(UiError::InitializationFailed("UI system not initialized".to_string()));
+    
+    async fn register_components(&self) -> UiResult<()> {
+        let mut registry = self.registry.write().await;
+        
+        registry.register::<UiElementComponent>("UiElementComponent");
+        registry.register::<UiLayoutComponent>("UiLayoutComponent");
+        registry.register::<UiStyleComponent>("UiStyleComponent");
+        registry.register::<UiInputComponent>("UiInputComponent");
+        registry.register::<UiTextComponent>("UiTextComponent");
+        
+        Ok(())
+    }
+    
+    async fn create_root(&self) -> UiResult<EntityId> {
+        let mut world = self.world.write().await;
+        
+        let mut root_element = UiElementComponent::new("root");
+        root_element.visible = true;
+        
+        let mut root_layout = UiLayoutComponent::default();
+        root_layout.bounds = ElementBounds {
+            x: 0.0,
+            y: 0.0,
+            width: self.screen_size[0],
+            height: self.screen_size[1],
+        };
+        root_layout.layout_type = LayoutType::Absolute;
+        
+        let mut root_style = UiStyleComponent::default();
+        root_style.visible = true;
+        
+        let components: Vec<Box<dyn playground_core_ecs::Component>> = vec![
+            Box::new(root_element),
+            Box::new(root_layout),
+            Box::new(root_style),
+            Box::new(UiInputComponent::default()),
+        ];
+        
+        let entities = world.spawn_batch(vec![components]).await
+            .map_err(|e| UiError::EcsError(e.to_string()))?;
+        
+        entities.into_iter().next()
+            .ok_or_else(|| UiError::CreationFailed("Failed to create root".into()))
+    }
+    
+    async fn update_layout(&mut self) -> UiResult<()> {
+        let dirty = self.dirty_elements.read().await.clone();
+        
+        if dirty.is_empty() {
+            return Ok(());
         }
         
-        self.current_frame += 1;
+        let mut layout_engine = self.layout_engine.write().await;
         
-        // Build query for dirty elements
-        let query = self.world.query()
-            .with_component(<UiDirtyComponent as playground_core_ecs::Component>::component_id())
-            .with_component(<UiElementComponent as playground_core_ecs::Component>::component_id())
-            .build();
+        for entity in dirty {
+            layout_engine.calculate_layout(
+                entity,
+                &self.element_graph,
+                &self.world,
+                self.screen_size,
+            ).await?;
+        }
         
-        let dirty_entities = self.world.execute_query(query.as_ref()).await
-            .map_err(|e| UiError::Other(format!("Query failed: {}", e)))?;
+        Ok(())
+    }
+    
+    async fn render_element_tree(
+        &self,
+        entity: EntityId,
+        batch: &mut RenderCommandBatch,
+        theme: &Theme,
+    ) -> UiResult<()> {
+        let world = self.world.read().await;
         
-        // Generate render commands
-        let mut commands = Vec::new();
+        // Get all components for this element
+        let element = world.get_component::<UiElementComponent>(entity).await
+            .map_err(|e| UiError::EcsError(e.to_string()))?;
+        let layout = world.get_component::<UiLayoutComponent>(entity).await
+            .map_err(|e| UiError::EcsError(e.to_string()))?;
+        let style = world.get_component::<UiStyleComponent>(entity).await
+            .map_err(|e| UiError::EcsError(e.to_string()))?;
         
-        // Clear screen with Discord dark background
-        commands.push(RenderCommand::Clear { 
-            color: Vector4::new(0.137, 0.145, 0.161, 1.0)  // #2f3136
-        });
+        // Convert to render commands
+        ui_to_render_commands(&element, &layout, &style, theme, batch)?;
         
-        // Render each dirty element
-        for entity in dirty_entities {
-            // Get element component
-            if let Ok(element) = self.world.get_component::<UiElementComponent>(entity).await {
-                if !element.visible {
-                    continue;
-                }
-                
-                // Get style component if it exists
-                let style = self.world.get_component::<UiStyleComponent>(entity).await.ok();
-                
-                // Draw element background
-                if let Some(ref style) = style {
-                    commands.push(RenderCommand::DrawQuad {
-                        position: element.bounds.position,
-                        size: element.bounds.size,
-                        color: style.background_color,
-                    });
-                }
-                
-                // Draw text if present
-                if let Ok(text) = self.world.get_component::<UiTextComponent>(entity).await {
-                    let text_color = style.as_ref()
-                        .map(|s| s.text_color)
-                        .unwrap_or_else(|| Vector4::new(1.0, 1.0, 1.0, 1.0));
-                    
-                    commands.push(RenderCommand::DrawText {
-                        position: element.bounds.position + Vector2::new(10.0, 10.0), // Padding
-                        text: text.text.clone(),
-                        size: text.font_size,
-                        color: text_color,
-                    });
-                }
+        // Render children
+        let graph = self.element_graph.read().await;
+        if let Some(children) = graph.get_children(entity) {
+            for &child in children {
+                Box::pin(self.render_element_tree(child, batch, theme)).await?;
             }
-            
-            // Clear dirty flag after rendering
-            // TODO: Add remove_component method to World
-            // self.world.remove_component::<UiDirtyComponent>(entity).await
-            //     .ok(); // Ignore error if component doesn't exist
         }
         
-        // Send render batch if we have commands
-        if !commands.is_empty() {
-            let batch = RenderBatchMessage {
-                frame_id: self.current_frame,
-                commands,
+        Ok(())
+    }
+    
+    async fn mark_subtree_dirty(&self, root: EntityId) -> UiResult<()> {
+        let graph = self.element_graph.read().await;
+        let mut dirty = self.dirty_elements.write().await;
+        
+        // Use depth-first iterator to mark entire subtree
+        for element in graph.iter_depth_first(root) {
+            dirty.push(element);
+        }
+        
+        Ok(())
+    }
+    
+    async fn send_batch(&self, batch: &RenderCommandBatch) -> UiResult<()> {
+        if let Some(ref manager) = self.channel_manager {
+            let data = bincode::serialize(batch)
+                .map_err(|e| UiError::SerializationError(e.to_string()))?;
+            
+            let packet = Packet {
+                channel_id: self.channel_id,
+                packet_type: 100, // RenderBatch type
+                priority: Priority::High,
+                payload: data,
             };
             
-            let payload = serialize_message(&batch)?;
-            self.send_packet(UiPacketType::RenderBatch, payload).await?;
+            let mut mgr = manager.write().await;
+            mgr.send_to_channel(self.channel_id, packet).await
+                .map_err(|e| UiError::NetworkError(e.to_string()))?;
         }
         
         Ok(())
-    }
-
-    /// Update the UI
-    pub async fn update(&mut self, _delta_time: f32) -> UiResult<()> {
-        if !self.initialized {
-            return Err(UiError::InitializationFailed("UI system not initialized".to_string()));
-        }
-        
-        // Run garbage collection on ECS
-        self.world.run_gc().await
-            .map_err(|e| UiError::Other(format!("GC failed: {}", e)))?;
-        
-        // Process WebSocket messages if connected
-        if let Some(_channel_id) = self.channel_id {
-            // Process messages through channel manager
-        }
-        
-        // Render the UI each frame
-        self.render().await?;
-        
-        Ok(())
-    }
-    
-    /// Get the root entity
-    pub fn root_entity(&self) -> Option<EntityId> {
-        self.root_entity
-    }
-    
-    /// Get the ECS world for advanced queries
-    pub fn world(&self) -> Arc<World> {
-        Arc::clone(&self.world)
-    }
-    
-    /// Get the input manager
-    pub fn input_manager(&mut self) -> &mut InputManager {
-        &mut self.input_manager
-    }
-    
-    /// Get the theme manager
-    pub fn theme_manager(&mut self) -> &mut ThemeManager {
-        &mut self.theme_manager
-    }
-    
-    /// Get memory statistics from the ECS
-    pub async fn memory_stats(&self) -> UiResult<playground_core_ecs::MemoryStats> {
-        let stats = self.world.memory_stats().await;
-        Ok(stats)
-    }
-    
-    /// Mark an element as dirty for rendering
-    pub async fn mark_dirty(&self, entity: EntityId) -> UiResult<()> {
-        let dirty = UiDirtyComponent {
-            layout_dirty: true,
-            style_dirty: true,
-            content_dirty: true,
-            last_render_frame: self.current_frame,
-        };
-        
-        // Use add_component_raw with the component boxed
-        let component_box = Box::new(dirty) as Box<dyn playground_core_ecs::Component>;
-        let component_id = <UiDirtyComponent as Component>::component_id();
-        
-        self.world.add_component_raw(entity, component_box, component_id).await
-            .map_err(|e| UiError::Other(format!("Failed to mark dirty: {}", e)))?;
-        
-        Ok(())
-    }
-    
-    /// Send a packet through the WebSocket channel
-    pub async fn send_packet(&self, packet_type: UiPacketType, payload: Bytes) -> UiResult<()> {
-        let channel_id = self.channel_id
-            .ok_or_else(|| UiError::ChannelError("UI system not registered with server".to_string()))?;
-        
-        let batcher = self.batcher.as_ref()
-            .ok_or_else(|| UiError::ChannelError("Batcher not initialized".to_string()))?;
-        
-        let packet = Packet::new(
-            channel_id,
-            packet_type as u16,
-            Priority::Medium,
-            payload,
-        );
-        
-        batcher.queue_packet(packet).await;
-        Ok(())
-    }
-    
-    /// Process incoming WebSocket message
-    pub async fn handle_message(&mut self, packet: Packet) -> UiResult<()> {
-        let packet_type = UiPacketType::try_from(packet.packet_type)?;
-        
-        match packet_type {
-            UiPacketType::CreateElement => {
-                let msg: CreateElementMessage = deserialize_message(&packet.payload)?;
-                self.handle_create_element(msg).await?;
-            }
-            UiPacketType::UpdateElement => {
-                let msg: UpdateElementMessage = deserialize_message(&packet.payload)?;
-                self.handle_update_element(msg).await?;
-            }
-            UiPacketType::InputEvent => {
-                let msg: InputEventMessage = deserialize_message(&packet.payload)?;
-                self.handle_input_event(msg).await?;
-            }
-            UiPacketType::TerminalInput => {
-                let msg: TerminalInputMessage = deserialize_message(&packet.payload)?;
-                self.handle_terminal_input(msg).await?;
-            }
-            UiPacketType::TerminalConnect => {
-                let msg: TerminalConnectMessage = deserialize_message(&packet.payload)?;
-                self.handle_terminal_connect(msg).await?;
-            }
-            _ => {
-                // Ignore unhandled packet types for now
-            }
-        }
-        
-        Ok(())
-    }
-    
-    /// Handle create element message
-    async fn handle_create_element(&mut self, msg: CreateElementMessage) -> UiResult<()> {
-        // Find parent entity if specified
-        let parent_entity = if let Some(_parent_id) = msg.parent_id {
-            // TODO: Implement UUID to EntityId mapping
-            self.root_entity
-        } else {
-            self.root_entity
-        };
-        
-        // Clone values we need to reuse
-        let element_type = msg.element_type.clone();
-        let name = msg.name.clone();
-        
-        // Create new element
-        let entity = self.create_element(
-            name,
-            element_type.clone(),
-            parent_entity,
-        ).await?;
-        
-        // Send response
-        let response = CreateElementMessage {
-            parent_id: msg.parent_id,
-            element_type,
-            name: format!("Created entity: {:?}", entity),
-            position: msg.position,
-            size: msg.size,
-        };
-        
-        let payload = serialize_message(&response)?;
-        self.send_packet(UiPacketType::ElementCreated, payload).await?;
-        
-        Ok(())
-    }
-    
-    /// Handle update element message
-    async fn handle_update_element(&mut self, _msg: UpdateElementMessage) -> UiResult<()> {
-        // TODO: Implement element updates via ECS components
-        Ok(())
-    }
-    
-    /// Handle input event message
-    async fn handle_input_event(&mut self, _msg: InputEventMessage) -> UiResult<()> {
-        // TODO: Route input events to appropriate elements
-        Ok(())
-    }
-    
-    /// Handle terminal input message
-    async fn handle_terminal_input(&mut self, msg: TerminalInputMessage) -> UiResult<()> {
-        // Forward terminal input to the terminal connection
-        let connections = self.terminal_connections.read().await;
-        if let Some(_entity_id) = connections.get(&msg.terminal_id) {
-            // TODO: Send input to actual terminal process
-            
-            // For now, echo the input back as output
-            let output = TerminalOutputMessage {
-                terminal_id: msg.terminal_id,
-                output: format!("$ {}", msg.input),
-                is_error: false,
-            };
-            
-            let payload = serialize_message(&output)?;
-            self.send_packet(UiPacketType::TerminalOutput, payload).await?;
-        }
-        
-        Ok(())
-    }
-    
-    /// Handle terminal connect message
-    async fn handle_terminal_connect(&mut self, msg: TerminalConnectMessage) -> UiResult<()> {
-        // Create a terminal entity
-        let entity = self.create_element(
-            format!("terminal-{}", msg.terminal_id),
-            "terminal".to_string(),
-            self.root_entity,
-        ).await?;
-        
-        // Store the terminal connection
-        let mut connections = self.terminal_connections.write().await;
-        connections.insert(msg.terminal_id, entity);
-        
-        // Send connection status
-        let state = TerminalStateMessage {
-            terminal_id: msg.terminal_id,
-            connected: true,
-            ready: true,
-        };
-        
-        let payload = serialize_message(&state)?;
-        self.send_packet(UiPacketType::TerminalState, payload).await?;
-        
-        Ok(())
-    }
-    
-    /// Send render batch to clients
-    pub async fn send_render_batch(&self, batch: RenderBatchMessage) -> UiResult<()> {
-        let payload = serialize_message(&batch)?;
-        self.send_packet(UiPacketType::RenderBatch, payload).await?;
-        Ok(())
-    }
-}
-
-impl Default for UiSystem {
-    fn default() -> Self {
-        Self::new()
     }
 }

@@ -1,344 +1,193 @@
-//! UI-specific ECS components for internal state management
-
-use async_trait::async_trait;
-use bytes::{Bytes, BytesMut, BufMut};
-use nalgebra::{Vector2, Vector4};
-use playground_core_ecs::{Component, ComponentId, EcsResult, EcsError};
+use playground_core_ecs::{Component, ComponentId, EcsError};
+use serde::{Serialize, Deserialize};
+use nalgebra::Vector4;
 use std::collections::HashMap;
-use uuid::Uuid;
-use crate::element::ElementBounds;
-use crate::layout::LayoutConstraints;
-use crate::theme::ThemeId;
 
-/// Component storing basic UI element data
-#[derive(Debug, Clone)]
+// Element component
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UiElementComponent {
-    pub id: Uuid,
-    pub name: String,
-    pub tag: String,
-    pub bounds: ElementBounds,
-    pub children: Vec<playground_core_ecs::EntityId>,
-    pub parent: Option<playground_core_ecs::EntityId>,
+    pub id: String,
+    pub element_type: String,
+    pub text_content: Option<String>,
     pub visible: bool,
-    pub interactive: bool,
-    pub z_index: i32,
+    pub hovered: bool,
+    pub focused: bool,
+    pub disabled: bool,
+    pub children: Vec<playground_core_ecs::EntityId>,
 }
 
-#[async_trait]
+impl UiElementComponent {
+    pub fn new(element_type: &str) -> Self {
+        Self {
+            id: uuid::Uuid::new_v4().to_string(),
+            element_type: element_type.to_string(),
+            text_content: None,
+            visible: true,
+            hovered: false,
+            focused: false,
+            disabled: false,
+            children: Vec::new(),
+        }
+    }
+}
+
 impl Component for UiElementComponent {
     fn component_id() -> ComponentId {
-        std::any::TypeId::of::<Self>()
+        ComponentId(100)
     }
     
-    async fn serialize(&self) -> EcsResult<Bytes> {
-        let mut buf = BytesMut::new();
-        
-        // Serialize ID (16 bytes)
-        buf.put_slice(self.id.as_bytes());
-        
-        // Serialize name length and name
-        buf.put_u32_le(self.name.len() as u32);
-        buf.put_slice(self.name.as_bytes());
-        
-        // Serialize tag length and tag
-        buf.put_u32_le(self.tag.len() as u32);
-        buf.put_slice(self.tag.as_bytes());
-        
-        // Serialize bounds (16 bytes: x, y, width, height as f32)
-        buf.put_f32_le(self.bounds.position.x);
-        buf.put_f32_le(self.bounds.position.y);
-        buf.put_f32_le(self.bounds.size.x);
-        buf.put_f32_le(self.bounds.size.y);
-        
-        // Serialize children count and IDs
-        buf.put_u32_le(self.children.len() as u32);
-        for child in &self.children {
-            buf.put_u32_le(child.index());
-            buf.put_u32_le(child.generation().value());
-        }
-        
-        // Serialize parent (optional)
-        if let Some(parent) = self.parent {
-            buf.put_u8(1);
-            buf.put_u32_le(parent.index());
-            buf.put_u32_le(parent.generation().value());
-        } else {
-            buf.put_u8(0);
-        }
-        
-        // Serialize flags and z_index
-        buf.put_u8(if self.visible { 1 } else { 0 });
-        buf.put_u8(if self.interactive { 1 } else { 0 });
-        buf.put_i32_le(self.z_index);
-        
-        Ok(buf.freeze())
+    fn component_name() -> &'static str {
+        "UiElementComponent"
     }
     
-    async fn deserialize(_data: &Bytes) -> EcsResult<Self> where Self: Sized {
-        // Implement deserialization when needed
-        Err(EcsError::SerializationError("UiElementComponent deserialization not implemented".into()))
+    fn serialize(&self) -> Result<Vec<u8>, EcsError> {
+        bincode::serialize(self)
+            .map_err(|e| EcsError::SerializationFailed(e.to_string()))
+    }
+    
+    fn deserialize(data: &[u8]) -> Result<Self, EcsError> {
+        bincode::deserialize(data)
+            .map_err(|e| EcsError::DeserializationFailed(e.to_string()))
     }
 }
 
-/// Component storing layout constraints and results
-#[derive(Debug, Clone)]
+// Layout component
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UiLayoutComponent {
-    pub constraints: LayoutConstraints,
-    pub computed_size: Vector2<f32>,
-    pub computed_position: Vector2<f32>,
-    pub padding: Vector4<f32>, // top, right, bottom, left
-    pub margin: Vector4<f32>,  // top, right, bottom, left
-    pub flex_grow: f32,
-    pub flex_shrink: f32,
-    pub flex_basis: f32,
-    pub align_self: AlignSelf,
-    pub justify_self: JustifySelf,
+    pub bounds: ElementBounds,
+    pub padding: [f32; 4], // top, right, bottom, left
+    pub margin: [f32; 4],
+    pub layout_type: LayoutType,
+    pub flex_direction: FlexDirection,
+    pub justify_content: JustifyContent,
+    pub align_items: AlignItems,
+    pub position_type: PositionType,
+    pub size: Size,
+    pub min_size: Size,
+    pub max_size: Size,
 }
 
-#[derive(Debug, Clone, Copy)]
-pub enum AlignSelf {
-    Auto,
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+pub struct ElementBounds {
+    pub x: f32,
+    pub y: f32,
+    pub width: f32,
+    pub height: f32,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub enum LayoutType {
+    Flexbox,
+    Absolute,
+    Docking,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub enum FlexDirection {
+    Row,
+    Column,
+    RowReverse,
+    ColumnReverse,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub enum JustifyContent {
     FlexStart,
     FlexEnd,
     Center,
-    Stretch,
+    SpaceBetween,
+    SpaceAround,
+    SpaceEvenly,
 }
 
-#[derive(Debug, Clone, Copy)]
-pub enum JustifySelf {
-    Auto,
-    Start,
-    End,
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub enum AlignItems {
+    FlexStart,
+    FlexEnd,
     Center,
+    Baseline,
     Stretch,
 }
 
-#[async_trait]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub enum PositionType {
+    Relative,
+    Absolute,
+    Fixed,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+pub struct Size {
+    pub width: Option<f32>,
+    pub height: Option<f32>,
+}
+
+impl Default for UiLayoutComponent {
+    fn default() -> Self {
+        Self {
+            bounds: ElementBounds { x: 0.0, y: 0.0, width: 0.0, height: 0.0 },
+            padding: [0.0; 4],
+            margin: [0.0; 4],
+            layout_type: LayoutType::Flexbox,
+            flex_direction: FlexDirection::Row,
+            justify_content: JustifyContent::FlexStart,
+            align_items: AlignItems::FlexStart,
+            position_type: PositionType::Relative,
+            size: Size { width: None, height: None },
+            min_size: Size { width: None, height: None },
+            max_size: Size { width: None, height: None },
+        }
+    }
+}
+
 impl Component for UiLayoutComponent {
     fn component_id() -> ComponentId {
-        std::any::TypeId::of::<Self>()
+        ComponentId(101)
     }
     
-    async fn serialize(&self) -> EcsResult<Bytes> {
-        let mut buf = BytesMut::new();
-        
-        // Serialize computed size and position
-        buf.put_f32_le(self.computed_size.x);
-        buf.put_f32_le(self.computed_size.y);
-        buf.put_f32_le(self.computed_position.x);
-        buf.put_f32_le(self.computed_position.y);
-        
-        // Serialize padding
-        buf.put_f32_le(self.padding.x);
-        buf.put_f32_le(self.padding.y);
-        buf.put_f32_le(self.padding.z);
-        buf.put_f32_le(self.padding.w);
-        
-        // Serialize margin
-        buf.put_f32_le(self.margin.x);
-        buf.put_f32_le(self.margin.y);
-        buf.put_f32_le(self.margin.z);
-        buf.put_f32_le(self.margin.w);
-        
-        // Serialize flex properties
-        buf.put_f32_le(self.flex_grow);
-        buf.put_f32_le(self.flex_shrink);
-        buf.put_f32_le(self.flex_basis);
-        
-        // Serialize alignment
-        buf.put_u8(self.align_self as u8);
-        buf.put_u8(self.justify_self as u8);
-        
-        Ok(buf.freeze())
+    fn component_name() -> &'static str {
+        "UiLayoutComponent"
     }
     
-    async fn deserialize(_data: &Bytes) -> EcsResult<Self> where Self: Sized {
-        Err(EcsError::SerializationError("UiLayoutComponent deserialization not implemented".into()))
+    fn serialize(&self) -> Result<Vec<u8>, EcsError> {
+        bincode::serialize(self)
+            .map_err(|e| EcsError::SerializationFailed(e.to_string()))
+    }
+    
+    fn deserialize(data: &[u8]) -> Result<Self, EcsError> {
+        bincode::deserialize(data)
+            .map_err(|e| EcsError::DeserializationFailed(e.to_string()))
     }
 }
 
-/// Component storing style and theme information
-#[derive(Debug, Clone)]
+// Style component
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UiStyleComponent {
-    pub theme_id: ThemeId,
-    pub background_color: Vector4<f32>, // RGBA
-    pub border_color: Vector4<f32>,     // RGBA
-    pub text_color: Vector4<f32>,       // RGBA
+    pub background_color: Option<Vector4<f32>>,
+    pub text_color: Option<Vector4<f32>>,
+    pub border_color: Option<Vector4<f32>>,
     pub border_width: f32,
     pub border_radius: f32,
     pub opacity: f32,
-    pub custom_properties: HashMap<String, String>,
-}
-
-#[async_trait]
-impl Component for UiStyleComponent {
-    fn component_id() -> ComponentId {
-        std::any::TypeId::of::<Self>()
-    }
-    
-    async fn serialize(&self) -> EcsResult<Bytes> {
-        let mut buf = BytesMut::new();
-        
-        // Serialize theme ID
-        buf.put_u32_le(self.theme_id.0);
-        
-        // Serialize colors
-        buf.put_f32_le(self.background_color.x);
-        buf.put_f32_le(self.background_color.y);
-        buf.put_f32_le(self.background_color.z);
-        buf.put_f32_le(self.background_color.w);
-        
-        buf.put_f32_le(self.border_color.x);
-        buf.put_f32_le(self.border_color.y);
-        buf.put_f32_le(self.border_color.z);
-        buf.put_f32_le(self.border_color.w);
-        
-        buf.put_f32_le(self.text_color.x);
-        buf.put_f32_le(self.text_color.y);
-        buf.put_f32_le(self.text_color.z);
-        buf.put_f32_le(self.text_color.w);
-        
-        // Serialize other properties
-        buf.put_f32_le(self.border_width);
-        buf.put_f32_le(self.border_radius);
-        buf.put_f32_le(self.opacity);
-        
-        // Serialize custom properties count
-        buf.put_u32_le(self.custom_properties.len() as u32);
-        for (key, value) in &self.custom_properties {
-            buf.put_u32_le(key.len() as u32);
-            buf.put_slice(key.as_bytes());
-            buf.put_u32_le(value.len() as u32);
-            buf.put_slice(value.as_bytes());
-        }
-        
-        Ok(buf.freeze())
-    }
-    
-    async fn deserialize(_data: &Bytes) -> EcsResult<Self> where Self: Sized {
-        Err(EcsError::SerializationError("UiStyleComponent deserialization not implemented".into()))
-    }
-}
-
-/// Component marking elements that need re-rendering
-#[derive(Debug, Clone)]
-pub struct UiDirtyComponent {
-    pub layout_dirty: bool,
-    pub style_dirty: bool,
-    pub content_dirty: bool,
-    pub last_render_frame: u64,
-}
-
-#[async_trait]
-impl Component for UiDirtyComponent {
-    fn component_id() -> ComponentId {
-        std::any::TypeId::of::<Self>()
-    }
-    
-    async fn serialize(&self) -> EcsResult<Bytes> {
-        let mut buf = BytesMut::new();
-        buf.put_u8(if self.layout_dirty { 1 } else { 0 });
-        buf.put_u8(if self.style_dirty { 1 } else { 0 });
-        buf.put_u8(if self.content_dirty { 1 } else { 0 });
-        buf.put_u64_le(self.last_render_frame);
-        Ok(buf.freeze())
-    }
-    
-    async fn deserialize(_data: &Bytes) -> EcsResult<Self> where Self: Sized {
-        Err(EcsError::SerializationError("UiDirtyComponent deserialization not implemented".into()))
-    }
-}
-
-/// Component storing input state and handlers
-#[derive(Debug, Clone)]
-pub struct UiInputComponent {
-    pub accepts_input: bool,
-    pub has_focus: bool,
-    pub hover: bool,
-    pub pressed: bool,
-    pub tab_index: Option<i32>,
-    pub last_interaction: Option<std::time::Instant>,
-}
-
-#[async_trait]
-impl Component for UiInputComponent {
-    fn component_id() -> ComponentId {
-        std::any::TypeId::of::<Self>()
-    }
-    
-    async fn serialize(&self) -> EcsResult<Bytes> {
-        let mut buf = BytesMut::new();
-        buf.put_u8(if self.accepts_input { 1 } else { 0 });
-        buf.put_u8(if self.has_focus { 1 } else { 0 });
-        buf.put_u8(if self.hover { 1 } else { 0 });
-        buf.put_u8(if self.pressed { 1 } else { 0 });
-        
-        if let Some(tab_index) = self.tab_index {
-            buf.put_u8(1);
-            buf.put_i32_le(tab_index);
-        } else {
-            buf.put_u8(0);
-        }
-        
-        Ok(buf.freeze())
-    }
-    
-    async fn deserialize(_data: &Bytes) -> EcsResult<Self> where Self: Sized {
-        Err(EcsError::SerializationError("UiInputComponent deserialization not implemented".into()))
-    }
-}
-
-/// Component for WebSocket connection state (for terminal, etc)
-#[derive(Debug, Clone)]
-pub struct UiWebSocketComponent {
-    pub channel_id: u16,
-    pub connected: bool,
-    pub last_message: Option<std::time::Instant>,
-    pub pending_messages: Vec<Bytes>,
-}
-
-#[async_trait]
-impl Component for UiWebSocketComponent {
-    fn component_id() -> ComponentId {
-        std::any::TypeId::of::<Self>()
-    }
-    
-    async fn serialize(&self) -> EcsResult<Bytes> {
-        let mut buf = BytesMut::new();
-        buf.put_u16_le(self.channel_id);
-        buf.put_u8(if self.connected { 1 } else { 0 });
-        buf.put_u32_le(self.pending_messages.len() as u32);
-        Ok(buf.freeze())
-    }
-    
-    async fn deserialize(_data: &Bytes) -> EcsResult<Self> where Self: Sized {
-        Err(EcsError::SerializationError("UiWebSocketComponent deserialization not implemented".into()))
-    }
-}
-
-/// Component for text content
-#[derive(Debug, Clone)]
-pub struct UiTextComponent {
-    pub text: String,
     pub font_size: f32,
-    pub font_family: String,
+    pub font_family: Option<String>,
     pub font_weight: FontWeight,
     pub text_align: TextAlign,
-    pub line_height: f32,
-    pub letter_spacing: f32,
+    pub visible: bool,
+    pub z_index: i32,
+    pub cursor: Option<String>,
+    pub custom_styles: HashMap<String, String>,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub enum FontWeight {
-    Thin,
     Light,
-    Regular,
-    Medium,
+    Normal,
     Bold,
-    Black,
+    ExtraBold,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub enum TextAlign {
     Left,
     Center,
@@ -346,32 +195,135 @@ pub enum TextAlign {
     Justify,
 }
 
-#[async_trait]
+impl Default for UiStyleComponent {
+    fn default() -> Self {
+        Self {
+            background_color: None,
+            text_color: None,
+            border_color: None,
+            border_width: 0.0,
+            border_radius: 0.0,
+            opacity: 1.0,
+            font_size: 14.0,
+            font_family: None,
+            font_weight: FontWeight::Normal,
+            text_align: TextAlign::Left,
+            visible: true,
+            z_index: 0,
+            cursor: None,
+            custom_styles: HashMap::new(),
+        }
+    }
+}
+
+impl Component for UiStyleComponent {
+    fn component_id() -> ComponentId {
+        ComponentId(102)
+    }
+    
+    fn component_name() -> &'static str {
+        "UiStyleComponent"
+    }
+    
+    fn serialize(&self) -> Result<Vec<u8>, EcsError> {
+        bincode::serialize(self)
+            .map_err(|e| EcsError::SerializationFailed(e.to_string()))
+    }
+    
+    fn deserialize(data: &[u8]) -> Result<Self, EcsError> {
+        bincode::deserialize(data)
+            .map_err(|e| EcsError::DeserializationFailed(e.to_string()))
+    }
+}
+
+// Input component
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UiInputComponent {
+    pub accepts_input: bool,
+    pub tab_index: Option<i32>,
+    pub on_click: Option<String>,
+    pub on_hover: Option<String>,
+    pub on_focus: Option<String>,
+    pub on_blur: Option<String>,
+    pub on_key_down: Option<String>,
+    pub on_key_up: Option<String>,
+}
+
+impl Default for UiInputComponent {
+    fn default() -> Self {
+        Self {
+            accepts_input: false,
+            tab_index: None,
+            on_click: None,
+            on_hover: None,
+            on_focus: None,
+            on_blur: None,
+            on_key_down: None,
+            on_key_up: None,
+        }
+    }
+}
+
+impl Component for UiInputComponent {
+    fn component_id() -> ComponentId {
+        ComponentId(103)
+    }
+    
+    fn component_name() -> &'static str {
+        "UiInputComponent"
+    }
+    
+    fn serialize(&self) -> Result<Vec<u8>, EcsError> {
+        bincode::serialize(self)
+            .map_err(|e| EcsError::SerializationFailed(e.to_string()))
+    }
+    
+    fn deserialize(data: &[u8]) -> Result<Self, EcsError> {
+        bincode::deserialize(data)
+            .map_err(|e| EcsError::DeserializationFailed(e.to_string()))
+    }
+}
+
+// Text component
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UiTextComponent {
+    pub text: String,
+    pub selectable: bool,
+    pub editable: bool,
+    pub selection_start: Option<usize>,
+    pub selection_end: Option<usize>,
+    pub cursor_position: usize,
+}
+
+impl UiTextComponent {
+    pub fn new(text: String) -> Self {
+        Self {
+            text,
+            selectable: true,
+            editable: false,
+            selection_start: None,
+            selection_end: None,
+            cursor_position: 0,
+        }
+    }
+}
+
 impl Component for UiTextComponent {
     fn component_id() -> ComponentId {
-        std::any::TypeId::of::<Self>()
+        ComponentId(104)
     }
     
-    async fn serialize(&self) -> EcsResult<Bytes> {
-        let mut buf = BytesMut::new();
-        
-        buf.put_u32_le(self.text.len() as u32);
-        buf.put_slice(self.text.as_bytes());
-        
-        buf.put_f32_le(self.font_size);
-        
-        buf.put_u32_le(self.font_family.len() as u32);
-        buf.put_slice(self.font_family.as_bytes());
-        
-        buf.put_u8(self.font_weight as u8);
-        buf.put_u8(self.text_align as u8);
-        buf.put_f32_le(self.line_height);
-        buf.put_f32_le(self.letter_spacing);
-        
-        Ok(buf.freeze())
+    fn component_name() -> &'static str {
+        "UiTextComponent"
     }
     
-    async fn deserialize(_data: &Bytes) -> EcsResult<Self> where Self: Sized {
-        Err(EcsError::SerializationError("UiTextComponent deserialization not implemented".into()))
+    fn serialize(&self) -> Result<Vec<u8>, EcsError> {
+        bincode::serialize(self)
+            .map_err(|e| EcsError::SerializationFailed(e.to_string()))
+    }
+    
+    fn deserialize(data: &[u8]) -> Result<Self, EcsError> {
+        bincode::deserialize(data)
+            .map_err(|e| EcsError::DeserializationFailed(e.to_string()))
     }
 }

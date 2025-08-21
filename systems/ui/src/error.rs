@@ -1,41 +1,45 @@
-//! UI system error types
-
 use thiserror::Error;
 
 #[derive(Error, Debug)]
 pub enum UiError {
-    #[error("UI initialization failed: {0}")]
-    InitializationFailed(String),
-    #[error("Invalid UI component: {0}")]
-    InvalidComponent(String),
-    #[error("Rendering error: {0}")]
-    RenderingError(String),
-    #[error("Layout error: {0}")]
-    LayoutError(String),
-    #[error("Input error: {0}")]
-    InputError(String),
-    #[error("Theme error: {0}")]
-    ThemeError(String),
-    #[error("Terminal error: {0}")]
-    TerminalError(String),
+    #[error("UI system already initialized")]
+    AlreadyInitialized,
+    
+    #[error("UI system not initialized")]
+    NotInitialized,
+    
     #[error("Element not found: {0}")]
     ElementNotFound(String),
-    #[error("Invalid input: {0}")]
-    InvalidInput(String),
-    #[error("Not found: {0}")]
-    NotFound(String),
-    #[error("Lock error: {0}")]
-    LockError(String),
+    
+    #[error("Theme not found: {0}")]
+    ThemeNotFound(String),
+    
+    #[error("Layout error: {0}")]
+    LayoutError(String),
+    
+    #[error("Input error: {0}")]
+    InputError(String),
+    
+    #[error("Rendering error: {0}")]
+    RenderingError(String),
+    
+    #[error("Terminal error: {0}")]
+    TerminalError(String),
+    
+    #[error("ECS error: {0}")]
+    EcsError(String),
+    
     #[error("Serialization error: {0}")]
     SerializationError(String),
-    #[error("Deserialization error: {0}")]
-    DeserializationError(String),
-    #[error("Invalid packet type: {0}")]
-    InvalidPacketType(u16),
-    #[error("Channel error: {0}")]
-    ChannelError(String),
-    #[error("Generic error: {0}")]
-    Other(String),
+    
+    #[error("Network error: {0}")]
+    NetworkError(String),
+    
+    #[error("Creation failed: {0}")]
+    CreationFailed(String),
+    
+    #[error("Invalid operation: {0}")]
+    InvalidOperation(String),
 }
 
 pub type UiResult<T> = Result<T, UiError>;

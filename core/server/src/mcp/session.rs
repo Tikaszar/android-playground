@@ -121,7 +121,7 @@ impl SessionManager {
         F: FnOnce(&mut Session),
     {
         if let Some(session) = self.sessions.write().await.get_mut(id) {
-            f(&mut session);
+            f(session);
             session.update_activity();
             Ok(())
         } else {

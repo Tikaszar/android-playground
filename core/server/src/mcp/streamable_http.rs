@@ -452,13 +452,15 @@ async fn handle_post(
     
     // For other requests, check if client wants SSE response
     if accept.contains("text/event-stream") {
-        let target_session = response_session_id.or_else(|| {
-            session_manager.get_last_sse_session()
-        });
+        let target_session = if let Some(id) = response_session_id {
+            Some(id)
+        } else {
+            session_manager.get_last_sse_session().await
+        };
         
         if let Some(session_id) = target_session {
             // Send response via SSE stream
-            if let Err(e) = session_manager.send_to_sse(&session_id, json!(response)) {
+            if let Err(e) = session_manager.send_to_sse(&session_id, json!(response)).await {
                 error!("Failed to send via SSE: {}", e);
                 // Fall back to JSON response
                 return Json(response).into_response();

@@ -1,5 +1,4 @@
-use std::sync::Arc;
-use tokio::sync::RwLock;
+use playground_core_types::{Shared, shared};
 use crate::error::{LogicResult, LogicError};
 use crate::world::World;
 
@@ -11,25 +10,24 @@ use playground_systems_ui::UiSystem;
 
 /// Manages all system instances for the engine
 pub struct SystemsManager {
-    world: Arc<RwLock<World>>,
-    pub networking: Arc<RwLock<NetworkingSystem>>,
-    pub ui: Arc<RwLock<UiSystem>>,
-    // Note: RenderingSystem needs a renderer type, but WebGL isn't thread-safe
-    // For now, we'll skip rendering in the server-side logic
-    // pub rendering: Arc<RwLock<RenderingSystem<SomeRenderer>>>,
-    // pub physics: Arc<RwLock<PhysicsSystem>>,
+    world: Shared<World>,
+    pub networking: Shared<NetworkingSystem>,
+    pub ui: Shared<UiSystem>,
+    renderer: Option<Shared<Box<dyn playground_core_rendering::Renderer>>>,
+    // pub physics: Shared<PhysicsSystem>, // Not yet implemented
 }
 
 impl SystemsManager {
     /// Create a new SystemsManager with reference to the World
-    pub async fn new(world: Arc<RwLock<World>>) -> LogicResult<Self> {
+    pub async fn new(world: Shared<World>) -> LogicResult<Self> {
         let networking = NetworkingSystem::new().await
             .map_err(|e| LogicError::InitializationFailed(format!("NetworkingSystem: {}", e)))?;
         
         Ok(Self {
             world,
-            networking: Arc::new(RwLock::new(networking)),
-            ui: Arc::new(RwLock::new(UiSystem::new())),
+            networking: shared(networking),
+            ui: shared(UiSystem::new()),
+            renderer: None,
         })
     }
     
@@ -62,9 +60,9 @@ impl SystemsManager {
             None
         };
         
-        // Initialize UiSystem with headless mode (no renderer needed on server)
+        // Initialize UiSystem
         let mut ui = self.ui.write().await;
-        ui.initialize_headless().await
+        ui.initialize().await
             .map_err(|e| LogicError::InitializationFailed(format!("UiSystem: {}", e)))?;
         
         // TODO: Set up channel connection for UiSystem
@@ -98,13 +96,39 @@ impl SystemsManager {
     }
     
     /// Get reference to NetworkingSystem
-    pub fn networking(&self) -> Arc<RwLock<NetworkingSystem>> {
+    pub fn networking(&self) -> Shared<NetworkingSystem> {
         self.networking.clone()
     }
     
     /// Get reference to UiSystem
-    pub fn ui(&self) -> Arc<RwLock<UiSystem>> {
+    pub fn ui(&self) -> Shared<UiSystem> {
         self.ui.clone()
+    }
+    
+    /// Set the renderer for the UI system
+    pub async fn set_renderer(&mut self, renderer: Box<dyn playground_core_rendering::Renderer>) {
+        self.renderer = Some(shared(renderer));
+    }
+    
+    /// Render a frame using the current renderer
+    pub async fn render_frame(&self) -> LogicResult<()> {
+        let mut ui = self.ui.write().await;
+        let batch = ui.render().await
+            .map_err(|e| LogicError::SystemError(format!("UI render failed: {}", e)))?;
+        
+        if let Some(ref renderer) = self.renderer {
+            let mut r = renderer.write().await;
+            r.begin_frame().await
+                .map_err(|e| LogicError::SystemError(format!("Begin frame failed: {}", e)))?;
+            r.execute_commands(&batch).await
+                .map_err(|e| LogicError::SystemError(format!("Execute commands failed: {}", e)))?;
+            r.end_frame().await
+                .map_err(|e| LogicError::SystemError(format!("End frame failed: {}", e)))?;
+            r.present().await
+                .map_err(|e| LogicError::SystemError(format!("Present failed: {}", e)))?;
+        }
+        
+        Ok(())
     }
     
     /// Register an MCP tool for a plugin or app

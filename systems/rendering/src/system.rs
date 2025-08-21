@@ -44,7 +44,8 @@ pub struct RenderingSystem<R: BaseRenderer<Error = RendererError>> {
 impl<R: BaseRenderer<Error = RendererError>> RenderingSystem<R> {
     /// Create a new rendering system with ECS integration
     pub async fn new() -> Result<Self, RendererError> {
-        let registry = Arc::new(ComponentRegistry::new());
+        use playground_core_types::shared;
+        let registry = shared(ComponentRegistry::new());
         let world = Arc::new(World::with_registry(registry));
         
         // Register all rendering components
