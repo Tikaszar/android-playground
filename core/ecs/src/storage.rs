@@ -26,6 +26,8 @@ pub trait ComponentStorage: Send + Sync {
     
     async fn get_raw(&self, entity: EntityId) -> EcsResult<ComponentBox>;
     
+    async fn get_raw_mut(&self, entity: EntityId) -> EcsResult<Shared<ComponentBox>>;
+    
     async fn contains(&self, entity: EntityId) -> bool;
     
     async fn clear(&self) -> EcsResult<()>;
@@ -46,7 +48,7 @@ pub trait ComponentStorage: Send + Sync {
 }
 
 pub struct SparseStorage {
-    components: Shared<HashMap<EntityId, ComponentBox>>,
+    components: Shared<HashMap<EntityId, Shared<ComponentBox>>>,
     dirty: Shared<HashMap<EntityId, ()>>,
     component_id: ComponentId,
 }
@@ -68,14 +70,14 @@ impl ComponentStorage for SparseStorage {
     }
     
     async fn insert(&self, entity: EntityId, component: ComponentBox) -> EcsResult<()> {
-        self.components.write().await.insert(entity, component);
+        self.components.write().await.insert(entity, shared(component));
         self.dirty.write().await.insert(entity, ());
         Ok(())
     }
     
     async fn insert_batch(&self, components: Vec<(EntityId, ComponentBox)>) -> EcsResult<()> {
         for (entity, component) in components {
-            self.components.write().await.insert(entity, component);
+            self.components.write().await.insert(entity, shared(component));
             self.dirty.write().await.insert(entity, ());
         }
         Ok(())
@@ -83,31 +85,63 @@ impl ComponentStorage for SparseStorage {
     
     async fn remove(&self, entity: EntityId) -> EcsResult<ComponentBox> {
         self.dirty.write().await.remove(&entity);
-        self.components.write().await.remove(&entity)
+        let shared_comp = self.components.write().await.remove(&entity)
             .ok_or_else(|| EcsError::ComponentNotFound {
                 entity,
                 component: format!("{:?}", self.component_id),
-            })
+            })?;
+        
+        // Try to extract the component from Shared
+        // This will fail if there are other references
+        match std::sync::Arc::try_unwrap(shared_comp) {
+            Ok(rwlock) => {
+                let component = rwlock.into_inner();
+                Ok(component)
+            }
+            Err(_arc) => {
+                // Component still has references, can't remove
+                Err(EcsError::ComponentInUse)
+            }
+        }
     }
     
     async fn remove_batch(&self, entities: Vec<EntityId>) -> EcsResult<Vec<ComponentBox>> {
         let mut results = Vec::with_capacity(entities.len());
         for entity in entities {
             self.dirty.write().await.remove(&entity);
-            if let Some(component) = self.components.write().await.remove(&entity) {
-                results.push(component);
+            if let Some(shared_comp) = self.components.write().await.remove(&entity) {
+                // Try to extract the component
+                match std::sync::Arc::try_unwrap(shared_comp) {
+                    Ok(rwlock) => {
+                        results.push(rwlock.into_inner());
+                    }
+                    Err(_) => {
+                        // Component still in use, skip it
+                    }
+                }
             }
         }
         Ok(results)
     }
     
     async fn get_raw(&self, entity: EntityId) -> EcsResult<ComponentBox> {
-        self.components.read().await.get(&entity)
-            .map(|component| {
-                let bytes = futures::executor::block_on(component.serialize())
-                    .unwrap_or_else(|_| bytes::Bytes::new());
-                Box::new(RawComponent { data: bytes }) as ComponentBox
-            })
+        let components = self.components.read().await;
+        let shared_comp = components.get(&entity)
+            .ok_or_else(|| EcsError::ComponentNotFound {
+                entity,
+                component: format!("{:?}", self.component_id),
+            })?;
+        
+        let component = shared_comp.read().await;
+        let bytes = component.serialize().await
+            .unwrap_or_else(|_| bytes::Bytes::new());
+        Ok(Box::new(RawComponent { data: bytes }) as ComponentBox)
+    }
+    
+    async fn get_raw_mut(&self, entity: EntityId) -> EcsResult<Shared<ComponentBox>> {
+        let components = self.components.read().await;
+        components.get(&entity)
+            .cloned()
             .ok_or_else(|| EcsError::ComponentNotFound {
                 entity,
                 component: format!("{:?}", self.component_id),
@@ -157,7 +191,7 @@ impl ComponentStorage for SparseStorage {
 
 pub struct DenseStorage {
     entities: Shared<Vec<EntityId>>,
-    components: Shared<Vec<ComponentBox>>,
+    components: Shared<Vec<Shared<ComponentBox>>>,
     entity_to_index: Shared<HashMap<EntityId, usize>>,
     dirty: Shared<HashMap<EntityId, ()>>,
     component_id: ComponentId,
@@ -185,7 +219,7 @@ impl ComponentStorage for DenseStorage {
         if let Some(index) = self.entity_to_index.read().await.get(&entity).copied() {
             let mut components = self.components.write().await;
             if index < components.len() {
-                components[index] = component;
+                components[index] = shared(component);
             }
             self.dirty.write().await.insert(entity, ());
         } else {
@@ -193,7 +227,7 @@ impl ComponentStorage for DenseStorage {
             let mut components = self.components.write().await;
             let index = entities.len();
             entities.push(entity);
-            components.push(component);
+            components.push(shared(component));
             drop(entities);
             drop(components);
             self.entity_to_index.write().await.insert(entity, index);
@@ -209,12 +243,12 @@ impl ComponentStorage for DenseStorage {
         for (entity, component) in batch {
             if let Some(index) = self.entity_to_index.read().await.get(&entity).copied() {
                 if index < components.len() {
-                    components[index] = component;
+                    components[index] = shared(component);
                 }
             } else {
                 let index = entities.len();
                 entities.push(entity);
-                components.push(component);
+                components.push(shared(component));
                 self.entity_to_index.write().await.insert(entity, index);
             }
             self.dirty.write().await.insert(entity, ());
@@ -237,7 +271,7 @@ impl ComponentStorage for DenseStorage {
                 });
             }
             
-            let component = if index == entities.len() - 1 {
+            let shared_component = if index == entities.len() - 1 {
                 entities.pop();
                 components.pop().unwrap()
             } else {
@@ -251,7 +285,11 @@ impl ComponentStorage for DenseStorage {
                 removed
             };
             
-            Ok(component)
+            // Try to extract the component from Shared
+            match std::sync::Arc::try_unwrap(shared_component) {
+                Ok(rwlock) => Ok(rwlock.into_inner()),
+                Err(_) => Err(EcsError::ComponentInUse)
+            }
         } else {
             Err(EcsError::ComponentNotFound {
                 entity,
@@ -277,7 +315,8 @@ impl ComponentStorage for DenseStorage {
             let component_clone = {
                 let components = self.components.read().await;
                 if index < components.len() {
-                    let bytes = futures::executor::block_on(components[index].serialize())
+                    let component = components[index].read().await;
+                    let bytes = component.serialize().await
                         .unwrap_or_else(|_| bytes::Bytes::new());
                     Some(bytes)
                 } else {
@@ -287,6 +326,25 @@ impl ComponentStorage for DenseStorage {
             
             if let Some(bytes) = component_clone {
                 Ok(Box::new(RawComponent { data: bytes }) as ComponentBox)
+            } else {
+                Err(EcsError::ComponentNotFound {
+                    entity,
+                    component: format!("{:?}", self.component_id),
+                })
+            }
+        } else {
+            Err(EcsError::ComponentNotFound {
+                entity,
+                component: format!("{:?}", self.component_id),
+            })
+        }
+    }
+    
+    async fn get_raw_mut(&self, entity: EntityId) -> EcsResult<Shared<ComponentBox>> {
+        if let Some(index) = self.entity_to_index.read().await.get(&entity).copied() {
+            let components = self.components.read().await;
+            if index < components.len() {
+                Ok(components[index].clone())
             } else {
                 Err(EcsError::ComponentNotFound {
                     entity,

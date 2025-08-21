@@ -225,6 +225,17 @@ impl World {
         T::deserialize(&bytes).await
     }
     
+    pub async fn get_component_mut<T: Component>(&self, entity: EntityId) -> EcsResult<Shared<ComponentBox>> {
+        let component_id = T::component_id();
+        let storages = self.storages.read().await;
+        
+        if let Some(storage) = storages.get(&component_id) {
+            storage.get_raw_mut(entity).await
+        } else {
+            Err(EcsError::ComponentNotRegistered(T::component_name().to_string()))
+        }
+    }
+    
     pub async fn has_component(&self, entity: EntityId, component_id: ComponentId) -> bool {
         if let Some(storage) = self.storages.read().await.get(&component_id) {
             storage.contains(entity).await

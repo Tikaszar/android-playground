@@ -1,29 +1,34 @@
 # CONTEXT.md - Current Session Context
 
-## Active Session - 2025-08-21
+## Active Session - 2025-08-21 (Session 2)
 
 ### Current Status
-**WebGL renderer created and compiling** - Ready for browser integration
+**UI system restructured, ECS fixed for mutable component access** - Compilation issues remain
 
-### What Was Done This Session (2025-08-21)
-- **Fixed core/ecs compilation errors** ✅
-  - Fixed all Shared<T> migration issues
-  - Fixed HashMap iteration (no .key()/.value() methods on tuples)
-  - Fixed async/await propagation issues
-  - Removed remaining dashmap references
+### What Was Done This Session (2025-08-21 - Session 2)
+- **Fixed UI directory structure violation** ✅
+  - Split monolithic files into proper directory modules
+  - components/ with element, layout, style, input, text modules
+  - input/ with event, manager, gestures modules  
+  - layout/ with engine, flexbox, absolute, docking modules
+  - rendering/ with converter, element_renderer modules
+  - terminal/ with manager, emulator modules
+  - mobile/ with features, floating_toolbar modules
+  - theme/ with types, colors, manager modules
+  - All files now under 1000 lines as required
 
-- **Created systems/webgl package** ✅
-  - Full WebGL2 renderer implementation
-  - Implements core/rendering::Renderer trait
-  - Vertex/index buffer batching system
-  - Support for all RenderCommand types
-  - Transform and clip rect stacks
-  - Shader and texture management infrastructure
+- **Fixed core/ecs for mutable component access** ✅
+  - Changed storage to use Shared<ComponentBox> instead of ComponentBox
+  - Added get_component_mut method to World
+  - Added get_raw_mut to ComponentStorage trait
+  - Updated SparseStorage and DenseStorage implementations
+  - Added ComponentInUse error for removal conflicts
+  - core/ecs now compiles successfully
 
-- **Fixed exports in core/rendering** ✅
-  - Added Viewport export
-  - Added RendererCapabilities export
-  - Ensured all needed types are accessible
+- **Updated Component implementations** ✅
+  - Fixed all UI components to use async trait methods
+  - Proper serialize/deserialize with Bytes
+  - Using TypeId for component IDs
 
 ### Architecture Rules Clarified
 - **NO unsafe code** - Ever
@@ -50,19 +55,18 @@ Browser (app.js)
   ↓ executes commands via WebGL
 ```
 
-### Issues Being Fixed
-1. **Black Screen** - No render command generation or execution
-2. **Missing core/rendering** - Now created with base traits
-3. **Browser using Canvas2D** - Will switch to WebGL
-4. **No Discord UI** - Will implement in UI Framework Plugin
+### Remaining Issues
+1. **Type mismatch with get_component_mut** - Returns Shared<ComponentBox> but need typed access
+2. **Missing methods in UI system** - despawn_batch, send_to_channel
+3. **Cannot access component fields directly** - Need proper casting from ComponentBox
 
 ### Next Immediate Steps (Next Session)
-1. Update systems/ui to use core/rendering types
-2. Integrate WebGLRenderer into systems/ui
-3. Implement WebGL rendering in browser (update app.js)
-4. Fix UI rendering (black screen issue)
-5. Test render command generation and execution
-6. Add pooling/recycling to GC for efficiency
+1. Fix get_component_mut to return typed components
+2. Update UI system to properly use mutable component access
+3. Fix remaining compilation errors in systems/ui
+4. Test full compilation of playground-editor
+5. Implement WebGL rendering in browser (update app.js)
+6. Fix UI rendering (black screen issue)
 
 ### Build Command
 ```bash

@@ -1,7 +1,6 @@
 use playground_core_ecs::EntityId;
 use playground_core_types::{Shared, shared};
 use crate::error::{UiError, UiResult};
-use crate::components::ElementBounds;
 use std::collections::HashMap;
 
 pub type ElementId = EntityId;
@@ -103,6 +102,3 @@ impl<'a> Iterator for DepthFirstIterator<'a> {
         }
     }
 }
-
-// Re-export ElementBounds from components
-pub use crate::components::ElementBounds;

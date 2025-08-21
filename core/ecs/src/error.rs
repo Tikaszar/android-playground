@@ -32,6 +32,9 @@ pub enum EcsError {
     #[error("Deserialization failed: {0}")]
     DeserializationFailed(String),
     
+    #[error("Component is still in use and cannot be removed")]
+    ComponentInUse,
+    
     #[error("Memory limit exceeded: {current}/{limit} bytes")]
     MemoryLimitExceeded {
         current: usize,

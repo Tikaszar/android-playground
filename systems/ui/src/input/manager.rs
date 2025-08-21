@@ -1,67 +1,17 @@
 use playground_core_ecs::{World, EntityId};
 use playground_core_types::Shared;
+use std::collections::HashMap;
 use crate::error::{UiError, UiResult};
 use crate::element::{ElementGraph, ElementId};
-use crate::components::*;
-use serde::{Serialize, Deserialize};
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum InputEvent {
-    MouseMove { x: f32, y: f32 },
-    MouseDown { x: f32, y: f32, button: MouseButton },
-    MouseUp { x: f32, y: f32, button: MouseButton },
-    MouseWheel { delta: f32 },
-    KeyDown { key: Key, modifiers: Modifiers },
-    KeyUp { key: Key, modifiers: Modifiers },
-    TextInput { text: String },
-    TouchStart { id: u32, x: f32, y: f32 },
-    TouchMove { id: u32, x: f32, y: f32 },
-    TouchEnd { id: u32, x: f32, y: f32 },
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
-pub enum MouseButton {
-    Left,
-    Right,
-    Middle,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
-pub enum Key {
-    // Letters
-    A, B, C, D, E, F, G, H, I, J, K, L, M,
-    N, O, P, Q, R, S, T, U, V, W, X, Y, Z,
-    
-    // Numbers
-    Num0, Num1, Num2, Num3, Num4,
-    Num5, Num6, Num7, Num8, Num9,
-    
-    // Special keys
-    Enter, Escape, Backspace, Tab, Space,
-    Up, Down, Left, Right,
-    Insert, Delete, Home, End, PageUp, PageDown,
-    
-    // Function keys
-    F1, F2, F3, F4, F5, F6, F7, F8, F9, F10, F11, F12,
-    
-    // Modifiers (as keys)
-    Shift, Control, Alt, Meta,
-}
-
-#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize)]
-pub struct Modifiers {
-    pub shift: bool,
-    pub control: bool,
-    pub alt: bool,
-    pub meta: bool,
-}
+use crate::components::{UiElementComponent, UiInputComponent, UiTextComponent};
+use super::event::{InputEvent, MouseButton, Key, Modifiers};
 
 pub struct InputManager {
     hovered_element: Option<ElementId>,
     focused_element: Option<ElementId>,
     pressed_element: Option<ElementId>,
     mouse_position: [f32; 2],
-    touches: std::collections::HashMap<u32, [f32; 2]>,
+    touches: HashMap<u32, [f32; 2]>,
 }
 
 impl InputManager {
@@ -71,7 +21,7 @@ impl InputManager {
             focused_element: None,
             pressed_element: None,
             mouse_position: [0.0, 0.0],
-            touches: std::collections::HashMap::new(),
+            touches: HashMap::new(),
         }
     }
     
@@ -295,18 +245,15 @@ impl InputManager {
     
     async fn hit_test(
         &self,
-        x: f32,
-        y: f32,
-        graph: &Shared<ElementGraph>,
-        world: &Shared<World>,
+        _x: f32,
+        _y: f32,
+        _graph: &Shared<ElementGraph>,
+        _world: &Shared<World>,
     ) -> UiResult<Option<ElementId>> {
         // Simple hit test - find topmost element containing point
         // In real implementation, would traverse tree in reverse order
         
-        let world_lock = world.read().await;
-        let graph_lock = graph.read().await;
-        
-        // For now, just check if we have any elements
+        // For now, just return None
         // Real implementation would check bounds
         
         Ok(None)
