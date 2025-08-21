@@ -88,18 +88,18 @@ impl InputManager {
         if hit != self.hovered_element {
             // Clear old hover
             if let Some(old) = self.hovered_element {
-                let mut world_lock = world.write().await;
-                if let Ok(mut elem) = world_lock.get_component_mut::<UiElementComponent>(old).await {
+                let world_lock = world.write().await;
+                let _ = world_lock.update_component::<UiElementComponent>(old, |elem| {
                     elem.hovered = false;
-                }
+                }).await;
             }
             
             // Set new hover
             if let Some(new) = hit {
-                let mut world_lock = world.write().await;
-                if let Ok(mut elem) = world_lock.get_component_mut::<UiElementComponent>(new).await {
+                let world_lock = world.write().await;
+                let _ = world_lock.update_component::<UiElementComponent>(new, |elem| {
                     elem.hovered = true;
-                }
+                }).await;
             }
             
             self.hovered_element = hit;
@@ -125,17 +125,17 @@ impl InputManager {
             if self.focused_element != Some(element) {
                 // Clear old focus
                 if let Some(old) = self.focused_element {
-                    let mut world_lock = world.write().await;
-                    if let Ok(mut elem) = world_lock.get_component_mut::<UiElementComponent>(old).await {
+                    let world_lock = world.write().await;
+                    let _ = world_lock.update_component::<UiElementComponent>(old, |elem| {
                         elem.focused = false;
-                    }
+                    }).await;
                 }
                 
                 // Set new focus
-                let mut world_lock = world.write().await;
-                if let Ok(mut elem) = world_lock.get_component_mut::<UiElementComponent>(element).await {
+                let world_lock = world.write().await;
+                let _ = world_lock.update_component::<UiElementComponent>(element, |elem| {
                     elem.focused = true;
-                }
+                }).await;
                 
                 self.focused_element = Some(element);
             }
@@ -197,10 +197,10 @@ impl InputManager {
                     Key::Escape => {
                         // Clear focus
                         drop(world_lock);
-                        let mut world_lock = world.write().await;
-                        if let Ok(mut elem) = world_lock.get_component_mut::<UiElementComponent>(focused).await {
+                        let world_lock = world.write().await;
+                        let _ = world_lock.update_component::<UiElementComponent>(focused, |elem| {
                             elem.focused = false;
-                        }
+                        }).await;
                         self.focused_element = None;
                     }
                     _ => {}
@@ -221,19 +221,28 @@ impl InputManager {
         world: &Shared<World>,
     ) -> UiResult<bool> {
         if let Some(focused) = self.focused_element {
-            let mut world_lock = world.write().await;
+            let world_lock = world.write().await;
             
             // Check if element has text component
-            if let Ok(mut text_comp) = world_lock.get_component_mut::<UiTextComponent>(focused).await {
+            if let Ok(text_comp) = world_lock.get_component::<UiTextComponent>(focused).await {
                 if text_comp.editable {
-                    // Insert text at cursor position
-                    text_comp.text.insert_str(text_comp.cursor_position, &text);
-                    text_comp.cursor_position += text.len();
+                    let new_text = {
+                        let mut text_content = text_comp.text.clone();
+                        text_content.insert_str(text_comp.cursor_position, &text);
+                        text_content
+                    };
+                    let new_cursor = text_comp.cursor_position + text.len();
+                    
+                    // Update text component
+                    world_lock.update_component::<UiTextComponent>(focused, |tc| {
+                        tc.text = new_text.clone();
+                        tc.cursor_position = new_cursor;
+                    }).await.map_err(|e| UiError::EcsError(e.to_string()))?;
                     
                     // Update element text content
-                    if let Ok(mut elem) = world_lock.get_component_mut::<UiElementComponent>(focused).await {
-                        elem.text_content = Some(text_comp.text.clone());
-                    }
+                    world_lock.update_component::<UiElementComponent>(focused, |elem| {
+                        elem.text_content = Some(new_text);
+                    }).await.map_err(|e| UiError::EcsError(e.to_string()))?;
                     
                     return Ok(true);
                 }

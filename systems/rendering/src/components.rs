@@ -66,7 +66,7 @@ impl Component for TextureResourceComponent {
     
     async fn deserialize(_bytes: &Bytes) -> EcsResult<Self> where Self: Sized {
         // Implement when needed for hot-reload
-        Err(EcsError::SerializationError("TextureResourceComponent deserialization not implemented".into()))
+        Err(EcsError::SerializationFailed("TextureResourceComponent deserialization not implemented".into()))
     }
 }
 
@@ -126,7 +126,7 @@ impl Component for BufferResourceComponent {
     }
     
     async fn deserialize(_bytes: &Bytes) -> EcsResult<Self> where Self: Sized {
-        Err(EcsError::SerializationError("BufferResourceComponent deserialization not implemented".into()))
+        Err(EcsError::SerializationFailed("BufferResourceComponent deserialization not implemented".into()))
     }
 }
 
@@ -173,7 +173,7 @@ impl Component for ShaderResourceComponent {
     }
     
     async fn deserialize(_bytes: &Bytes) -> EcsResult<Self> where Self: Sized {
-        Err(EcsError::SerializationError("ShaderResourceComponent deserialization not implemented".into()))
+        Err(EcsError::SerializationFailed("ShaderResourceComponent deserialization not implemented".into()))
     }
 }
 
@@ -217,7 +217,7 @@ impl Component for PipelineResourceComponent {
     }
     
     async fn deserialize(_bytes: &Bytes) -> EcsResult<Self> where Self: Sized {
-        Err(EcsError::SerializationError("PipelineResourceComponent deserialization not implemented".into()))
+        Err(EcsError::SerializationFailed("PipelineResourceComponent deserialization not implemented".into()))
     }
 }
 
@@ -256,7 +256,7 @@ impl Component for RenderTargetComponent {
     }
     
     async fn deserialize(_bytes: &Bytes) -> EcsResult<Self> where Self: Sized {
-        Err(EcsError::SerializationError("RenderTargetComponent deserialization not implemented".into()))
+        Err(EcsError::SerializationFailed("RenderTargetComponent deserialization not implemented".into()))
     }
 }
 
@@ -327,7 +327,7 @@ impl Component for RenderPassComponent {
     }
     
     async fn deserialize(_bytes: &Bytes) -> EcsResult<Self> where Self: Sized {
-        Err(EcsError::SerializationError("RenderPassComponent deserialization not implemented".into()))
+        Err(EcsError::SerializationFailed("RenderPassComponent deserialization not implemented".into()))
     }
 }
 
@@ -368,7 +368,7 @@ impl Component for FrameStateComponent {
     }
     
     async fn deserialize(_bytes: &Bytes) -> EcsResult<Self> where Self: Sized {
-        Err(EcsError::SerializationError("FrameStateComponent deserialization not implemented".into()))
+        Err(EcsError::SerializationFailed("FrameStateComponent deserialization not implemented".into()))
     }
 }
 
@@ -418,7 +418,7 @@ impl Component for CapabilitiesComponent {
     }
     
     async fn deserialize(_bytes: &Bytes) -> EcsResult<Self> where Self: Sized {
-        Err(EcsError::SerializationError("CapabilitiesComponent deserialization not implemented".into()))
+        Err(EcsError::SerializationFailed("CapabilitiesComponent deserialization not implemented".into()))
     }
 }
 
@@ -450,6 +450,6 @@ impl Component for StreamingPriorityComponent {
     }
     
     async fn deserialize(_bytes: &Bytes) -> EcsResult<Self> where Self: Sized {
-        Err(EcsError::SerializationError("StreamingPriorityComponent deserialization not implemented".into()))
+        Err(EcsError::SerializationFailed("StreamingPriorityComponent deserialization not implemented".into()))
     }
 }

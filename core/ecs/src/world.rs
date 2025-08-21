@@ -184,7 +184,7 @@ impl World {
         if let Some(storage) = self.storages.read().await.get(&component_id) {
             storage.insert(entity, component).await?;
             
-            if let Some(mut components) = self.entities.write().await.get_mut(&entity) {
+            if let Some(components) = self.entities.write().await.get_mut(&entity) {
                 if !components.contains(&component_id) {
                     components.push(component_id);
                 }
@@ -200,7 +200,7 @@ impl World {
         if let Some(storage) = self.storages.read().await.get(&component_id) {
             let component_box = storage.remove(entity).await?;
             
-            if let Some(mut components) = self.entities.write().await.get_mut(&entity) {
+            if let Some(components) = self.entities.write().await.get_mut(&entity) {
                 components.retain(|&id| id != component_id);
             }
             
@@ -225,15 +225,20 @@ impl World {
         T::deserialize(&bytes).await
     }
     
-    pub async fn get_component_mut<T: Component>(&self, entity: EntityId) -> EcsResult<Shared<ComponentBox>> {
-        let component_id = T::component_id();
-        let storages = self.storages.read().await;
+    pub async fn update_component<T: Component>(&self, entity: EntityId, updater: impl FnOnce(&mut T)) -> EcsResult<()> {
+        // Get the component
+        let component = self.get_component::<T>(entity).await?;
         
-        if let Some(storage) = storages.get(&component_id) {
-            storage.get_raw_mut(entity).await
-        } else {
-            Err(EcsError::ComponentNotRegistered(T::component_name().to_string()))
-        }
+        // Apply the update
+        let mut updated = component;
+        updater(&mut updated);
+        
+        // Remove old and add new
+        self.remove_component_raw(entity, T::component_id()).await?;
+        let component_box = Box::new(updated) as ComponentBox;
+        self.add_component_raw(entity, component_box, T::component_id()).await?;
+        
+        Ok(())
     }
     
     pub async fn has_component(&self, entity: EntityId, component_id: ComponentId) -> bool {

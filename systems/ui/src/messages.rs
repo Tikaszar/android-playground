@@ -56,7 +56,7 @@ impl TryFrom<u16> for UiPacketType {
             202 => Ok(UiPacketType::TerminalConnect),
             203 => Ok(UiPacketType::TerminalDisconnect),
             204 => Ok(UiPacketType::TerminalState),
-            _ => Err(UiError::InvalidPacketType(value)),
+            _ => Err(UiError::InvalidOperation(format!("Invalid packet type: {}", value))),
         }
     }
 }
@@ -170,7 +170,7 @@ pub fn serialize_message<T: Serialize>(msg: &T) -> UiResult<Bytes> {
 
 pub fn deserialize_message<T: for<'de> Deserialize<'de>>(data: &Bytes) -> UiResult<T> {
     serde_json::from_slice(data)
-        .map_err(|e| UiError::DeserializationError(e.to_string()))
+        .map_err(|e| UiError::SerializationError(e.to_string()))
 }
 
 /// Binary protocol helpers for efficient encoding
@@ -215,7 +215,7 @@ pub mod binary {
     /// Decode a UUID from bytes
     pub fn decode_uuid(buf: &mut Bytes) -> UiResult<Uuid> {
         if buf.remaining() < 16 {
-            return Err(UiError::DeserializationError("Not enough bytes for UUID".to_string()));
+            return Err(UiError::SerializationError("Not enough bytes for UUID".to_string()));
         }
         let mut bytes = [0u8; 16];
         buf.copy_to_slice(&mut bytes);
@@ -232,15 +232,15 @@ pub mod binary {
     /// Decode a string from bytes
     pub fn decode_string(buf: &mut Bytes) -> UiResult<String> {
         if buf.remaining() < 4 {
-            return Err(UiError::DeserializationError("Not enough bytes for string length".to_string()));
+            return Err(UiError::SerializationError("Not enough bytes for string length".to_string()));
         }
         let len = buf.get_u32() as usize;
         if buf.remaining() < len {
-            return Err(UiError::DeserializationError(format!("Not enough bytes for string: expected {}, got {}", len, buf.remaining())));
+            return Err(UiError::SerializationError(format!("Not enough bytes for string: expected {}, got {}", len, buf.remaining())));
         }
         let mut bytes = vec![0u8; len];
         buf.copy_to_slice(&mut bytes);
         String::from_utf8(bytes)
-            .map_err(|e| UiError::DeserializationError(format!("Invalid UTF-8: {}", e)))
+            .map_err(|e| UiError::SerializationError(format!("Invalid UTF-8: {}", e)))
     }
 }

@@ -19,16 +19,28 @@ impl AbsoluteLayout {
         screen_size: [f32; 2],
     ) -> UiResult<()> {
         // Absolute positioning - elements use their set positions
-        let mut world_lock = world.write().await;
-        let mut layout = world_lock.get_component_mut::<UiLayoutComponent>(entity).await
+        let world_lock = world.write().await;
+        let layout = world_lock.get_component::<UiLayoutComponent>(entity).await
             .map_err(|e| UiError::EcsError(e.to_string()))?;
         
+        let mut bounds = layout.bounds;
+        let mut needs_update = false;
+        
         // Ensure bounds are within screen
-        if layout.bounds.x + layout.bounds.width > screen_size[0] {
-            layout.bounds.width = screen_size[0] - layout.bounds.x;
+        if bounds.x + bounds.width > screen_size[0] {
+            bounds.width = screen_size[0] - bounds.x;
+            needs_update = true;
         }
-        if layout.bounds.y + layout.bounds.height > screen_size[1] {
-            layout.bounds.height = screen_size[1] - layout.bounds.y;
+        if bounds.y + bounds.height > screen_size[1] {
+            bounds.height = screen_size[1] - bounds.y;
+            needs_update = true;
+        }
+        
+        // Update if needed
+        if needs_update {
+            world_lock.update_component::<UiLayoutComponent>(entity, |l| {
+                l.bounds = bounds;
+            }).await.map_err(|e| UiError::EcsError(e.to_string()))?;
         }
         
         Ok(())

@@ -88,7 +88,7 @@ async fn handle_get(
     let (tx, rx) = mpsc::unbounded_channel::<Value>();
     
     // Register the sender
-    session_manager.register_sse_sender(session_id.clone(), tx.clone());
+    session_manager.register_sse_sender(session_id.clone(), tx.clone()).await;
     
     // Add to dashboard as MCP session
     ws_state.dashboard.add_mcp_session(session_id.clone()).await;
@@ -193,7 +193,7 @@ async fn handle_post(
             // If there was a temp session, update it
             if let Some(ref old_id) = session_id {
                 info!("  Updating session ID from {} to {}", old_id, new_session_id);
-                session_manager.update_session_id(old_id, new_session_id.clone());
+                session_manager.update_session_id(old_id, new_session_id.clone()).await;
                 // Use the new session ID for sending response
                 response_session_id = Some(new_session_id.clone());
             } else {

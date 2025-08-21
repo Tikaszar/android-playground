@@ -22,12 +22,12 @@ impl Component for ConnectionComponent {
     async fn serialize(&self) -> playground_core_ecs::Result<Bytes> {
         bincode::serialize(self)
             .map(|v| Bytes::from(v))
-            .map_err(|e| playground_core_ecs::EcsError::SerializationError(e.to_string()))
+            .map_err(|e| playground_core_ecs::EcsError::SerializationFailed(e.to_string()))
     }
     
     async fn deserialize(bytes: &Bytes) -> playground_core_ecs::Result<Self> {
         bincode::deserialize(bytes)
-            .map_err(|e| playground_core_ecs::EcsError::SerializationError(e.to_string()))
+            .map_err(|e| playground_core_ecs::EcsError::SerializationFailed(e.to_string()))
     }
 }
 
@@ -44,12 +44,12 @@ impl Component for ChannelComponent {
     async fn serialize(&self) -> playground_core_ecs::Result<Bytes> {
         bincode::serialize(self)
             .map(|v| Bytes::from(v))
-            .map_err(|e| playground_core_ecs::EcsError::SerializationError(e.to_string()))
+            .map_err(|e| playground_core_ecs::EcsError::SerializationFailed(e.to_string()))
     }
     
     async fn deserialize(bytes: &Bytes) -> playground_core_ecs::Result<Self> {
         bincode::deserialize(bytes)
-            .map_err(|e| playground_core_ecs::EcsError::SerializationError(e.to_string()))
+            .map_err(|e| playground_core_ecs::EcsError::SerializationFailed(e.to_string()))
     }
 }
 
@@ -109,11 +109,11 @@ impl Component for NetworkStatsComponent {
     async fn serialize(&self) -> playground_core_ecs::Result<Bytes> {
         bincode::serialize(self)
             .map(|v| Bytes::from(v))
-            .map_err(|e| playground_core_ecs::EcsError::SerializationError(e.to_string()))
+            .map_err(|e| playground_core_ecs::EcsError::SerializationFailed(e.to_string()))
     }
     
     async fn deserialize(bytes: &Bytes) -> playground_core_ecs::Result<Self> {
         bincode::deserialize(bytes)
-            .map_err(|e| playground_core_ecs::EcsError::SerializationError(e.to_string()))
+            .map_err(|e| playground_core_ecs::EcsError::SerializationFailed(e.to_string()))
     }
 }

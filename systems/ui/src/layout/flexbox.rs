@@ -2,7 +2,7 @@ use playground_core_ecs::{World, EntityId};
 use playground_core_types::Shared;
 use crate::error::{UiError, UiResult};
 use crate::element::ElementGraph;
-use crate::components::UiLayoutComponent;
+use crate::components::{UiLayoutComponent, ElementBounds};
 
 pub struct FlexboxLayout;
 
@@ -19,20 +19,30 @@ impl FlexboxLayout {
         screen_size: [f32; 2],
     ) -> UiResult<()> {
         // Simplified flexbox layout
-        let mut world_lock = world.write().await;
-        let mut layout = world_lock.get_component_mut::<UiLayoutComponent>(entity).await
+        let world_lock = world.write().await;
+        
+        // Get the current layout for reading
+        let layout = world_lock.get_component::<UiLayoutComponent>(entity).await
             .map_err(|e| UiError::EcsError(e.to_string()))?;
         
-        // For now, just ensure bounds are set
-        if layout.bounds.width == 0.0 {
-            layout.bounds.width = screen_size[0];
+        let mut bounds = layout.bounds;
+        let padding = layout.padding;
+        
+        // Update bounds if needed
+        let needs_update = bounds.width == 0.0 || bounds.height == 0.0;
+        if bounds.width == 0.0 {
+            bounds.width = screen_size[0];
         }
-        if layout.bounds.height == 0.0 {
-            layout.bounds.height = screen_size[1];
+        if bounds.height == 0.0 {
+            bounds.height = screen_size[1];
         }
         
-        let padding = layout.padding;
-        let bounds = layout.bounds;
+        // Update the component if bounds changed
+        if needs_update {
+            world_lock.update_component::<UiLayoutComponent>(entity, |l| {
+                l.bounds = bounds;
+            }).await.map_err(|e| UiError::EcsError(e.to_string()))?;
+        }
         
         drop(world_lock);
         
@@ -42,17 +52,24 @@ impl FlexboxLayout {
             let mut child_y = bounds.y + padding[0];
             
             for &child in children {
-                let mut world_lock = world.write().await;
-                let mut child_layout = world_lock.get_component_mut::<UiLayoutComponent>(child).await
-                    .map_err(|e| UiError::EcsError(e.to_string()))?;
+                let world_lock = world.write().await;
                 
-                // Simple vertical layout for now
-                child_layout.bounds.x = bounds.x + padding[3];
-                child_layout.bounds.y = child_y;
-                child_layout.bounds.width = bounds.width - padding[1] - padding[3];
-                child_layout.bounds.height = 50.0; // Default height
+                // Calculate new bounds for child
+                let new_bounds = ElementBounds {
+                    x: bounds.x + padding[3],
+                    y: child_y,
+                    width: bounds.width - padding[1] - padding[3],
+                    height: 50.0, // Default height
+                };
                 
-                child_y += child_layout.bounds.height + 10.0; // Spacing
+                // Update child layout
+                world_lock.update_component::<UiLayoutComponent>(child, |layout| {
+                    layout.bounds = new_bounds;
+                }).await.map_err(|e| UiError::EcsError(e.to_string()))?;
+                
+                child_y += new_bounds.height + 10.0; // Spacing
+                
+                drop(world_lock);
             }
         }
         
