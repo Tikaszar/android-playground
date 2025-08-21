@@ -42,6 +42,8 @@ This file contains critical memory for Claude Code when working with this reposi
 - Query API: `.with_component(ComponentId)` - NO TURBOFISH!
 - systems/logic is SPECIAL - initializes all other systems
 - Plugins ARE systems/logic Systems (NOT core/ecs) - implement systems/logic::System trait
+- **Plugins MUST NOT use core/ecs directly** - only through systems/logic
+- UiSystem internal ECS is private - plugins use UiInterface from systems/logic
 
 ## #current-violations
 None! All architecture violations fixed ✅
@@ -117,7 +119,7 @@ http://localhost:8080/mcp
 - 8 IDE plugins created with structure
 - WebSocket multiplexer with binary protocol (FIXED!)
 - MCP server with tool system (WORKING!)
-- UI Framework Plugin (3000+ lines)
+- UI Framework Plugin (3000+ lines) - NOW USES systems/logic!
 - Package naming (all standardized)
 - ECS Query API (no turbofish)
 - Plugin async traits (all async)
@@ -129,6 +131,8 @@ http://localhost:8080/mcp
 - Dashboard owned by server, accessed by systems
 - File logging for verbose output
 - playground-editor IDE builds and runs!
+- UI Framework Plugin architecture fixed (uses UiInterface)
+- Render pipeline architecture established
 
 🟡 **Needs Testing**:
 - UI Framework Plugin rendering

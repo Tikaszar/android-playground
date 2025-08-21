@@ -10,11 +10,10 @@ crate-type = ["dylib", "rlib"]
 [dependencies]
 tracing-subscriber = { workspace = true }
 playground-core-types = { path = "../../core/types" }
-playground-core-ecs = { path = "../../core/ecs" }
 playground-systems-ui = { path = "../../systems/ui" }
 playground-systems-logic = { path = "../../systems/logic" }
 playground-systems-networking = { path = "../../systems/networking" }
-playground-systems-rendering = { path = "../../systems/rendering" }
+playground-core-rendering = { path = "../../core/rendering" }
 
 anyhow = "1.0"
 async-trait = "0.1"

@@ -290,6 +290,27 @@ map.write().await.insert(key, value);
 4. Removed core/plugin entirely
 5. Plugins now implement systems/logic::System trait
 
+### Plugins MUST Use systems/logic ECS
+**Decision**: Plugins cannot use core/ecs directly
+
+**Why**:
+- core/ecs is for Systems' internal state management only
+- Mixing ECS layers causes confusion and violations
+- systems/logic provides the game ECS for plugins/apps
+- Clean separation of concerns
+
+**Implementation**:
+- UiSystem uses core/ecs internally (private)
+- Plugins use systems/logic World for their state
+- UiInterface provides clean API for UI interaction
+- No direct component manipulation across layers
+
+**Evolution**:
+1. UI Framework Plugin was using core/ecs::Component (WRONG)
+2. Was trying to manipulate UiSystem's internal components
+3. Created UiInterface in systems/logic for proper abstraction
+4. Plugins now use high-level APIs like create_discord_layout()
+
 ### Plugin Loading by Apps
 **Decision**: Apps load plugins and register them as Systems
 

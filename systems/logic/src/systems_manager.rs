@@ -1,6 +1,8 @@
 use playground_core_types::{Shared, shared};
 use crate::error::{LogicResult, LogicError};
 use crate::world::World;
+use crate::ui_interface::UiInterface;
+use crate::rendering_interface::{RenderingInterface, RendererWrapper};
 
 // Import other systems
 use playground_systems_networking::NetworkingSystem;
@@ -144,6 +146,23 @@ impl SystemsManager {
         net.register_mcp_tool(name.clone(), description, input_schema, handler_channel).await
             .map_err(|e| LogicError::SystemError(format!("Failed to register MCP tool '{}': {}", name, e)))?;
         Ok(())
+    }
+    
+    /// Get UI interface for plugins to interact with UI system
+    pub fn ui_interface(&self) -> UiInterface {
+        UiInterface::new(self.ui.clone())
+    }
+    
+    /// Get rendering interface if a renderer is set
+    pub fn rendering_interface(&self) -> Option<Box<dyn RenderingInterface>> {
+        self.renderer.as_ref().map(|r| {
+            Box::new(RendererWrapper::new(r.clone())) as Box<dyn RenderingInterface>
+        })
+    }
+    
+    /// Get the shared World for plugins to use
+    pub fn world(&self) -> Shared<World> {
+        self.world.clone()
     }
     
 }

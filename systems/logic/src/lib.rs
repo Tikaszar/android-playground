@@ -17,6 +17,8 @@ pub mod storage;
 pub mod system;
 pub mod world;
 pub mod systems_manager;
+pub mod ui_interface;
+pub mod rendering_interface;
 
 pub use archetype::*;
 pub use component::*;
@@ -29,6 +31,11 @@ pub use storage::*;
 pub use system::*;
 pub use world::*;
 pub use systems_manager::SystemsManager;
+pub use ui_interface::UiInterface;
+pub use rendering_interface::{RenderingInterface, RendererWrapper};
 
 // Re-export Shared type for plugins and apps
 pub use playground_core_types::{Shared, shared};
+
+// Re-export core rendering types that plugins need
+pub use playground_core_rendering::{RenderCommand, RenderCommandBatch, Viewport};

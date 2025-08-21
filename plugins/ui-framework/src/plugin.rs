@@ -1,9 +1,8 @@
 use async_trait::async_trait;
-use playground_systems_logic::{System, World, LogicResult};
+use playground_systems_logic::{System, World, LogicResult, SystemsManager, UiInterface, Component};
 use playground_core_types::{
-    Priority,
+    Priority, Shared, shared,
 };
-use playground_core_ecs::Component;
 use std::sync::Arc;
 use std::collections::HashMap;
 use tokio::sync::RwLock;
@@ -254,123 +253,45 @@ impl UiFrameworkPlugin {
     }
     
     async fn create_discord_ui(&self) -> LogicResult<()> {
-        // Get the UI system from SystemsManager
-        let ui_system = self.systems_manager.ui();
-        let mut ui = ui_system.write().await;
+        // Get the UI interface from SystemsManager
+        let mut ui_interface = self.systems_manager.ui_interface();
         
-        // Get screen dimensions (default to 1920x1080, will be updated on resize)
-        let screen_width = 1920.0;
-        let screen_height = 1080.0;
+        // Create Discord-style layout using the high-level interface
+        let layout = ui_interface.create_discord_layout().await?;
         
-        // Create sidebar for channel list (Discord-style, 240px width)
-        let sidebar = ui.create_element(
-            "sidebar".to_string(),
-            "panel".to_string(),
-            ui.root_entity(),
-        ).await.map_err(|e| playground_systems_logic::LogicError::SystemError(
-            format!("Failed to create sidebar: {}", e)
-        ))?;
-        
-        // Set sidebar bounds and style
-        let sidebar_style = playground_systems_ui::components::UiStyleComponent {
-            theme_id: playground_systems_ui::theme::ThemeId(0),
-            background_color: nalgebra::Vector4::new(0.184, 0.192, 0.212, 1.0), // #2f3136
-            border_color: nalgebra::Vector4::new(0.125, 0.129, 0.145, 1.0), // #202225
-            text_color: nalgebra::Vector4::new(0.863, 0.867, 0.871, 1.0), // #dcddde
-            border_width: 0.0,
-            border_radius: 0.0,
-            opacity: 1.0,
-            custom_properties: std::collections::HashMap::new(),
-        };
-        
-        // Use add_component_raw with boxed component
-        let component_box = Box::new(sidebar_style) as Box<dyn playground_core_ecs::Component>;
-        let component_id = <playground_systems_ui::components::UiStyleComponent as playground_core_ecs::Component>::component_id();
-        ui.world().add_component_raw(sidebar, component_box, component_id).await
-            .map_err(|e| playground_systems_logic::LogicError::SystemError(
-                format!("Failed to add sidebar style: {}", e)
-            ))?;
-        
-        // Create channel categories
+        // Add channel categories to the sidebar
         let categories = vec!["SYSTEMS", "IDE PLUGINS", "GAME PLUGINS"];
         let mut y_offset = 20.0;
         
         for category in categories {
-            let category_entity = ui.create_element(
-                format!("category-{}", category),
-                "text".to_string(),
-                Some(sidebar),
-            ).await.map_err(|e| playground_systems_logic::LogicError::SystemError(
-                format!("Failed to create category: {}", e)
-            ))?;
+            let category_text = ui_interface.create_text(
+                category,
+                Some(layout.sidebar),
+            ).await?;
             
-            // Add text component for category
-            let text_component = playground_systems_ui::components::UiTextComponent {
-                text: category.to_string(),
-                font_family: "sans-serif".to_string(),
+            // Style the category text
+            let category_style = playground_systems_ui::ElementStyle {
+                text_color: [0.54, 0.56, 0.60, 1.0], // Discord gray for categories
                 font_size: 12.0,
-                font_weight: playground_systems_ui::components::FontWeight::Bold,
-                text_align: playground_systems_ui::components::TextAlign::Left,
-                line_height: 1.5,
-                letter_spacing: 0.0,
+                font_weight: playground_systems_ui::FontWeight::Bold,
+                ..Default::default()
             };
+            ui_interface.style_element(category_text, category_style).await?;
             
-            let component_box = Box::new(text_component) as Box<dyn playground_core_ecs::Component>;
-            let component_id = <playground_systems_ui::components::UiTextComponent as playground_core_ecs::Component>::component_id();
-            ui.world().add_component_raw(category_entity, component_box, component_id).await
-                .map_err(|e| playground_systems_logic::LogicError::SystemError(
-                    format!("Failed to add text component: {}", e)
-                ))?;
+            // Set position
+            ui_interface.set_bounds(
+                category_text,
+                playground_systems_ui::ElementBounds::new(10.0, y_offset, 220.0, 20.0)
+            ).await?;
             
             y_offset += 30.0;
         }
         
-        // Create main content area
-        let main_content = ui.create_element(
-            "main-content".to_string(),
-            "panel".to_string(),
-            ui.root_entity(),
-        ).await.map_err(|e| playground_systems_logic::LogicError::SystemError(
-            format!("Failed to create main content: {}", e)
-        ))?;
-        
-        // Set main content style (Discord chat area)
-        let main_style = playground_systems_ui::components::UiStyleComponent {
-            theme_id: playground_systems_ui::theme::ThemeId(0),
-            background_color: nalgebra::Vector4::new(0.212, 0.224, 0.247, 1.0), // #36393f
-            border_color: nalgebra::Vector4::new(0.125, 0.129, 0.145, 1.0),
-            text_color: nalgebra::Vector4::new(0.863, 0.867, 0.871, 1.0),
-            border_width: 0.0,
-            border_radius: 0.0,
-            opacity: 1.0,
-            custom_properties: std::collections::HashMap::new(),
-        };
-        
-        let component_box = Box::new(main_style) as Box<dyn playground_core_ecs::Component>;
-        let component_id = <playground_systems_ui::components::UiStyleComponent as playground_core_ecs::Component>::component_id();
-        ui.world().add_component_raw(main_content, component_box, component_id).await
-            .map_err(|e| playground_systems_logic::LogicError::SystemError(
-                format!("Failed to add main content style: {}", e)
-            ))?;
-        
-        // Mark root as dirty to trigger initial render
-        if let Some(root) = ui.root_entity() {
-            ui.mark_dirty(root).await
-                .map_err(|e| playground_systems_logic::LogicError::SystemError(
-                    format!("Failed to mark root dirty: {}", e)
-                ))?;
-        }
-        
-        // Also mark sidebar and main content as dirty
-        ui.mark_dirty(sidebar).await
-            .map_err(|e| playground_systems_logic::LogicError::SystemError(
-                format!("Failed to mark sidebar dirty: {}", e)
-            ))?;
-        
-        ui.mark_dirty(main_content).await
-            .map_err(|e| playground_systems_logic::LogicError::SystemError(
-                format!("Failed to mark main content dirty: {}", e)
-            ))?;
+        // Store layout reference in UI state for later use
+        let mut ui_state = self.ui_state.write().await;
+        // Store the layout IDs for future reference
+        // This would typically be stored in a component in the systems/logic World
+        drop(ui_state);
         
         info!("Discord-style UI layout created");
         Ok(())

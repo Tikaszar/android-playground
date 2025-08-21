@@ -2,6 +2,37 @@
 
 This file tracks the detailed history of development sessions, including achievements, bug fixes, and implementation progress.
 
+## Session: 2025-08-21 - UI Framework Architecture Fix (Session 4)
+
+### What Was Accomplished
+1. **Fixed Plugin Architecture Violations**
+   - Plugins were using core/ecs directly - VIOLATION!
+   - Created UiInterface in systems/logic for proper abstraction
+   - Plugins now use systems/logic World and ECS correctly
+   - Clean separation between plugin state and UI internals
+
+2. **Created Public UI API**
+   - Added systems/ui/src/types.rs with public types
+   - ElementStyle, ElementBounds, DiscordLayout, etc.
+   - Added public methods to UiSystem for plugins
+   - set_element_style(), set_element_bounds(), create_element_with_id()
+
+3. **Fixed UI Framework Plugin**
+   - Removed playground-core-ecs dependency entirely
+   - Updated to use UiInterface from systems/logic
+   - Uses high-level create_discord_layout() method
+   - Successfully compiles with zero errors
+
+4. **Established Render Pipeline Architecture**
+   - Created RenderingInterface in systems/logic
+   - SystemsManager exposes ui_interface() and rendering_interface()
+   - Clear path: Plugin → UiInterface → UiSystem → Channel 10 → Browser WebGL
+
+### Key Architecture Clarification
+- **Plugins MUST use systems/logic ECS** - never core/ecs
+- **UiSystem uses core/ecs internally** - this is private
+- **Clean API boundaries** - no mixing of ECS layers
+
 ## Session: 2025-08-21 - Core Compilation Fixes (Session 3)
 
 ### What Was Accomplished

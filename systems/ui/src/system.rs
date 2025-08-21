@@ -281,6 +281,132 @@ impl UiSystem {
         Ok(())
     }
     
+    // Public API methods for plugins
+    
+    pub fn get_root_element(&self) -> Option<ElementId> {
+        self.root_entity
+    }
+    
+    pub async fn set_element_style(&mut self, element: ElementId, style: crate::types::ElementStyle) -> UiResult<()> {
+        // Convert public ElementStyle to internal UiStyleComponent
+        let ui_style = UiStyleComponent {
+            background_color: Some(nalgebra::Vector4::new(
+                style.background_color[0],
+                style.background_color[1],
+                style.background_color[2],
+                style.background_color[3],
+            )),
+            text_color: Some(nalgebra::Vector4::new(
+                style.text_color[0],
+                style.text_color[1],
+                style.text_color[2],
+                style.text_color[3],
+            )),
+            border_color: Some(nalgebra::Vector4::new(
+                style.border_color[0],
+                style.border_color[1],
+                style.border_color[2],
+                style.border_color[3],
+            )),
+            border_width: style.border_width,
+            border_radius: style.border_radius,
+            opacity: style.opacity,
+            font_size: style.font_size,
+            font_family: Some(style.font_family),
+            font_weight: match style.font_weight {
+                crate::types::FontWeight::Light => crate::components::FontWeight::Light,
+                crate::types::FontWeight::Normal => crate::components::FontWeight::Normal,
+                crate::types::FontWeight::Bold => crate::components::FontWeight::Bold,
+                crate::types::FontWeight::ExtraBold => crate::components::FontWeight::ExtraBold,
+            },
+            text_align: match style.text_align {
+                crate::types::TextAlign::Left => crate::components::TextAlign::Left,
+                crate::types::TextAlign::Center => crate::components::TextAlign::Center,
+                crate::types::TextAlign::Right => crate::components::TextAlign::Right,
+                crate::types::TextAlign::Justify => crate::components::TextAlign::Justify,
+            },
+            visible: style.visible,
+            z_index: style.z_index,
+            cursor: None,
+            custom_styles: std::collections::HashMap::new(),
+        };
+        
+        // Update component in world using the update_component pattern
+        let world = self.world.read().await;
+        world.update_component(element, |_style: &mut UiStyleComponent| {
+            *_style = ui_style;
+        }).await.map_err(|e| UiError::EcsError(e.to_string()))?;
+        drop(world);
+        
+        // Mark as dirty for re-render
+        self.dirty_elements.write().await.push(element);
+        
+        Ok(())
+    }
+    
+    pub async fn set_element_bounds(&mut self, element: ElementId, bounds: crate::types::ElementBounds) -> UiResult<()> {
+        // Update layout component with bounds
+        let layout = UiLayoutComponent {
+            bounds: crate::components::ElementBounds {
+                x: bounds.x,
+                y: bounds.y,
+                width: bounds.width,
+                height: bounds.height,
+            },
+            padding: [0.0; 4],
+            margin: [0.0; 4],
+            layout_type: crate::components::LayoutType::Absolute,
+            flex_direction: crate::components::FlexDirection::Row,
+            justify_content: crate::components::JustifyContent::FlexStart,
+            align_items: crate::components::AlignItems::FlexStart,
+            position_type: crate::components::PositionType::Absolute,
+            size: crate::components::Size {
+                width: Some(bounds.width),
+                height: Some(bounds.height),
+            },
+            min_size: crate::components::Size { width: None, height: None },
+            max_size: crate::components::Size { width: None, height: None },
+        };
+        
+        let world = self.world.read().await;
+        world.update_component(element, |_layout: &mut UiLayoutComponent| {
+            *_layout = layout;
+        }).await.map_err(|e| UiError::EcsError(e.to_string()))?;
+        drop(world);
+        
+        // Mark as dirty
+        self.dirty_elements.write().await.push(element);
+        
+        Ok(())
+    }
+    
+    pub async fn mark_dirty(&mut self, element: ElementId) -> UiResult<()> {
+        self.dirty_elements.write().await.push(element);
+        Ok(())
+    }
+    
+    pub async fn force_layout(&mut self) -> UiResult<()> {
+        self.update_layout().await
+    }
+    
+    pub async fn create_element_with_id(
+        &mut self,
+        id: String,
+        element_type: String,
+        parent: Option<ElementId>,
+    ) -> UiResult<ElementId> {
+        let entity = self.create_element(&element_type, parent).await?;
+        
+        // Update element component with the id
+        let world = self.world.read().await;
+        world.update_component(entity, |elem: &mut UiElementComponent| {
+            elem.id = id;
+        }).await.map_err(|e| UiError::EcsError(e.to_string()))?;
+        drop(world);
+        
+        Ok(entity)
+    }
+    
     async fn register_components(&self) -> UiResult<()> {
         let mut registry = self.registry.write().await;
         
