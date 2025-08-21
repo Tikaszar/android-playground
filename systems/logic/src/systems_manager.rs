@@ -115,20 +115,12 @@ impl SystemsManager {
     /// Render a frame using the current renderer
     pub async fn render_frame(&self) -> LogicResult<()> {
         let mut ui = self.ui.write().await;
-        let batch = ui.render().await
+        // render() now sends commands directly via channel 10
+        ui.render().await
             .map_err(|e| LogicError::SystemError(format!("UI render failed: {}", e)))?;
         
-        if let Some(ref renderer) = self.renderer {
-            let mut r = renderer.write().await;
-            r.begin_frame().await
-                .map_err(|e| LogicError::SystemError(format!("Begin frame failed: {}", e)))?;
-            r.execute_commands(&batch).await
-                .map_err(|e| LogicError::SystemError(format!("Execute commands failed: {}", e)))?;
-            r.end_frame().await
-                .map_err(|e| LogicError::SystemError(format!("End frame failed: {}", e)))?;
-            r.present().await
-                .map_err(|e| LogicError::SystemError(format!("Present failed: {}", e)))?;
-        }
+        // If we have a local renderer (for testing), we could use it here
+        // but normally rendering happens in the browser via WebGL
         
         Ok(())
     }
@@ -165,4 +157,36 @@ impl SystemsManager {
         self.world.clone()
     }
     
+    /// Start the render loop at 60fps
+    pub async fn start_render_loop(&self) -> LogicResult<()> {
+        use std::time::{Duration, Instant};
+        use tokio::time::interval_at;
+        
+        // TODO: Get channel manager from networking system to connect UI
+        // The networking system needs to provide access to its channel manager
+        // For now, the UI will generate render commands but not send them
+        
+        // Create 60fps interval (16.67ms)
+        let frame_duration = Duration::from_millis(16);
+        let start = Instant::now() + frame_duration;
+        let mut interval = interval_at(start.into(), frame_duration);
+        
+        // Clone references for the spawned task
+        let ui_system = self.ui.clone();
+        
+        // Spawn render loop task
+        tokio::spawn(async move {
+            loop {
+                interval.tick().await;
+                
+                // Render the UI
+                let mut ui = ui_system.write().await;
+                if let Err(e) = ui.render().await {
+                    tracing::warn!("UI render error: {}", e);
+                }
+            }
+        });
+        
+        Ok(())
+    }
 }

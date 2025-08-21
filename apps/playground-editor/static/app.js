@@ -5,11 +5,13 @@
  * which handles all UI rendering and mobile interactions.
  */
 
+import { WebGLRenderer } from './webgl/renderer.js';
+
 class UIFrameworkClient {
     constructor() {
         this.ws = null;
         this.canvas = null;
-        this.ctx = null;
+        this.renderer = null; // WebGL renderer instead of 2D context
         this.channels = new Set();
         this.reconnectAttempts = 0;
         this.maxReconnectAttempts = 10;
@@ -50,11 +52,15 @@ class UIFrameworkClient {
             return;
         }
         
-        // Set up canvas context
-        this.ctx = this.canvas.getContext('2d', {
-            alpha: false,
-            desynchronized: true,
-        });
+        // Create WebGL renderer
+        try {
+            this.renderer = new WebGLRenderer(this.canvas);
+            console.log('WebGL renderer initialized');
+        } catch (error) {
+            console.error('Failed to initialize WebGL renderer:', error);
+            this.showError();
+            return;
+        }
         
         // Set up event listeners
         this.setupEventListeners();
@@ -206,66 +212,16 @@ class UIFrameworkClient {
             const decoder = new TextDecoder();
             const batch = JSON.parse(decoder.decode(payload));
             
-            if (batch.commands) {
-                this.executeRenderCommands(batch.commands);
+            if (batch.commands && this.renderer) {
+                // Use WebGL renderer to execute commands
+                this.renderer.executeCommandBatch(batch);
             }
         } catch (e) {
             console.error('Failed to parse render batch:', e);
         }
     }
     
-    executeRenderCommands(commands) {
-        // Execute each render command on the canvas
-        for (const cmd of commands) {
-            switch(cmd.Clear ? 'Clear' : 
-                   cmd.DrawQuad ? 'DrawQuad' : 
-                   cmd.DrawText ? 'DrawText' : 
-                   cmd.DrawImage ? 'DrawImage' :
-                   cmd.SetClipRect ? 'SetClipRect' :
-                   cmd.ClearClipRect ? 'ClearClipRect' : null) {
-                
-                case 'Clear':
-                    const clear = cmd.Clear;
-                    // Convert color array to CSS rgba
-                    const clearColor = `rgba(${Math.floor(clear.color[0] * 255)}, ${Math.floor(clear.color[1] * 255)}, ${Math.floor(clear.color[2] * 255)}, ${clear.color[3]})`;
-                    this.ctx.fillStyle = clearColor;
-                    this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
-                    break;
-                    
-                case 'DrawQuad':
-                    const quad = cmd.DrawQuad;
-                    const quadColor = `rgba(${Math.floor(quad.color[0] * 255)}, ${Math.floor(quad.color[1] * 255)}, ${Math.floor(quad.color[2] * 255)}, ${quad.color[3]})`;
-                    this.ctx.fillStyle = quadColor;
-                    this.ctx.fillRect(quad.position[0], quad.position[1], quad.size[0], quad.size[1]);
-                    break;
-                    
-                case 'DrawText':
-                    const text = cmd.DrawText;
-                    const textColor = `rgba(${Math.floor(text.color[0] * 255)}, ${Math.floor(text.color[1] * 255)}, ${Math.floor(text.color[2] * 255)}, ${text.color[3]})`;
-                    this.ctx.fillStyle = textColor;
-                    this.ctx.font = `${text.size}px sans-serif`;
-                    this.ctx.fillText(text.text, text.position[0], text.position[1]);
-                    break;
-                    
-                case 'DrawImage':
-                    // Image drawing would require texture management
-                    console.log('DrawImage not yet implemented:', cmd.DrawImage);
-                    break;
-                    
-                case 'SetClipRect':
-                    const clip = cmd.SetClipRect;
-                    this.ctx.save();
-                    this.ctx.beginPath();
-                    this.ctx.rect(clip.position[0], clip.position[1], clip.size[0], clip.size[1]);
-                    this.ctx.clip();
-                    break;
-                    
-                case 'ClearClipRect':
-                    this.ctx.restore();
-                    break;
-            }
-        }
-    }
+    // executeRenderCommands removed - now handled by WebGL renderer
     
     updateUI(payload) {
         // UI Framework is updating UI elements
@@ -367,15 +323,13 @@ class UIFrameworkClient {
         
         // Get display size
         const rect = this.canvas.getBoundingClientRect();
-        const width = rect.width * dpr;
-        const height = rect.height * dpr;
+        const width = rect.width;
+        const height = rect.height;
         
-        // Set canvas size
-        this.canvas.width = width;
-        this.canvas.height = height;
-        
-        // Scale for high DPI
-        this.ctx.scale(dpr, dpr);
+        // Update WebGL renderer viewport
+        if (this.renderer) {
+            this.renderer.resize();
+        }
         
         // Notify UI Framework of resize
         this.sendToUIFramework(this.MSG_TYPES.RESIZE, {

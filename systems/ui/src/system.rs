@@ -106,9 +106,6 @@ impl UiSystem {
         Ok(())
     }
     
-    pub async fn set_channel_manager(&mut self, manager: Shared<ChannelManager>) {
-        self.channel_manager = Some(manager);
-    }
     
     pub async fn set_viewport(&mut self, viewport: Viewport) {
         self.viewport = viewport;
@@ -120,54 +117,6 @@ impl UiSystem {
         }
     }
     
-    pub async fn render(&mut self) -> UiResult<RenderCommandBatch> {
-        if !self.initialized {
-            return Err(UiError::NotInitialized);
-        }
-        
-        let mut batch = RenderCommandBatch::new(self.frame_id);
-        batch.set_viewport(self.viewport);
-        
-        // Get current theme
-        let theme_mgr = self.theme_manager.read().await;
-        let theme = theme_mgr.get_theme(self.current_theme)?;
-        let theme_clone = theme.clone();
-        drop(theme_mgr);
-        
-        // Clear with theme background
-        batch.push(RenderCommand::Clear {
-            color: [
-                theme_clone.colors.background.x,
-                theme_clone.colors.background.y,
-                theme_clone.colors.background.z,
-                theme_clone.colors.background.w,
-            ]
-        });
-        
-        // Update layout for dirty elements
-        self.update_layout().await?;
-        
-        // Render element tree
-        if let Some(root) = self.root_entity {
-            self.render_element_tree(root, &mut batch, &theme_clone).await?;
-        }
-        
-        // Render mobile UI if active
-        let mobile = self.mobile_features.read().await;
-        mobile.render(&mut batch, &theme_clone)?;
-        drop(mobile);
-        
-        // Send via WebSocket
-        if let Some(ref manager) = self.channel_manager {
-            self.send_batch(&batch).await?;
-        }
-        
-        // Clear dirty list
-        self.dirty_elements.write().await.clear();
-        
-        self.frame_id += 1;
-        Ok(batch)
-    }
     
     pub async fn handle_input(&mut self, event: InputEvent) -> UiResult<bool> {
         let mut input_mgr = self.input_manager.write().await;
@@ -420,10 +369,22 @@ impl UiSystem {
     }
     
     async fn create_root(&self) -> UiResult<EntityId> {
+        // Create an empty entity first
         let mut world = self.world.write().await;
+        let entities = world.spawn_batch(vec![vec![]]).await
+            .map_err(|e| UiError::EcsError(e.to_string()))?;
         
+        let entity = entities.into_iter().next()
+            .ok_or_else(|| UiError::CreationFailed("Failed to create root entity".into()))?;
+        
+        // Now add components individually (avoiding trait object issues)
         let mut root_element = UiElementComponent::new("root");
         root_element.visible = true;
+        world.add_component_raw(
+            entity, 
+            Box::new(root_element),
+            UiElementComponent::component_id()
+        ).await.map_err(|e| UiError::EcsError(e.to_string()))?;
         
         let mut root_layout = UiLayoutComponent::default();
         root_layout.bounds = ElementBounds {
@@ -433,22 +394,27 @@ impl UiSystem {
             height: self.screen_size[1],
         };
         root_layout.layout_type = LayoutType::Absolute;
+        world.add_component_raw(
+            entity,
+            Box::new(root_layout),
+            UiLayoutComponent::component_id()
+        ).await.map_err(|e| UiError::EcsError(e.to_string()))?;
         
         let mut root_style = UiStyleComponent::default();
         root_style.visible = true;
-        
-        let components: Vec<Box<dyn playground_core_ecs::Component>> = vec![
-            Box::new(root_element),
-            Box::new(root_layout),
+        world.add_component_raw(
+            entity,
             Box::new(root_style),
+            UiStyleComponent::component_id()
+        ).await.map_err(|e| UiError::EcsError(e.to_string()))?;
+        
+        world.add_component_raw(
+            entity,
             Box::new(UiInputComponent::default()),
-        ];
+            UiInputComponent::component_id()
+        ).await.map_err(|e| UiError::EcsError(e.to_string()))?;
         
-        let entities = world.spawn_batch(vec![components]).await
-            .map_err(|e| UiError::EcsError(e.to_string()))?;
-        
-        entities.into_iter().next()
-            .ok_or_else(|| UiError::CreationFailed("Failed to create root".into()))
+        Ok(entity)
     }
     
     async fn update_layout(&mut self) -> UiResult<()> {
@@ -515,23 +481,63 @@ impl UiSystem {
     }
     
     async fn send_batch(&self, batch: &RenderCommandBatch) -> UiResult<()> {
-        if let Some(ref manager) = self.channel_manager {
-            let data = bincode::serialize(batch)
+        if let Some(ref _manager) = self.channel_manager {
+            let _data = bincode::serialize(batch)
                 .map_err(|e| UiError::SerializationError(e.to_string()))?;
             
-            let packet = Packet {
-                channel_id: self.channel_id,
-                packet_type: 100, // RenderBatch type
-                priority: Priority::High,
-                payload: bytes::Bytes::from(data),
-            };
+            // TODO: Send packet through networking system
+            // For now, the render commands are generated but not sent
+            // The networking system needs to provide a proper send API
             
-            // TODO: Send packet through proper channel
-            // For now, just skip sending until networking is properly connected
-            // manager.read().await.send_to_channel(self.channel_id, packet.payload.clone()).await
-            //     .map_err(|e| UiError::NetworkError(e.to_string()))?;
+            // let packet = Packet {
+            //     channel_id: self.channel_id,
+            //     packet_type: 104, // RenderBatch type (matching browser expectation)
+            //     priority: Priority::High,
+            //     payload: bytes::Bytes::from(data),
+            // };
         }
         
         Ok(())
+    }
+    
+    /// Main render method that generates and sends render commands
+    pub async fn render(&mut self) -> UiResult<()> {
+        // First update layout for any dirty elements
+        self.update_layout().await?;
+        
+        // Clear dirty list after layout update
+        self.dirty_elements.write().await.clear();
+        
+        // Get the current theme
+        let theme_mgr = self.theme_manager.read().await;
+        let theme = theme_mgr.get_theme(self.current_theme)?
+            .clone();
+        drop(theme_mgr);
+        
+        // Create render command batch
+        let mut batch = RenderCommandBatch::new(self.frame_id);
+        
+        // Start with clear command using theme background
+        batch.push(RenderCommand::Clear {
+            color: [0.133, 0.137, 0.153, 1.0], // Discord dark background
+        });
+        
+        // Render the element tree starting from root
+        if let Some(root) = self.root_entity {
+            self.render_element_tree(root, &mut batch, &theme).await?;
+        }
+        
+        // Send the batch through channel 10
+        self.send_batch(&batch).await?;
+        
+        // Increment frame counter
+        self.frame_id += 1;
+        
+        Ok(())
+    }
+    
+    /// Set the channel manager for networking
+    pub fn set_channel_manager(&mut self, manager: Shared<ChannelManager>) {
+        self.channel_manager = Some(manager);
     }
 }

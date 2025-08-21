@@ -25,6 +25,9 @@ async fn main() -> Result<()> {
     // Register the plugin as a System in the World
     world.write().await.register_plugin_system(ui_plugin).await?;
     
+    // Start the render loop for UI system
+    systems.start_render_loop().await?;
+    
     // Start the main update loop that runs all Systems
     let world_for_update = world.clone();
     tokio::spawn(async move {
