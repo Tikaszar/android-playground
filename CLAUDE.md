@@ -49,10 +49,11 @@ None! All architecture violations fixed ✅
 ## #immediate-goals
 1. Fix UI rendering (currently black screen) - IN PROGRESS
    - core/rendering created ✅
-   - Need: systems/rendering updates, UiSystem render pipeline
+   - systems/webgl created ✅
+   - Need: UiSystem integration, browser WebGL implementation
 2. Fix client tracking in Dashboard (remove disconnected)
-3. Complete UiSystem render() pipeline
-4. Implement WebGL rendering in browser
+3. Complete UiSystem render() pipeline with WebGLRenderer
+4. Implement WebGL rendering in browser (app.js)
 5. Get Discord-style UI working
 6. Design and implement idle-mmo-rpg game mechanics
 

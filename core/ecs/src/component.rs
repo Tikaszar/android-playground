@@ -149,14 +149,16 @@ impl ComponentRegistry {
         self.pool_limit
     }
     
-    pub fn pool_usage_percentage(&self) -> f32 {
-        let usage = self.current_pool_usage() as f32;
+    pub async fn pool_usage_percentage(&self) -> f32 {
+        let usage = self.current_pool_usage().await as f32;
         let limit = self.pool_limit as f32;
         (usage / limit) * 100.0
     }
     
     pub async fn is_networked(&self, id: ComponentId) -> bool {
         self.components
+            .read()
+            .await
             .get(&id)
             .map(|info| info.networked)
             .unwrap_or(false)
@@ -176,7 +178,8 @@ impl ComponentRegistry {
         }
         
         if let Some(migration_fn) = &info.migration_fn {
-            migration_fn(data, from_version)
+            let guard = migration_fn.read().await;
+            guard(data, from_version)
         } else if cfg!(debug_assertions) {
             Ok(Bytes::new())
         } else {

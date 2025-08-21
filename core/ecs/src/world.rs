@@ -99,7 +99,7 @@ impl World {
     }
     
     pub async fn register_component<T: Component>(&self) -> EcsResult<()> {
-        self.registry.register::<T>().await?;
+        self.registry.read().await.register::<T>().await?;
         
         let component_id = T::component_id();
         if !self.storages.read().await.contains_key(&component_id) {
@@ -111,7 +111,7 @@ impl World {
     }
     
     pub async fn register_component_with_storage<T: Component>(&self, storage_type: StorageType) -> EcsResult<()> {
-        self.registry.register::<T>().await?;
+        self.registry.read().await.register::<T>().await?;
         
         let component_id = T::component_id();
         if !self.storages.read().await.contains_key(&component_id) {
@@ -127,14 +127,14 @@ impl World {
     
     pub async fn spawn_batch(&self, bundles: Vec<Vec<ComponentBox>>) -> EcsResult<Vec<EntityId>> {
         let count = bundles.len();
-        let entities = self.allocator.allocate_batch(count).await;
+        let entities = self.allocator.read().await.allocate_batch(count).await;
         
         for (entity, bundle) in entities.iter().zip(bundles) {
             let mut component_ids = Vec::new();
             
             for component in bundle {
                 let type_name = std::any::type_name_of_val(&*component);
-                let component_id = self.registry.get_info_by_name(type_name).await
+                let component_id = self.registry.read().await.get_info_by_name(type_name).await
                     .ok_or_else(|| EcsError::ComponentNotRegistered(type_name.to_string()))?
                     .id;
                 
@@ -164,14 +164,14 @@ impl World {
     }
     
     async fn despawn_immediate(&self, entity: EntityId) -> EcsResult<()> {
-        if let Some((_, component_ids)) = self.entities.write().await.remove(&entity) {
+        if let Some(component_ids) = self.entities.write().await.remove(&entity) {
             for component_id in component_ids {
                 if let Some(storage) = self.storages.read().await.get(&component_id) {
                     let _ = storage.remove(entity).await;
                 }
             }
             
-            self.allocator.free(entity).await;
+            self.allocator.read().await.free(entity).await;
             
             let mut stats = self.memory_stats.write().await;
             stats.total_entities = stats.total_entities.saturating_sub(1);
@@ -248,9 +248,9 @@ impl World {
     pub async fn get_dirty_entities(&self) -> Vec<(EntityId, Vec<ComponentId>)> {
         let mut result: Vec<(EntityId, Vec<ComponentId>)> = Vec::new();
         
-        for storage_entry in self.storages.read().await.iter() {
-            let component_id = *storage_entry.key();
-            let storage = storage_entry.value();
+        for (component_id, storage) in self.storages.read().await.iter() {
+            let component_id = *component_id;
+            let storage = storage;
             
             for entity in storage.get_dirty().await {
                 let exists = result.iter_mut().find(|(e, _)| *e == entity);
@@ -266,8 +266,8 @@ impl World {
     }
     
     pub async fn clear_dirty(&self) -> EcsResult<()> {
-        for storage_entry in self.storages.read().await.iter() {
-            storage_entry.value().clear_dirty().await?;
+        for (_component_id, storage) in self.storages.read().await.iter() {
+            storage.clear_dirty().await?;
         }
         Ok(())
     }

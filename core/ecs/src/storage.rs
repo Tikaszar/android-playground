@@ -84,7 +84,6 @@ impl ComponentStorage for SparseStorage {
     async fn remove(&self, entity: EntityId) -> EcsResult<ComponentBox> {
         self.dirty.write().await.remove(&entity);
         self.components.write().await.remove(&entity)
-            .map(|(_, component)| component)
             .ok_or_else(|| EcsError::ComponentNotFound {
                 entity,
                 component: format!("{:?}", self.component_id),
@@ -95,7 +94,7 @@ impl ComponentStorage for SparseStorage {
         let mut results = Vec::with_capacity(entities.len());
         for entity in entities {
             self.dirty.write().await.remove(&entity);
-            if let Some((_, component)) = self.components.write().await.remove(&entity) {
+            if let Some(component) = self.components.write().await.remove(&entity) {
                 results.push(component);
             }
         }
@@ -104,8 +103,8 @@ impl ComponentStorage for SparseStorage {
     
     async fn get_raw(&self, entity: EntityId) -> EcsResult<ComponentBox> {
         self.components.read().await.get(&entity)
-            .map(|entry| {
-                let bytes = futures::executor::block_on(entry.value().serialize())
+            .map(|component| {
+                let bytes = futures::executor::block_on(component.serialize())
                     .unwrap_or_else(|_| bytes::Bytes::new());
                 Box::new(RawComponent { data: bytes }) as ComponentBox
             })
@@ -130,8 +129,8 @@ impl ComponentStorage for SparseStorage {
     }
     
     async fn entities(&self) -> Vec<EntityId> {
-        self.components.read().await.iter()
-            .map(|entry| *entry.key())
+        self.components.read().await.keys()
+            .copied()
             .collect()
     }
     
@@ -145,8 +144,8 @@ impl ComponentStorage for SparseStorage {
     }
     
     async fn get_dirty(&self) -> Vec<EntityId> {
-        self.dirty.read().await.iter()
-            .map(|entry| *entry.key())
+        self.dirty.read().await.keys()
+            .copied()
             .collect()
     }
     
@@ -183,7 +182,7 @@ impl ComponentStorage for DenseStorage {
     }
     
     async fn insert(&self, entity: EntityId, component: ComponentBox) -> EcsResult<()> {
-        if let Some(index) = self.entity_to_index.read().await.get(&entity).map(|e| *e.value()) {
+        if let Some(index) = self.entity_to_index.read().await.get(&entity).copied() {
             let mut components = self.components.write().await;
             if index < components.len() {
                 components[index] = component;
@@ -208,7 +207,7 @@ impl ComponentStorage for DenseStorage {
         let mut components = self.components.write().await;
         
         for (entity, component) in batch {
-            if let Some(index) = self.entity_to_index.read().await.get(&entity).map(|e| *e.value()) {
+            if let Some(index) = self.entity_to_index.read().await.get(&entity).copied() {
                 if index < components.len() {
                     components[index] = component;
                 }
@@ -227,7 +226,7 @@ impl ComponentStorage for DenseStorage {
     async fn remove(&self, entity: EntityId) -> EcsResult<ComponentBox> {
         self.dirty.write().await.remove(&entity);
         
-        if let Some((_, index)) = self.entity_to_index.write().await.remove(&entity) {
+        if let Some(index) = self.entity_to_index.write().await.remove(&entity) {
             let mut entities = self.entities.write().await;
             let mut components = self.components.write().await;
             
@@ -248,7 +247,7 @@ impl ComponentStorage for DenseStorage {
                 entities[index] = last_entity;
                 let removed = std::mem::replace(&mut components[index], last_component);
                 
-                self.entity_to_index.insert(last_entity, index);
+                self.entity_to_index.write().await.insert(last_entity, index);
                 removed
             };
             
@@ -274,7 +273,7 @@ impl ComponentStorage for DenseStorage {
     }
     
     async fn get_raw(&self, entity: EntityId) -> EcsResult<ComponentBox> {
-        if let Some(index) = self.entity_to_index.read().await.get(&entity).map(|e| *e.value()) {
+        if let Some(index) = self.entity_to_index.read().await.get(&entity).copied() {
             let component_clone = {
                 let components = self.components.read().await;
                 if index < components.len() {
@@ -332,8 +331,8 @@ impl ComponentStorage for DenseStorage {
     }
     
     async fn get_dirty(&self) -> Vec<EntityId> {
-        self.dirty.read().await.iter()
-            .map(|entry| *entry.key())
+        self.dirty.read().await.keys()
+            .copied()
             .collect()
     }
     

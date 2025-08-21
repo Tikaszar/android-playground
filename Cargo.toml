@@ -15,6 +15,7 @@ members = [
     "systems/physics",
     "systems/logic",
     "systems/rendering",
+    "systems/webgl",
     
     # Apps layer
     "apps/playground-editor",

@@ -1,5 +1,5 @@
 [package]
-name = "playground-systems-networking"
+name = "playground-systems-webgl"
 version.workspace = true
 authors.workspace = true
 edition.workspace = true
@@ -7,19 +7,13 @@ license.workspace = true
 
 [dependencies]
 playground-core-types = { path = "../../core/types" }
+playground-core-rendering = { path = "../../core/rendering" }
 playground-core-ecs = { path = "../../core/ecs" }
-playground-core-server = { path = "../../core/server" }  # For packet types and channel definitions
 serde = { workspace = true }
 serde_json = { workspace = true }
 bytes = { workspace = true }
 tokio = { workspace = true }
 thiserror = { workspace = true }
-futures-util = { workspace = true }
-futures = { workspace = true }
-tracing = { workspace = true }
-bincode = { workspace = true }
 async-trait = { workspace = true }
-tokio-tungstenite = "0.20"  # For native WebSocket client
-axum = { workspace = true }
-tower = { workspace = true }
-tower-http = { workspace = true }
+tracing = { workspace = true }
+nalgebra = { workspace = true }
