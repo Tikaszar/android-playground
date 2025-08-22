@@ -41,3 +41,11 @@ pub use playground_core_types::{Shared, shared};
 
 // Re-export core rendering types that plugins need
 pub use playground_core_rendering::{RenderCommand, RenderCommandBatch, Viewport};
+
+// Re-export core UI types that plugins need
+pub use playground_core_ui::{
+    ElementType as UiElementType, 
+    Style as UiStyle, 
+    Bounds as UiBounds,
+    UiCommand, UiEvent, EventResult as UiEventResult,
+};

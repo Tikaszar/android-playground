@@ -8,6 +8,7 @@ members = [
     "core/server",
     "core/client",
     "core/rendering",
+    "core/ui",
     
     # Systems layer
     "systems/ui",

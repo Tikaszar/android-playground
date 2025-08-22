@@ -3,6 +3,12 @@ use playground_core_ecs::{World, EntityId, ComponentRegistry, Component};
 use playground_core_types::{Shared, shared};
 use playground_core_server::{ChannelManager, Packet, Priority};
 use playground_systems_networking::NetworkingSystem;
+use playground_core_ui::{
+    UiRenderer, UiElement, UiCommand, UiEvent as CoreUiEvent, EventResult,
+    ElementId as CoreElementId, ElementType as CoreElementType, 
+    ElementUpdate, Style as CoreStyle, Bounds as CoreBounds,
+    Orientation, UiError as CoreUiError, UiResult as CoreUiResult
+};
 use crate::error::{UiError, UiResult};
 use crate::element::{ElementGraph, ElementId};
 use crate::components::*;
@@ -14,6 +20,7 @@ use crate::mobile::MobileFeatures;
 use crate::rendering::ui_to_render_commands;
 use std::collections::HashMap;
 use uuid::Uuid;
+use async_trait::async_trait;
 
 pub struct UiSystem {
     // Core ECS
@@ -211,10 +218,32 @@ impl UiSystem {
     }
     
     pub async fn set_element_text(&mut self, element: EntityId, text: String) -> UiResult<()> {
-        // For now, just mark as dirty - proper implementation would update components
-        // The ECS doesn't provide mutable component access, need to remove and re-add
+        // Get the current component
+        let world = self.world.read().await;
+        let current_component = world.get_component::<UiElementComponent>(element).await
+            .map_err(|e| UiError::EcsError(e.to_string()))?;
         
-        // Mark as dirty
+        // Create updated component with new text
+        let mut updated_component = current_component.clone();
+        updated_component.text_content = Some(text);
+        
+        drop(world);
+        
+        // Remove old component and add updated one
+        let mut world = self.world.write().await;
+        world.remove_component_raw(element, UiElementComponent::component_id()).await
+            .map_err(|e| UiError::EcsError(e.to_string()))?;
+        
+        world.add_component_raw(
+            element,
+            Box::new(updated_component),
+            UiElementComponent::component_id()
+        ).await
+            .map_err(|e| UiError::EcsError(e.to_string()))?;
+        
+        drop(world);
+        
+        // Mark as dirty for re-render
         self.dirty_elements.write().await.push(element);
         
         Ok(())
@@ -824,5 +853,216 @@ impl UiSystem {
             float alpha = texture(u_texture, v_texCoord).a;
             fragColor = vec4(v_color.rgb, v_color.a * alpha);
         }"#.to_string()
+    }
+}
+
+// Implement UiRenderer trait from core/ui
+#[async_trait]
+impl UiRenderer for UiSystem {
+    async fn initialize(&mut self) -> CoreUiResult<()> {
+        self.initialize().await
+            .map_err(|e| CoreUiError::NotInitialized)
+    }
+    
+    async fn create_element(
+        &mut self,
+        element_type: CoreElementType,
+        parent: Option<CoreElementId>,
+    ) -> CoreUiResult<CoreElementId> {
+        // Map core element type to our internal type
+        let element_type_str = match element_type {
+            CoreElementType::Panel => "panel",
+            CoreElementType::Text => "text",
+            CoreElementType::Button => "button",
+            CoreElementType::Input => "input",
+            CoreElementType::Image => "image",
+            CoreElementType::ScrollView => "scrollview",
+            CoreElementType::List => "list",
+            CoreElementType::Grid => "grid",
+            CoreElementType::Canvas => "canvas",
+            CoreElementType::Custom => "custom",
+        };
+        
+        // Convert parent ID if provided
+        let parent_entity = if let Some(parent_id) = parent {
+            // Find entity by matching UUID
+            let world = self.world.read().await;
+            // For now, we'll need to maintain a mapping between CoreElementId and EntityId
+            // This is a simplification - in production you'd have a proper mapping
+            None
+        } else {
+            self.root_entity
+        };
+        
+        let entity = self.create_element(element_type_str, parent_entity).await
+            .map_err(|e| CoreUiError::InvalidOperation(e.to_string()))?;
+        
+        // Create a CoreElementId from the entity
+        Ok(CoreElementId(Uuid::new_v4()))
+    }
+    
+    async fn update_element(
+        &mut self,
+        id: CoreElementId,
+        update: ElementUpdate,
+    ) -> CoreUiResult<()> {
+        // This would need proper ID mapping in production
+        match update {
+            ElementUpdate::Text(text) => {
+                // Find entity and update text
+                Ok(())
+            }
+            ElementUpdate::Style(style) => {
+                // Convert CoreStyle to our internal style and apply
+                Ok(())
+            }
+            ElementUpdate::Bounds(bounds) => {
+                // Update element bounds
+                Ok(())
+            }
+            _ => Ok(())
+        }
+    }
+    
+    async fn remove_element(&mut self, id: CoreElementId) -> CoreUiResult<()> {
+        // Find and remove element
+        Ok(())
+    }
+    
+    async fn get_element(&self, id: CoreElementId) -> CoreUiResult<Box<dyn UiElement>> {
+        Err(CoreUiError::ElementNotFound(format!("{:?}", id)))
+    }
+    
+    async fn process_command(&mut self, command: UiCommand) -> CoreUiResult<()> {
+        match command {
+            UiCommand::CreateElement { id, element_type, parent } => {
+                // Map core element type to our internal type
+                let element_type_str = match element_type {
+                    CoreElementType::Panel => "panel",
+                    CoreElementType::Text => "text",
+                    CoreElementType::Button => "button",
+                    CoreElementType::Input => "input",
+                    CoreElementType::Image => "image",
+                    CoreElementType::ScrollView => "scrollview",
+                    CoreElementType::List => "list",
+                    CoreElementType::Grid => "grid",
+                    CoreElementType::Canvas => "canvas",
+                    CoreElementType::Custom => "custom",
+                };
+                
+                // Convert parent CoreElementId to internal EntityId (would need mapping)
+                let parent_entity = self.root_entity;
+                self.create_element(element_type_str, parent_entity).await
+                    .map_err(|e| CoreUiError::InvalidOperation(e.to_string()))?;
+                Ok(())
+            }
+            UiCommand::SetText { id, text } => {
+                self.update_element(id, ElementUpdate::Text(text)).await
+            }
+            _ => Ok(())
+        }
+    }
+    
+    async fn handle_event(&mut self, event: CoreUiEvent) -> CoreUiResult<EventResult> {
+        // Convert core event to our internal event and handle
+        Ok(EventResult::Ignored)
+    }
+    
+    async fn calculate_layout(&mut self) -> CoreUiResult<()> {
+        self.update_layout().await
+            .map_err(|e| CoreUiError::LayoutFailed(e.to_string()))
+    }
+    
+    async fn render_frame(&mut self, frame_id: u64) -> CoreUiResult<RenderCommandBatch> {
+        self.frame_id = frame_id;
+        
+        // Create render command batch
+        let mut batch = RenderCommandBatch::new(frame_id);
+        
+        // Clear with mobile-friendly dark background (Discord-like)
+        batch.push(RenderCommand::Clear {
+            color: [0.133, 0.137, 0.153, 1.0],
+        });
+        
+        // Render the UI tree
+        if let Some(root) = self.root_entity {
+            let theme_mgr = self.theme_manager.read().await;
+            let theme = theme_mgr.get_theme(self.current_theme)
+                .map_err(|e| CoreUiError::RenderingFailed(e.to_string()))?
+                .clone();
+            drop(theme_mgr);
+            
+            self.render_element_tree(root, &mut batch, &theme).await
+                .map_err(|e| CoreUiError::RenderingFailed(e.to_string()))?;
+        }
+        
+        Ok(batch)
+    }
+    
+    async fn get_root(&self) -> Option<CoreElementId> {
+        // Would need proper ID mapping
+        self.root_entity.map(|_| CoreElementId(Uuid::new_v4()))
+    }
+    
+    async fn set_viewport(&mut self, width: f32, height: f32) -> CoreUiResult<()> {
+        self.viewport = Viewport {
+            x: 0,
+            y: 0,
+            width: width as u32,
+            height: height as u32,
+        };
+        self.screen_size = [width, height];
+        
+        // Update root element bounds
+        if let Some(root) = self.root_entity {
+            let world = self.world.read().await;
+            // Update root layout bounds to match viewport
+            drop(world);
+        }
+        
+        Ok(())
+    }
+    
+    async fn set_safe_area_insets(
+        &mut self,
+        top: f32,
+        bottom: f32,
+        left: f32,
+        right: f32,
+    ) -> CoreUiResult<()> {
+        // Store safe area insets for mobile layout
+        let mut mobile = self.mobile_features.write().await;
+        mobile.set_safe_area_insets(top, bottom, left, right).await
+            .map_err(|e| CoreUiError::InvalidOperation(e.to_string()))?;
+        Ok(())
+    }
+    
+    async fn handle_orientation_change(&mut self, orientation: Orientation) -> CoreUiResult<()> {
+        // Handle mobile orientation change
+        let mut mobile = self.mobile_features.write().await;
+        
+        // Update screen size based on orientation
+        match orientation {
+            Orientation::Portrait | Orientation::PortraitUpsideDown => {
+                // Portrait mode - taller than wide
+                if self.screen_size[0] > self.screen_size[1] {
+                    self.screen_size = [self.screen_size[1], self.screen_size[0]];
+                }
+            }
+            Orientation::LandscapeLeft | Orientation::LandscapeRight => {
+                // Landscape mode - wider than tall
+                if self.screen_size[1] > self.screen_size[0] {
+                    self.screen_size = [self.screen_size[1], self.screen_size[0]];
+                }
+            }
+        }
+        
+        // Mark all elements as dirty for re-layout
+        if let Some(root) = self.root_entity {
+            self.mark_subtree_dirty(root).await
+                .map_err(|e| CoreUiError::LayoutFailed(e.to_string()))?;
+        }
+        
+        Ok(())
     }
 }

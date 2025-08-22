@@ -82,7 +82,11 @@ pub fn ui_to_render_commands(
         "button" => element_renderer::render_button(element, layout, style, theme, batch)?,
         "terminal" => element_renderer::render_terminal(element, layout, style, theme, batch)?,
         "input" => element_renderer::render_input(element, layout, style, theme, batch)?,
-        "container" => {}, // Already rendered background
+        "panel" | "container" => {}, // Already rendered background
+        "scrollview" => {
+            // Scrollview is like a panel but with overflow handling
+            // For now, just render as a panel
+        },
         _ => {} // Unknown element type
     }
     

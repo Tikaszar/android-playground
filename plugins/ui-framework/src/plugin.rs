@@ -256,44 +256,161 @@ impl UiFrameworkPlugin {
         // Get the UI interface from SystemsManager
         let mut ui_interface = self.systems_manager.ui_interface();
         
-        // Create Discord-style layout using the high-level interface
-        let layout = ui_interface.create_discord_layout().await?;
+        // Create mobile Discord layout optimized for phones
+        let layout = ui_interface.create_mobile_discord_layout().await?;
         
-        // Add channel categories to the sidebar
-        let categories = vec!["SYSTEMS", "IDE PLUGINS", "GAME PLUGINS"];
+        // Add a header bar to the main content
+        let header = ui_interface.create_panel(
+            "header-bar",
+            Some(layout.main_content),
+        ).await?;
+        
+        ui_interface.set_bounds(
+            header,
+            playground_systems_ui::ElementBounds::new(0.0, 0.0, 360.0, 50.0)
+        ).await?;
+        
+        // Add hamburger menu button (to show channel drawer)
+        let menu_button = ui_interface.create_button(
+            "☰",
+            Some(header),
+        ).await?;
+        
+        ui_interface.set_bounds(
+            menu_button,
+            playground_systems_ui::ElementBounds::new(10.0, 10.0, 30.0, 30.0)
+        ).await?;
+        
+        // Add channel name in header
+        let channel_name = ui_interface.create_text(
+            "# general",
+            Some(header),
+        ).await?;
+        
+        ui_interface.style_element(channel_name, playground_systems_ui::ElementStyle {
+            text_color: [0.863, 0.867, 0.871, 1.0],
+            font_size: 18.0,
+            font_weight: playground_systems_ui::FontWeight::Bold,
+            ..Default::default()
+        }).await?;
+        
+        ui_interface.set_bounds(
+            channel_name,
+            playground_systems_ui::ElementBounds::new(50.0, 15.0, 200.0, 30.0)
+        ).await?;
+        
+        // Add channels to the drawer (off-screen initially)
+        let channels = vec![
+            ("SYSTEMS", vec!["# ui", "# networking", "# logic"]),
+            ("IDE", vec!["# editor", "# terminal", "# files"]),
+            ("CHAT", vec!["# general", "# help", "# announcements"]),
+        ];
+        
         let mut y_offset = 20.0;
-        
-        for category in categories {
-            let category_text = ui_interface.create_text(
+        for (category, channel_list) in channels {
+            // Category header
+            let category_elem = ui_interface.create_text(
                 category,
                 Some(layout.sidebar),
             ).await?;
             
-            // Style the category text
-            let category_style = playground_systems_ui::ElementStyle {
-                text_color: [0.54, 0.56, 0.60, 1.0], // Discord gray for categories
+            ui_interface.style_element(category_elem, playground_systems_ui::ElementStyle {
+                text_color: [0.54, 0.56, 0.60, 1.0],
                 font_size: 12.0,
                 font_weight: playground_systems_ui::FontWeight::Bold,
                 ..Default::default()
-            };
-            ui_interface.style_element(category_text, category_style).await?;
+            }).await?;
             
-            // Set position
             ui_interface.set_bounds(
-                category_text,
-                playground_systems_ui::ElementBounds::new(10.0, y_offset, 220.0, 20.0)
+                category_elem,
+                playground_systems_ui::ElementBounds::new(15.0, y_offset, 250.0, 20.0)
             ).await?;
             
-            y_offset += 30.0;
+            y_offset += 25.0;
+            
+            // Channels in category
+            for channel_name in channel_list {
+                let channel_elem = ui_interface.create_button(
+                    channel_name,
+                    Some(layout.sidebar),
+                ).await?;
+                
+                ui_interface.style_element(channel_elem, playground_systems_ui::ElementStyle {
+                    background_color: [0.0, 0.0, 0.0, 0.0], // Transparent
+                    text_color: [0.7, 0.7, 0.7, 1.0],
+                    font_size: 16.0, // Larger for mobile touch
+                    ..Default::default()
+                }).await?;
+                
+                ui_interface.set_bounds(
+                    channel_elem,
+                    playground_systems_ui::ElementBounds::new(20.0, y_offset, 240.0, 40.0)
+                ).await?;
+                
+                y_offset += 42.0;
+            }
+            
+            y_offset += 10.0; // Space between categories
         }
         
-        // Store layout reference in UI state for later use
+        // Add some initial messages to the message area
+        ui_interface.add_message(
+            layout.message_area,
+            "System",
+            "Welcome to the Android Playground IDE!",
+            "now",
+        ).await?;
+        
+        ui_interface.add_message(
+            layout.message_area,
+            "UI Framework",
+            "Mobile Discord UI initialized successfully",
+            "now",
+        ).await?;
+        
+        // Add input field to the input area
+        let input_field = ui_interface.create_panel(
+            "message-input",
+            Some(layout.input_area),
+        ).await?;
+        
+        ui_interface.style_element(input_field, playground_systems_ui::ElementStyle {
+            background_color: [0.251, 0.263, 0.286, 1.0],
+            border_radius: 20.0, // Rounded like Discord mobile
+            ..Default::default()
+        }).await?;
+        
+        ui_interface.set_bounds(
+            input_field,
+            playground_systems_ui::ElementBounds::new(10.0, 10.0, 340.0, 40.0)
+        ).await?;
+        
+        // Add placeholder text
+        let placeholder = ui_interface.create_text(
+            "Message #general",
+            Some(input_field),
+        ).await?;
+        
+        ui_interface.style_element(placeholder, playground_systems_ui::ElementStyle {
+            text_color: [0.5, 0.5, 0.5, 1.0],
+            font_size: 16.0,
+            ..Default::default()
+        }).await?;
+        
+        ui_interface.set_bounds(
+            placeholder,
+            playground_systems_ui::ElementBounds::new(20.0, 12.0, 300.0, 20.0)
+        ).await?;
+        
+        // Force initial layout calculation
+        ui_interface.force_layout().await?;
+        
+        // Store layout reference in UI state
         let mut ui_state = self.ui_state.write().await;
-        // Store the layout IDs for future reference
-        // This would typically be stored in a component in the systems/logic World
+        // In production, you'd store these IDs in components
         drop(ui_state);
         
-        info!("Discord-style UI layout created");
+        info!("Mobile Discord UI layout created successfully");
         Ok(())
     }
 }

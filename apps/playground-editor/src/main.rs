@@ -6,7 +6,7 @@ use anyhow::Result;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
-use playground_systems_logic::{World, SystemsManager};
+use playground_systems_logic::{World, SystemsManager, System};
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -20,10 +20,13 @@ async fn main() -> Result<()> {
     // Load and register the UI Framework Plugin as a System
     use playground_plugins_ui_framework::UiFrameworkPlugin;
     
-    let ui_plugin = Box::new(UiFrameworkPlugin::new(systems.clone()));
+    let mut ui_plugin = UiFrameworkPlugin::new(systems.clone());
+    
+    // Initialize the plugin
+    ui_plugin.initialize(&*world.read().await).await?;
     
     // Register the plugin as a System in the World
-    world.write().await.register_plugin_system(ui_plugin).await?;
+    world.write().await.register_plugin_system(Box::new(ui_plugin)).await?;
     
     // Start the render loop for UI system
     systems.start_render_loop().await?;

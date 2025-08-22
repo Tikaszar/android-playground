@@ -50,6 +50,11 @@ impl MobileFeatures {
         self.safe_area_insets
     }
     
+    pub async fn set_safe_area_insets(&mut self, top: f32, bottom: f32, left: f32, right: f32) -> UiResult<()> {
+        self.safe_area_insets = [top, right, bottom, left];
+        Ok(())
+    }
+    
     fn detect_mobile() -> bool {
         // Simple detection - would use actual platform detection
         cfg!(target_os = "android") || cfg!(target_os = "ios")

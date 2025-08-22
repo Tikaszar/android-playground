@@ -11,6 +11,7 @@ playground-core-types = { path = "../../core/types" }
 playground-core-server = { path = "../../core/server" }
 playground-core-ecs = { path = "../../core/ecs" }
 playground-core-rendering = { path = "../../core/rendering" }
+playground-core-ui = { path = "../../core/ui" }
 
 # Systems dependencies
 playground-systems-networking = { path = "../networking" }

@@ -1,19 +1,29 @@
 use crate::error::{LogicResult, LogicError};
 use playground_core_types::{Shared, shared};
+use playground_core_ui::{
+    UiRenderer, ElementId as CoreElementId, ElementType, ElementUpdate,
+    Style, Bounds, UiCommand, UiEvent, EventResult
+};
 use playground_systems_ui::{
     UiSystem, ElementId, ElementStyle, ElementBounds, 
     DiscordLayout, FontWeight, TextAlign
 };
+use async_trait::async_trait;
 
 /// High-level interface for plugins to interact with the UI system
 /// This provides a clean API without exposing internal ECS details
 pub struct UiInterface {
     ui_system: Shared<UiSystem>,
+    // Track mapping between core ElementIds and internal ElementIds
+    element_mapping: Shared<std::collections::HashMap<CoreElementId, ElementId>>,
 }
 
 impl UiInterface {
     pub fn new(ui_system: Shared<UiSystem>) -> Self {
-        Self { ui_system }
+        Self { 
+            ui_system,
+            element_mapping: shared(std::collections::HashMap::new()),
+        }
     }
     
     /// Create a panel element
@@ -211,5 +221,254 @@ impl UiInterface {
         ui.mark_dirty(element)
             .await
             .map_err(|e| LogicError::SystemError(format!("Failed to mark dirty: {}", e)))
+    }
+    
+    // Mobile-specific Discord UI methods
+    
+    /// Create a mobile Discord channel list
+    pub async fn create_mobile_channel_list(&mut self, parent: Option<ElementId>) -> LogicResult<ElementId> {
+        let mut ui = self.ui_system.write().await;
+        
+        // Create scrollable container for channels
+        let container = ui.create_element_with_id(
+            "channel-list".to_string(),
+            "scrollview".to_string(),
+            parent,
+        ).await
+            .map_err(|e| LogicError::SystemError(format!("Failed to create channel list: {}", e)))?;
+        
+        // Style for mobile channel list - full width, touch-friendly
+        let style = ElementStyle {
+            background_color: [0.184, 0.192, 0.212, 1.0], // Discord sidebar color
+            border_color: [0.125, 0.129, 0.145, 1.0],
+            text_color: [0.863, 0.867, 0.871, 1.0],
+            border_width: 0.0,
+            border_radius: 0.0,
+            opacity: 1.0,
+            font_size: 16.0, // Larger for mobile
+            font_family: "system-ui, sans-serif".to_string(),
+            font_weight: FontWeight::Normal,
+            text_align: TextAlign::Left,
+            visible: true,
+            z_index: 10,
+        };
+        
+        ui.set_element_style(container, style).await
+            .map_err(|e| LogicError::SystemError(format!("Failed to style channel list: {}", e)))?;
+        
+        Ok(container)
+    }
+    
+    /// Create a mobile Discord message area
+    pub async fn create_mobile_message_area(&mut self, parent: Option<ElementId>) -> LogicResult<ElementId> {
+        let mut ui = self.ui_system.write().await;
+        
+        let message_area = ui.create_element_with_id(
+            "message-area".to_string(),
+            "scrollview".to_string(),
+            parent,
+        ).await
+            .map_err(|e| LogicError::SystemError(format!("Failed to create message area: {}", e)))?;
+        
+        // Mobile-optimized message area style
+        let style = ElementStyle {
+            background_color: [0.212, 0.224, 0.247, 1.0], // Discord main area color
+            border_color: [0.0, 0.0, 0.0, 0.0],
+            text_color: [0.863, 0.867, 0.871, 1.0],
+            border_width: 0.0,
+            border_radius: 0.0,
+            opacity: 1.0,
+            font_size: 15.0, // Comfortable mobile reading size
+            font_family: "system-ui, sans-serif".to_string(),
+            font_weight: FontWeight::Normal,
+            text_align: TextAlign::Left,
+            visible: true,
+            z_index: 0,
+        };
+        
+        ui.set_element_style(message_area, style).await
+            .map_err(|e| LogicError::SystemError(format!("Failed to style message area: {}", e)))?;
+        
+        Ok(message_area)
+    }
+    
+    /// Create a mobile Discord input bar
+    pub async fn create_mobile_input_bar(&mut self, parent: Option<ElementId>) -> LogicResult<ElementId> {
+        let mut ui = self.ui_system.write().await;
+        
+        let input_bar = ui.create_element_with_id(
+            "input-bar".to_string(),
+            "panel".to_string(),
+            parent,
+        ).await
+            .map_err(|e| LogicError::SystemError(format!("Failed to create input bar: {}", e)))?;
+        
+        // Mobile input bar with larger touch targets
+        let style = ElementStyle {
+            background_color: [0.251, 0.263, 0.286, 1.0], // Discord input background
+            border_color: [0.125, 0.129, 0.145, 1.0],
+            text_color: [0.863, 0.867, 0.871, 1.0],
+            border_width: 1.0,
+            border_radius: 8.0, // Rounded for mobile
+            opacity: 1.0,
+            font_size: 16.0, // Prevent zoom on iOS
+            font_family: "system-ui, sans-serif".to_string(),
+            font_weight: FontWeight::Normal,
+            text_align: TextAlign::Left,
+            visible: true,
+            z_index: 20,
+        };
+        
+        ui.set_element_style(input_bar, style).await
+            .map_err(|e| LogicError::SystemError(format!("Failed to style input bar: {}", e)))?;
+        
+        // Set bounds for mobile - full width at bottom with safe area
+        ui.set_element_bounds(input_bar, ElementBounds::new(
+            0.0,
+            1080.0 - 80.0, // Position at bottom with space for safe area
+            360.0, // Mobile width
+            60.0, // Touch-friendly height
+        )).await
+            .map_err(|e| LogicError::SystemError(format!("Failed to set input bar bounds: {}", e)))?;
+        
+        Ok(input_bar)
+    }
+    
+    /// Create a mobile Discord layout optimized for phones
+    pub async fn create_mobile_discord_layout(&mut self) -> LogicResult<DiscordLayout> {
+        let mut ui = self.ui_system.write().await;
+        
+        // Get root element
+        let root = ui.get_root_element()
+            .ok_or_else(|| LogicError::SystemError("No root element".to_string()))?;
+        
+        // Mobile uses tabs or drawer for channel list, not side-by-side
+        // Create main container with swipe navigation
+        let main_container = ui.create_element_with_id(
+            "main-container".to_string(),
+            "panel".to_string(),
+            Some(root),
+        ).await
+            .map_err(|e| LogicError::SystemError(format!("Failed to create main container: {}", e)))?;
+        
+        // Full screen container
+        ui.set_element_bounds(main_container, ElementBounds::new(0.0, 0.0, 360.0, 800.0))
+            .await
+            .map_err(|e| LogicError::SystemError(format!("Failed to set main container bounds: {}", e)))?;
+        
+        // Hidden drawer for channel list (swipe from left to show)
+        let sidebar = ui.create_element_with_id(
+            "channel-drawer".to_string(),
+            "panel".to_string(),
+            Some(main_container),
+        ).await
+            .map_err(|e| LogicError::SystemError(format!("Failed to create channel drawer: {}", e)))?;
+        
+        // Position off-screen initially
+        ui.set_element_bounds(sidebar, ElementBounds::new(-280.0, 0.0, 280.0, 800.0))
+            .await
+            .map_err(|e| LogicError::SystemError(format!("Failed to set drawer bounds: {}", e)))?;
+        
+        // Main content area (messages)
+        let main_content = ui.create_element_with_id(
+            "main-content".to_string(),
+            "panel".to_string(),
+            Some(main_container),
+        ).await
+            .map_err(|e| LogicError::SystemError(format!("Failed to create main content: {}", e)))?;
+        
+        ui.set_element_bounds(main_content, ElementBounds::new(0.0, 0.0, 360.0, 800.0))
+            .await
+            .map_err(|e| LogicError::SystemError(format!("Failed to set main content bounds: {}", e)))?;
+        
+        // Message area with virtual keyboard consideration
+        let message_area = ui.create_element_with_id(
+            "message-area".to_string(),
+            "scrollview".to_string(),
+            Some(main_content),
+        ).await
+            .map_err(|e| LogicError::SystemError(format!("Failed to create message area: {}", e)))?;
+        
+        ui.set_element_bounds(message_area, ElementBounds::new(0.0, 50.0, 360.0, 690.0))
+            .await
+            .map_err(|e| LogicError::SystemError(format!("Failed to set message area bounds: {}", e)))?;
+        
+        // Input area at bottom
+        let input_area = ui.create_element_with_id(
+            "input-area".to_string(),
+            "panel".to_string(),
+            Some(main_content),
+        ).await
+            .map_err(|e| LogicError::SystemError(format!("Failed to create input area: {}", e)))?;
+        
+        ui.set_element_bounds(input_area, ElementBounds::new(0.0, 740.0, 360.0, 60.0))
+            .await
+            .map_err(|e| LogicError::SystemError(format!("Failed to set input area bounds: {}", e)))?;
+        
+        // Apply Discord mobile styles
+        let sidebar_style = ElementStyle {
+            background_color: [0.118, 0.122, 0.137, 0.95], // Darker with transparency
+            ..Default::default()
+        };
+        ui.set_element_style(sidebar, sidebar_style).await.ok();
+        
+        let main_style = ElementStyle {
+            background_color: [0.212, 0.224, 0.247, 1.0],
+            ..Default::default()
+        };
+        ui.set_element_style(main_content, main_style).await.ok();
+        
+        Ok(DiscordLayout {
+            sidebar,
+            main_content,
+            message_area,
+            input_area,
+            member_list: None, // No member list on mobile (accessed via menu)
+        })
+    }
+    
+    /// Add a message to the message area
+    pub async fn add_message(
+        &mut self,
+        message_area: ElementId,
+        username: &str,
+        content: &str,
+        timestamp: &str,
+    ) -> LogicResult<ElementId> {
+        let mut ui = self.ui_system.write().await;
+        
+        // Create message container
+        let message = ui.create_element("panel", Some(message_area))
+            .await
+            .map_err(|e| LogicError::SystemError(format!("Failed to create message: {}", e)))?;
+        
+        // Create username text
+        let username_elem = ui.create_element("text", Some(message))
+            .await
+            .map_err(|e| LogicError::SystemError(format!("Failed to create username: {}", e)))?;
+        
+        ui.set_element_text(username_elem, username.to_string())
+            .await
+            .map_err(|e| LogicError::SystemError(format!("Failed to set username: {}", e)))?;
+        
+        // Style username with Discord colors
+        let username_style = ElementStyle {
+            text_color: [0.4, 0.6, 1.0, 1.0], // Blue-ish for usernames
+            font_size: 14.0,
+            font_weight: FontWeight::Bold,
+            ..Default::default()
+        };
+        ui.set_element_style(username_elem, username_style).await.ok();
+        
+        // Create message content
+        let content_elem = ui.create_element("text", Some(message))
+            .await
+            .map_err(|e| LogicError::SystemError(format!("Failed to create content: {}", e)))?;
+        
+        ui.set_element_text(content_elem, content.to_string())
+            .await
+            .map_err(|e| LogicError::SystemError(format!("Failed to set content: {}", e)))?;
+        
+        Ok(message)
     }
 }
