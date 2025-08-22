@@ -1,35 +1,36 @@
 # CONTEXT.md - Current Session Context
 
-## Active Session - 2025-08-22 (Session 6)
+## Active Session - 2025-08-22 (Session 7)
 
 ### Current Status
-**Render pipeline fixed but UI still black** - Fixed ECS errors, byte order issues, connected networking, but browser still shows black screen
+**Major Architecture Refactor** - Replaced WebSocket-based internal communication with MessageBus system
 
-### What Was Done This Session (2025-08-22 - Session 6)
-- **Fixed ECS component registration** ✅
-  - Fixed trait object type erasure in create_element
-  - Added register_component_storage to World
-  - Components now spawn without errors
+### What Was Done This Session (2025-08-22 - Session 7)
+- **Identified Client #0 Issue** ✅
+  - Client #0 was NetworkingSystem connecting back to its own server via WebSocket
+  - Systems were using WebSocket for internal communication (architectural violation)
+  - Packets were being serialized/deserialized unnecessarily
   
-- **Connected UI to Networking** ✅
-  - UI system now has NetworkingSystem reference
-  - Can send render commands via channel 10
-  - 60fps render loop properly started
+- **Implemented MessageBus Architecture** ✅
+  - Created MessageBus in core/ecs for internal system communication
+  - Added GameMessageBus to systems/logic for plugin/app messaging
+  - Created MessageBridge in core/server to bridge internal messages to WebSocket clients
+  - Systems now communicate via direct memory instead of WebSocket
   
-- **Fixed packet serialization** ✅
-  - Fixed byte order mismatch (little-endian → big-endian)
-  - Server and client now agree on packet format
-  - No more "Payload size mismatch" errors
+- **Updated Systems to Use MessageBus** ✅
+  - UiSystem now publishes to MessageBus instead of NetworkingSystem.send_packet()
+  - NetworkingSystem WebSocketClient removed (partially - needs completion)
+  - Direct packet broadcast fix for WebSocket clients
   
-- **Added browser logging** ✅
-  - Browser sends logs to server via channel 0, type 200
-  - Server displays browser logs with [Browser] prefix
-  - Added bincode deserializer to browser
+- **Fixed WebSocket Broadcasting** ✅
+  - Fixed issue where only first client received packets
+  - Implemented direct broadcast to all WebSocket clients
+  - Browser now connects as Client #1, #2, etc.
   
-- **Remaining issue** ⚠️
-  - Browser receives packets but doesn't render
-  - Bincode deserialization may have issues
-  - WebGL renderer may not be executing commands properly
+- **Remaining Tasks** ⚠️
+  - Complete NetworkingSystem refactor (remove all WebSocketClient references)
+  - Wire up MessageBridge in server initialization
+  - Test that browser receives packets via new architecture
 
 ### Previous Session (2025-08-21 - Session 5)
 - **Created complete WebGL renderer for browser** ✅

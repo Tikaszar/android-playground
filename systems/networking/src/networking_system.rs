@@ -1,5 +1,5 @@
 use crate::{
-    NetworkError, NetworkResult, WebSocketClient,
+    NetworkError, NetworkResult,
     ChannelManager, PacketQueue, IncomingPacket,
     ConnectionComponent, NetworkStatsComponent,
     NetworkStats,
@@ -10,14 +10,13 @@ use std::sync::Arc;
 use tokio::sync::RwLock;
 
 /// Main networking system that Plugins interact with
+/// Now uses MessageBus for internal communication instead of WebSocket
 pub struct NetworkingSystem {
     // Internal ECS world for managing network state
     world: Arc<RwLock<World>>,
-    // WebSocket client connection to core/server
-    ws_client: Option<Arc<WebSocketClient>>,
     // Channel manager for dynamic registration
     channel_manager: Arc<RwLock<ChannelManager>>,
-    // Packet queue for batching
+    // Packet queue for batching (kept for compatibility)
     packet_queue: Arc<RwLock<PacketQueue>>,
     // Dashboard reference (only available after server starts)
     dashboard: Option<Arc<playground_core_server::Dashboard>>,
@@ -30,7 +29,6 @@ impl NetworkingSystem {
         
         Ok(Self {
             world,
-            ws_client: None,
             channel_manager: Arc::new(RwLock::new(ChannelManager::new())),
             packet_queue: Arc::new(RwLock::new(PacketQueue::new())),
             dashboard: None,
@@ -42,40 +40,25 @@ impl NetworkingSystem {
         self.dashboard.clone()
     }
     
-    /// Initialize and connect to core/server
-    pub async fn initialize(&mut self, server_url: Option<String>) -> NetworkResult<()> {
-        // Start the core server internally if not provided
-        if server_url.is_none() {
-            // Start core/server and get dashboard reference
-            match Self::start_core_server().await {
-                Ok(dashboard) => {
-                    self.dashboard = Some(dashboard);
-                }
-                Err(e) => {
-                    eprintln!("Core server startup failed: {}", e);
-                    return Err(NetworkError::ConnectionFailed(format!("Failed to start core server: {}", e)));
-                }
+    /// Initialize and start core/server
+    pub async fn initialize(&mut self, _server_url: Option<String>) -> NetworkResult<()> {
+        // Start the core server internally 
+        // Note: We no longer connect via WebSocket - systems use MessageBus
+        match Self::start_core_server().await {
+            Ok(dashboard) => {
+                self.dashboard = Some(dashboard);
+            }
+            Err(e) => {
+                eprintln!("Core server startup failed: {}", e);
+                return Err(NetworkError::ConnectionFailed(format!("Failed to start core server: {}", e)));
             }
         }
         
-        // Connect to core/server WebSocket endpoint
-        let url = server_url.unwrap_or_else(|| "ws://localhost:8080/ws".to_string());
-        
-        // Create and connect WebSocket client
-        let client = Arc::new(WebSocketClient::new(url.clone()));
-        client.connect().await?;
-        
-        // Store the client
-        self.ws_client = Some(client.clone());
-        
-        // Register systems channels (1-999)
+        // Register systems channels (1-999) locally
         let mut manager = self.channel_manager.write().await;
-        let channel_id = manager.register_system_channel("networking", 100).await?;
+        let _channel_id = manager.register_system_channel("networking", 100).await?;
         
-        // Register with the WebSocket server
-        if let Some(ws) = &self.ws_client {
-            ws.register_channel(channel_id, "networking").await?;
-        }
+        // No WebSocket client needed - we use MessageBus for internal communication
         
         Ok(())
     }
@@ -161,38 +144,29 @@ impl NetworkingSystem {
         channel: ChannelId,
         packet_type: u16,
         data: Vec<u8>,
-        priority: Priority,
+        _priority: Priority,
     ) -> NetworkResult<()> {
         // Log packet send
         if let Some(ref dashboard) = self.dashboard {
             dashboard.log(
                 playground_core_server::dashboard::LogLevel::Debug,
-                format!("NetworkingSystem: Sending packet type {} on channel {} ({} bytes)", 
+                format!("NetworkingSystem: Publishing packet type {} on channel {} ({} bytes) to MessageBus", 
                     packet_type, channel, data.len()),
                 None
             ).await;
         }
         
-        // Send directly through WebSocket if connected
-        if let Some(ws) = &self.ws_client {
-            use playground_core_server::Packet;
-            use bytes::Bytes;
-            
-            // Priority types are the same now (both from core/types)
-            
-            let packet = Packet {
-                channel_id: channel,
-                packet_type,
-                priority,  // Now both are the same Priority type from core/types
-                payload: Bytes::from(data.clone()),
-            };
-            
-            ws.send_packet(packet).await?;
-        }
+        // Publish to the message bus instead of WebSocket
+        // The MessageBridge in core/server will forward to WebSocket clients
+        use bytes::Bytes;
+        self.world.read().await
+            .publish(channel, Bytes::from(data.clone()))
+            .await
+            .map_err(|e| NetworkError::SendError(format!("Failed to publish: {:?}", e)))?;
         
-        // Also queue it locally for tracking
+        // Also queue it locally for tracking (if still needed)
         let mut queue = self.packet_queue.write().await;
-        queue.enqueue(channel, packet_type, data, priority).await
+        queue.enqueue(channel, packet_type, data, _priority).await
     }
     
     /// Process incoming packets for a channel

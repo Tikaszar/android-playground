@@ -100,18 +100,35 @@ class UIFrameworkClient {
         const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
         const wsUrl = `${protocol}//${window.location.host}/ws`;
         
-        console.log(`Connecting to UI Framework at ${wsUrl}`);
+        console.log(`=== WebSocket Connection Attempt ===`);
+        console.log(`URL: ${wsUrl}`);
+        console.log(`Location host: ${window.location.host}`);
+        console.log(`Location protocol: ${window.location.protocol}`);
+        console.log(`Browser URL: ${window.location.href}`);
         
         try {
             this.ws = new WebSocket(wsUrl);
             this.ws.binaryType = 'arraybuffer';
             
-            this.ws.onopen = () => this.onConnect();
+            console.log('WebSocket object created successfully');
+            console.log('Initial readyState:', this.ws.readyState);
+            
+            this.ws.onopen = () => {
+                console.log('WebSocket onopen event fired');
+                this.onConnect();
+            };
             this.ws.onmessage = (e) => this.onMessage(e);
-            this.ws.onerror = (e) => this.onError(e);
-            this.ws.onclose = () => this.onDisconnect();
+            this.ws.onerror = (e) => {
+                console.error('WebSocket onerror event fired');
+                this.onError(e);
+            };
+            this.ws.onclose = (e) => {
+                console.log('WebSocket onclose event fired', e.code, e.reason);
+                this.onDisconnect();
+            };
         } catch (error) {
             console.error('Failed to create WebSocket:', error);
+            console.error('Error stack:', error.stack);
             this.showError();
         }
     }
@@ -504,6 +521,15 @@ class UIFrameworkClient {
     
     onError(error) {
         console.error('WebSocket error:', error);
+        console.error('WebSocket readyState:', this.ws?.readyState);
+        console.error('WebSocket URL:', this.ws?.url);
+        console.error('Error type:', error.type);
+        console.error('Error target:', error.target);
+        
+        // Also log to server if possible
+        if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+            this.sendLog('error', `WebSocket error: ${error.type || 'unknown'}`);
+        }
     }
     
     onDisconnect() {

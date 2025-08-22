@@ -5,6 +5,8 @@ use crate::component::{Component, ComponentId, ComponentRegistry, ComponentBox};
 use crate::storage::{ComponentStorage, SparseStorage, DenseStorage, StorageType};
 use crate::query::{Query, QueryBuilder};
 use crate::error::{EcsError, EcsResult};
+use crate::messaging::{MessageBus, ChannelId};
+use bytes::Bytes;
 
 pub struct MemoryStats {
     pub total_entities: usize,
@@ -74,6 +76,7 @@ pub struct World {
     registry: Shared<ComponentRegistry>,
     gc: Shared<GarbageCollector>,
     memory_stats: Shared<MemoryStats>,
+    message_bus: Shared<MessageBus>,
 }
 
 impl World {
@@ -95,6 +98,7 @@ impl World {
                 pool_limit: 100 * 1024 * 1024,
                 growth_rate: 0.0,
             }),
+            message_bus: shared(MessageBus::new()),
         }
     }
     
@@ -329,6 +333,27 @@ impl World {
     
     pub async fn is_empty(&self) -> bool {
         self.entities.read().await.is_empty()
+    }
+    
+    // Messaging API
+    
+    /// Publish a message to a channel
+    pub async fn publish(&self, channel: ChannelId, message: impl Into<Bytes>) -> EcsResult<()> {
+        self.message_bus.read().await.publish(channel, message.into()).await
+    }
+    
+    /// Subscribe to a channel with a handler
+    pub async fn subscribe(
+        &self,
+        channel: ChannelId,
+        handler: std::sync::Arc<dyn crate::messaging::MessageHandler>,
+    ) -> EcsResult<()> {
+        self.message_bus.read().await.subscribe(channel, handler).await
+    }
+    
+    /// Get the message bus for advanced operations
+    pub fn message_bus(&self) -> Shared<MessageBus> {
+        self.message_bus.clone()
     }
 }
 

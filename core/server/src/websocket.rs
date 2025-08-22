@@ -100,7 +100,7 @@ pub async fn websocket_handler(
 }
 
 async fn handle_websocket(socket: WebSocket, state: Arc<WebSocketState>) {
-    let (sender, mut receiver) = socket.split();
+    let (mut sender, mut receiver) = socket.split();
     
     // Get client IP (placeholder - in real implementation, extract from request headers)
     let client_ip = "127.0.0.1".to_string();
@@ -127,36 +127,50 @@ async fn handle_websocket(socket: WebSocket, state: Arc<WebSocketState>) {
         loop {
             interval.tick().await;
             
-            let batches = state_clone.batcher.get_all_batches().await;
-            if batches.is_empty() {
-                continue;
-            }
-            
-            let connections = state_clone.connections.read().await;
-            if connection_id >= connections.len() {
-                break;
-            }
-            
-            let conn_lock = connections[connection_id].clone();
-            drop(connections);
-            
-            let mut conn = conn_lock.write().await;
-            if let Some(connection) = conn.as_mut() {
-                for (channel_id, batch) in batches {
-                    let batch_len = batch.len() as u64;
-                    // Activity tracked by dashboard.update_client_activity
+            // Only get batches if this is connection 0 (to avoid multiple connections consuming the same packets)
+            // This is a temporary fix - we should implement proper broadcast
+            if connection_id == 0 {
+                let batches = state_clone.batcher.get_all_batches().await;
+                if !batches.is_empty() {
+                    state_clone.dashboard.log(
+                        crate::dashboard::LogLevel::Debug,
+                        format!("Broadcasting {} batches to all clients", batches.len()),
+                        None
+                    ).await;
                     
-                    // Update dashboard with sent message
-                    state_clone.dashboard.update_client_activity(connection_id, false, batch_len).await;
+                    // Send to ALL connections, not just this one
+                    let connections = state_clone.connections.read().await;
                     
-                    if let Err(e) = connection.sender.send(Message::Binary(batch)).await {
-                        state_clone.dashboard.log_error(format!("Failed to send batch: {}", e), Some(connection_id)).await;
-                        *conn = None;
-                        return;
+                    state_clone.dashboard.log(
+                        crate::dashboard::LogLevel::Debug,
+                        format!("Total connections: {}", connections.len()),
+                        None
+                    ).await;
+                    
+                    for (conn_id, conn_lock) in connections.iter().enumerate() {
+                        let mut conn = conn_lock.write().await;
+                        if let Some(connection) = conn.as_mut() {
+                            for (_channel_id, batch) in &batches {
+                                let batch_len = batch.len() as u64;
+                                
+                                // Update dashboard with sent message
+                                state_clone.dashboard.update_client_activity(conn_id, false, batch_len).await;
+                                
+                                if let Err(e) = connection.sender.send(Message::Binary(batch.clone())).await {
+                                    state_clone.dashboard.log_error(
+                                        format!("Failed to send batch to client {}: {}", conn_id, e), 
+                                        Some(conn_id)
+                                    ).await;
+                                    // Can't set to None here while borrowed
+                                    break;
+                                }
+                            }
+                        }
                     }
                 }
             } else {
-                break;
+                // Other connections just wait
+                continue;
             }
         }
     });
@@ -205,6 +219,41 @@ async fn handle_message(data: Bytes, state: &WebSocketState) -> anyhow::Result<(
     if packet.channel_id == 0 {
         handle_control_message(packet, state).await?;
     } else {
+        // Instead of queuing, broadcast immediately to all OTHER clients
+        // This is a temporary fix for the broadcast issue
+        let connections = state.connections.read().await;
+        let packet_bytes = packet.serialize();
+        
+        state.dashboard.log(
+            crate::dashboard::LogLevel::Debug,
+            format!("Broadcasting packet (channel {}, type {}) to {} clients", 
+                packet.channel_id, packet.packet_type, connections.len()),
+            None
+        ).await;
+        
+        for (conn_id, conn_lock) in connections.iter().enumerate() {
+            // Send to ALL clients, including Client #0
+            // We want everyone to receive the broadcast
+            
+            let mut conn = conn_lock.write().await;
+            if let Some(connection) = conn.as_mut() {
+                if let Err(e) = connection.sender.send(Message::Binary(packet_bytes.clone())).await {
+                    state.dashboard.log(
+                        crate::dashboard::LogLevel::Error,
+                        format!("Failed to broadcast to client {}: {}", conn_id, e),
+                        Some(conn_id)
+                    ).await;
+                } else {
+                    state.dashboard.log(
+                        crate::dashboard::LogLevel::Debug,
+                        format!("Sent packet to client {}", conn_id),
+                        Some(conn_id)
+                    ).await;
+                }
+            }
+        }
+        
+        // Also queue it for batching (in case we want to use that later)
         state.batcher.queue_packet(packet).await;
     }
     

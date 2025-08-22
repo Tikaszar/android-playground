@@ -19,6 +19,7 @@ pub mod world;
 pub mod systems_manager;
 pub mod ui_interface;
 pub mod rendering_interface;
+pub mod messaging;
 
 pub use archetype::*;
 pub use component::*;
@@ -33,6 +34,7 @@ pub use world::*;
 pub use systems_manager::SystemsManager;
 pub use ui_interface::UiInterface;
 pub use rendering_interface::{RenderingInterface, RendererWrapper};
+pub use messaging::{GameMessageBus, GameMessageHandler, channels};
 
 // Re-export Shared type for plugins and apps
 pub use playground_core_types::{Shared, shared};

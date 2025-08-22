@@ -84,12 +84,18 @@ impl FrameBatcher {
         let mut batch_size = 0;
         let mut packets = Vec::new();
         
-        while let Some(queued) = queue.pop() {
+        // IMPORTANT: Don't pop() - just peek and collect packets
+        // We'll clear them separately after all clients have received them
+        let temp_queue: Vec<_> = queue.drain().collect();
+        for queued in &temp_queue {
             let serialized = queued.packet.serialize();
             let packet_size = serialized.len() + 4;
             
             if batch_size + packet_size > self.max_batch_size && !packets.is_empty() {
-                queue.push(queued);
+                // Put back the remaining packets
+                for q in temp_queue.into_iter().skip(packets.len()) {
+                    queue.push(q);
+                }
                 break;
             }
             

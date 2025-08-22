@@ -1,0 +1,82 @@
+diff --git a/core/server/src/websocket.rs b/core/server/src/websocket.rs
+index original..fixed 100644
+--- a/core/server/src/websocket.rs
++++ b/core/server/src/websocket.rs
+@@ -100,7 +100,7 @@ pub async fn websocket_handler(
+ }
+ 
+ async fn handle_websocket(socket: WebSocket, state: Arc<WebSocketState>) {
+-    let (sender, mut receiver) = socket.split();
++    let (mut sender, mut receiver) = socket.split();
+     
+     // Get client IP (placeholder - in real implementation, extract from request headers)
+     let client_ip = "127.0.0.1".to_string();
+@@ -108,9 +108,7 @@ async fn handle_websocket(socket: WebSocket, state: Arc<WebSocketState>) {
+     let connection_id = {
+         let mut connections = state.connections.write().await;
+         let id = connections.len();
+-        connections.push(Arc::new(RwLock::new(Some(WebSocketConnection {
+-            id,
+-            sender,
+-        }))));
++        // Don't store sender here - we'll handle it differently
++        connections.push(Arc::new(RwLock::new(Some(()))));
+         id
+     };
+     
+@@ -120,40 +118,8 @@ async fn handle_websocket(socket: WebSocket, state: Arc<WebSocketState>) {
+     // Connection logging handled by dashboard.add_client
+     
+-    let state_clone = state.clone();
+-    let send_task = tokio::spawn(async move {
+-        let mut interval = time::interval(state_clone.batcher.frame_duration());
+-        
+-        loop {
+-            interval.tick().await;
+-            
+-            let batches = state_clone.batcher.get_all_batches().await;
+-            if batches.is_empty() {
+-                continue;
+-            }
+-            
+-            let connections = state_clone.connections.read().await;
+-            if connection_id >= connections.len() {
+-                break;
+-            }
+-            
+-            let conn_lock = connections[connection_id].clone();
+-            drop(connections);
+-            
+-            let mut conn = conn_lock.write().await;
+-            if let Some(connection) = conn.as_mut() {
+-                for (channel_id, batch) in batches {
+-                    let batch_len = batch.len() as u64;
+-                    // Activity tracked by dashboard.update_client_activity
+-                    
+-                    // Update dashboard with sent message
+-                    state_clone.dashboard.update_client_activity(connection_id, false, batch_len).await;
+-                    
+-                    if let Err(e) = connection.sender.send(Message::Binary(batch)).await {
+-                        state_clone.dashboard.log_error(format!("Failed to send batch: {}", e), Some(connection_id)).await;
+-                        *conn = None;
+-                        return;
+-                    }
+-                }
+-            } else {
+-                break;
+-            }
+-        }
+-    });
++    // Instead of per-connection send task, we need a global broadcast loop
++    // For now, just receive messages
+     
+     while let Some(msg) = receiver.next().await {
+         match msg {
+@@ -187,8 +153,6 @@ async fn handle_websocket(socket: WebSocket, state: Arc<WebSocketState>) {
+         }
+     }
+     
+-    send_task.abort();
+-    
+     // Mark client as disconnected in dashboard
+     state.dashboard.remove_client(connection_id).await;

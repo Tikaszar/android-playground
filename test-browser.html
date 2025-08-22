@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebSocket Test</title>
+    <style>
+        body {
+            background: #1a1a1a;
+            color: #e0e0e0;
+            font-family: monospace;
+            padding: 20px;
+        }
+        #log {
+            background: #000;
+            padding: 10px;
+            border: 1px solid #333;
+            height: 400px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+        }
+        button {
+            padding: 10px 20px;
+            margin: 10px 0;
+            background: #5865f2;
+            color: white;
+            border: none;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <h1>WebSocket Connection Test</h1>
+    <button onclick="testConnection()">Test WebSocket</button>
+    <button onclick="clearLog()">Clear Log</button>
+    <div id="log"></div>
+
+    <script>
+        const log = document.getElementById('log');
+        
+        function addLog(msg, type = 'info') {
+            const time = new Date().toLocaleTimeString();
+            const color = type === 'error' ? '#ff5555' : type === 'success' ? '#50fa7b' : '#8be9fd';
+            log.innerHTML += `<span style="color: ${color}">[${time}] ${msg}</span>\n`;
+            log.scrollTop = log.scrollHeight;
+        }
+        
+        function clearLog() {
+            log.innerHTML = '';
+        }
+        
+        function testConnection() {
+            addLog('=== Starting WebSocket Test ===');
+            addLog(`Current URL: ${window.location.href}`);
+            addLog(`Host: ${window.location.host}`);
+            
+            const wsUrl = `ws://${window.location.host}/ws`;
+            addLog(`Attempting connection to: ${wsUrl}`);
+            
+            try {
+                const ws = new WebSocket(wsUrl);
+                ws.binaryType = 'arraybuffer';
+                
+                addLog('WebSocket object created');
+                
+                ws.onopen = () => {
+                    addLog('✓ WebSocket connected!', 'success');
+                    addLog('Sending test packet...');
+                    
+                    // Send a test packet on channel 10
+                    const packet = new ArrayBuffer(9 + 4);
+                    const view = new DataView(packet);
+                    view.setUint16(0, 10, false);  // Channel 10
+                    view.setUint16(2, 999, false); // Test type
+                    view.setUint8(4, 1);           // Priority
+                    view.setUint32(5, 4, false);   // Payload size
+                    view.setUint32(9, 0x12345678, false); // Test data
+                    
+                    ws.send(packet);
+                    addLog('Test packet sent');
+                };
+                
+                ws.onmessage = (e) => {
+                    if (e.data instanceof ArrayBuffer) {
+                        const view = new DataView(e.data);
+                        const channel = view.getUint16(0, false);
+                        const type = view.getUint16(2, false);
+                        const size = view.getUint32(5, false);
+                        addLog(`✓ Received packet: channel=${channel}, type=${type}, size=${size}`, 'success');
+                    } else {
+                        addLog(`Received text message: ${e.data}`);
+                    }
+                };
+                
+                ws.onerror = (e) => {
+                    addLog(`✗ WebSocket error: ${e.type}`, 'error');
+                    addLog(`ReadyState: ${ws.readyState}`, 'error');
+                };
+                
+                ws.onclose = (e) => {
+                    addLog(`WebSocket closed: code=${e.code}, reason=${e.reason || 'none'}`);
+                };
+                
+            } catch (error) {
+                addLog(`✗ Failed to create WebSocket: ${error.message}`, 'error');
+                addLog(`Stack: ${error.stack}`, 'error');
+            }
+        }
+        
+        // Auto-test on load
+        window.onload = () => {
+            addLog('Page loaded, ready to test');
+        };
+    </script>
+</body>
+</html>

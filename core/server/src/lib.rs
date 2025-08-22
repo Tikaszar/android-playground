@@ -5,6 +5,7 @@ pub mod websocket;
 pub mod handlers;
 pub mod mcp;
 pub mod dashboard;
+pub mod bridge;
 
 pub use channel::{ChannelManager, ChannelInfo};
 pub use packet::{Packet, Priority};
@@ -13,3 +14,4 @@ pub use websocket::{WebSocketState, websocket_handler};
 pub use mcp::McpServer;
 pub use handlers::{list_plugins, reload_plugin, root};
 pub use dashboard::Dashboard;
+pub use bridge::{MessageBridge, WebSocketBroadcaster};

@@ -537,33 +537,28 @@ impl UiSystem {
     }
     
     async fn send_batch(&self, batch: &RenderCommandBatch) -> UiResult<()> {
+        // Serialize with bincode (efficient binary format)
+        let data = bincode::serialize(batch)
+            .map_err(|e| UiError::SerializationError(e.to_string()))?;
+        
+        // Log that we're sending render commands (if we have dashboard via networking)
         if let Some(ref networking) = self.networking_system {
-            // Serialize with bincode (efficient binary format)
-            let data = bincode::serialize(batch)
-                .map_err(|e| UiError::SerializationError(e.to_string()))?;
-            
-            // Log that we're sending render commands
             if let Some(dashboard) = networking.read().await.get_dashboard().await {
                 dashboard.log(
                     playground_core_server::dashboard::LogLevel::Debug,
-                    format!("UI: Sending RenderBatch on channel {} (bincode, {} bytes)", 
+                    format!("UI: Publishing RenderBatch to MessageBus on channel {} (bincode, {} bytes)", 
                         self.channel_id, data.len()),
                     None
                 ).await;
             }
-            
-            // Send render commands through networking system
-            // Packet type 104 = RenderBatch (matching browser expectation)
-            networking.read().await.send_packet(
-                self.channel_id,
-                104, // RenderBatch packet type
-                data,
-                playground_core_types::Priority::High
-            ).await.map_err(|e| UiError::NetworkError(e.to_string()))?;
-        } else {
-            // Log that networking is not connected
-            eprintln!("UI: WARNING - NetworkingSystem not connected, cannot send render commands!");
         }
+        
+        // Publish to the message bus instead of using NetworkingSystem
+        // The MessageBridge in core/server will forward this to WebSocket clients
+        self.world.read().await
+            .publish(self.channel_id, data)
+            .await
+            .map_err(|e| UiError::SerializationError(format!("Failed to publish: {:?}", e)))?;
         
         Ok(())
     }
