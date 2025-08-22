@@ -189,16 +189,16 @@ impl WebSocketClient {
     }
 }
 
-/// Serialize a packet to binary format
+/// Serialize a packet to binary format (using big-endian to match server)
 fn serialize_packet(packet: &Packet) -> Vec<u8> {
     let payload_len = packet.payload.len() as u32;
     let mut buffer = BytesMut::with_capacity(9 + payload_len as usize);
     
-    // Write header
-    buffer.put_u16_le(packet.channel_id);
-    buffer.put_u16_le(packet.packet_type);
+    // Write header (big-endian to match server's Packet::serialize)
+    buffer.put_u16(packet.channel_id);      // Big-endian
+    buffer.put_u16(packet.packet_type);     // Big-endian
     buffer.put_u8(packet.priority as u8);
-    buffer.put_u32_le(payload_len);
+    buffer.put_u32(payload_len);            // Big-endian
     
     // Write payload
     buffer.extend_from_slice(&packet.payload);
@@ -206,14 +206,14 @@ fn serialize_packet(packet: &Packet) -> Vec<u8> {
     buffer.to_vec()
 }
 
-/// Deserialize a packet from binary format
+/// Deserialize a packet from binary format (using big-endian to match server)
 fn deserialize_packet(data: &[u8]) -> NetworkResult<Packet> {
     if data.len() < 9 {
         return Err(NetworkError::InvalidMessage("Packet too short".to_string()));
     }
     
-    let channel_id = u16::from_le_bytes([data[0], data[1]]);
-    let packet_type = u16::from_le_bytes([data[2], data[3]]);
+    let channel_id = u16::from_be_bytes([data[0], data[1]]);    // Big-endian
+    let packet_type = u16::from_be_bytes([data[2], data[3]]);   // Big-endian
     let priority = match data[4] {
         0 => Priority::Low,
         1 => Priority::Medium,
@@ -222,7 +222,7 @@ fn deserialize_packet(data: &[u8]) -> NetworkResult<Packet> {
         4 => Priority::Blocker,
         _ => Priority::Medium,
     };
-    let payload_len = u32::from_le_bytes([data[5], data[6], data[7], data[8]]) as usize;
+    let payload_len = u32::from_be_bytes([data[5], data[6], data[7], data[8]]) as usize;  // Big-endian
     
     if data.len() < 9 + payload_len {
         return Err(NetworkError::InvalidMessage("Payload truncated".to_string()));

@@ -180,6 +180,19 @@ impl World {
         Ok(())
     }
     
+    pub async fn register_component_storage(&self, component_id: ComponentId, storage_type: StorageType) -> EcsResult<()> {
+        let mut storages = self.storages.write().await;
+        if !storages.contains_key(&component_id) {
+            let storage: Box<dyn ComponentStorage> = match storage_type {
+                StorageType::Dense => Box::new(DenseStorage::new(component_id)),
+                StorageType::Sparse => Box::new(SparseStorage::new(component_id)),
+                StorageType::Pooled => Box::new(SparseStorage::new(component_id)), // Use sparse for now
+            };
+            storages.insert(component_id, storage);
+        }
+        Ok(())
+    }
+    
     pub async fn add_component_raw(&self, entity: EntityId, component: ComponentBox, component_id: ComponentId) -> EcsResult<()> {
         if let Some(storage) = self.storages.read().await.get(&component_id) {
             storage.insert(entity, component).await?;

@@ -67,9 +67,12 @@ impl SystemsManager {
         ui.initialize().await
             .map_err(|e| LogicError::InitializationFailed(format!("UiSystem: {}", e)))?;
         
-        // TODO: Set up channel connection for UiSystem
-        // This would need access to the WebSocketState from core/server
-        // For now, the UI system won't be able to send render commands
+        // Register UI system with networking and get its channel
+        let ui_channel = networking.register_system_channel("ui", 10).await
+            .map_err(|e| LogicError::InitializationFailed(format!("Failed to register UI channel: {}", e)))?;
+        
+        // Store networking reference in UI system so it can send render commands
+        ui.set_networking_system(self.networking.clone());
         
         if let Some(ref dashboard) = dashboard {
             use playground_core_server::dashboard::LogLevel;
@@ -90,6 +93,24 @@ impl SystemsManager {
             dashboard.log(
                 LogLevel::Info,
                 "✓ All systems initialized successfully".to_string(),
+                None
+            ).await;
+            
+            dashboard.log(
+                LogLevel::Info,
+                "Starting 60fps render loop...".to_string(),
+                None
+            ).await;
+        }
+        
+        // Start the render loop at 60fps
+        self.start_render_loop().await?;
+        
+        if let Some(ref dashboard) = dashboard {
+            use playground_core_server::dashboard::LogLevel;
+            dashboard.log(
+                LogLevel::Info,
+                "✓ Render loop started".to_string(),
                 None
             ).await;
         }

@@ -131,6 +131,9 @@ class UIFrameworkClient {
         
         // Wait a bit for WebSocket to fully stabilize before sending first message
         // This avoids race condition with async connection establishment
+        
+        // Send connection log to server
+        this.sendLog('info', 'Browser connected and ready');
         setTimeout(() => {
             // Send initial resize event to UI Framework Plugin
             this.handleResize();
@@ -164,11 +167,14 @@ class UIFrameworkClient {
             // Extract payload
             const payload = new Uint8Array(data, 9, payloadSize);
             
+            this.sendLog('debug', `Received packet on channel 10: type ${packetType}, size ${payloadSize}`);
+            
             // Handle UI system packets (RenderBatch is type 104)
             if (packetType === 104) {
                 this.renderFrame(payload);
             } else {
                 console.log(`UI packet type ${packetType} on channel ${channelId}`);
+                this.sendLog('warning', `Unknown UI packet type ${packetType} on channel ${channelId}`);
             }
         }
         // Check if this is a UI Framework channel
@@ -207,18 +213,141 @@ class UIFrameworkClient {
     }
     
     renderFrame(payload) {
-        // Parse the render batch message
+        // Parse the bincode-serialized render batch message
         try {
-            const decoder = new TextDecoder();
-            const batch = JSON.parse(decoder.decode(payload));
+            const batch = this.deserializeBincode(payload);
+            console.log('Received render batch:', batch);
+            this.sendLog('debug', `Received render batch: frame ${batch.frame_id}, ${batch.commands.length} commands`);
             
-            if (batch.commands && this.renderer) {
+            if (batch && batch.commands && this.renderer) {
+                console.log(`Executing ${batch.commands.length} render commands`);
+                this.sendLog('debug', `Commands: ${JSON.stringify(batch.commands)}`);
                 // Use WebGL renderer to execute commands
                 this.renderer.executeCommandBatch(batch);
+            } else if (!this.renderer) {
+                console.error('WebGL renderer not initialized!');
+                this.sendLog('error', 'WebGL renderer not initialized!');
             }
         } catch (e) {
             console.error('Failed to parse render batch:', e);
+            this.sendLog('error', `Failed to parse render batch: ${e.message}`);
         }
+    }
+    
+    // Send log message to server on control channel
+    sendLog(level, message) {
+        if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return;
+        
+        // Send log message on control channel (0) with a special packet type
+        const logData = JSON.stringify({
+            type: 'browser_log',
+            level: level,
+            message: message,
+            timestamp: Date.now()
+        });
+        
+        const encoder = new TextEncoder();
+        const payload = encoder.encode(logData);
+        
+        // Create packet (channel 0, type 200 for browser logs)
+        const packet = new ArrayBuffer(9 + payload.length);
+        const view = new DataView(packet);
+        
+        // Header (big-endian to match server)
+        view.setUint16(0, 0, false);        // Channel 0 (control)
+        view.setUint16(2, 200, false);      // Type 200 (browser log)
+        view.setUint8(4, 1);                // Priority medium
+        view.setUint32(5, payload.length, false); // Payload size
+        
+        // Payload
+        const uint8View = new Uint8Array(packet);
+        uint8View.set(payload, 9);
+        
+        try {
+            this.ws.send(packet);
+        } catch (e) {
+            console.error('Failed to send log to server:', e);
+        }
+    }
+    
+    // Deserialize bincode format (simplified for RenderCommandBatch)
+    deserializeBincode(payload) {
+        console.log('Deserializing bincode payload:', payload.length, 'bytes');
+        const view = new DataView(payload.buffer, payload.byteOffset, payload.byteLength);
+        let offset = 0;
+        
+        // Read frame_id (u64)
+        const frameId = Number(view.getBigUint64(offset, true)); // little-endian
+        offset += 8;
+        console.log('Frame ID:', frameId);
+        
+        // Read commands vector length (u64 for bincode)
+        const commandsLen = Number(view.getBigUint64(offset, true));
+        offset += 8;
+        console.log('Commands count:', commandsLen);
+        
+        const commands = [];
+        for (let i = 0; i < commandsLen; i++) {
+            // Read command variant index (u32)
+            const variantIndex = view.getUint32(offset, true);
+            offset += 4;
+            
+            // Parse command based on variant
+            let command;
+            switch (variantIndex) {
+                case 0: // Clear
+                    command = {
+                        Clear: {
+                            color: [
+                                view.getFloat32(offset, true),
+                                view.getFloat32(offset + 4, true),
+                                view.getFloat32(offset + 8, true),
+                                view.getFloat32(offset + 12, true)
+                            ]
+                        }
+                    };
+                    offset += 16;
+                    break;
+                    
+                case 1: // DrawQuad
+                    command = {
+                        DrawQuad: {
+                            position: [
+                                view.getFloat32(offset, true),
+                                view.getFloat32(offset + 4, true)
+                            ],
+                            size: [
+                                view.getFloat32(offset + 8, true),
+                                view.getFloat32(offset + 12, true)
+                            ],
+                            color: [
+                                view.getFloat32(offset + 16, true),
+                                view.getFloat32(offset + 20, true),
+                                view.getFloat32(offset + 24, true),
+                                view.getFloat32(offset + 28, true)
+                            ]
+                        }
+                    };
+                    offset += 32;
+                    break;
+                    
+                // Add more command types as needed
+                default:
+                    console.warn(`Unknown command variant: ${variantIndex}`);
+                    // Skip unknown command (this is approximate, need actual size)
+                    offset += 32; 
+                    break;
+            }
+            
+            if (command) {
+                commands.push(command);
+            }
+        }
+        
+        return {
+            frame_id: frameId,
+            commands: commands
+        };
     }
     
     // executeRenderCommands removed - now handled by WebGL renderer

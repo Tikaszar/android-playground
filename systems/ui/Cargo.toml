@@ -12,6 +12,9 @@ playground-core-server = { path = "../../core/server" }
 playground-core-ecs = { path = "../../core/ecs" }
 playground-core-rendering = { path = "../../core/rendering" }
 
+# Systems dependencies
+playground-systems-networking = { path = "../networking" }
+
 # Async runtime
 tokio = { workspace = true }
 async-trait = "0.1"

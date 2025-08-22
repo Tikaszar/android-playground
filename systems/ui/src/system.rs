@@ -1,7 +1,8 @@
 use playground_core_rendering::{RenderCommand, RenderCommandBatch, Viewport};
-use playground_core_ecs::{World, EntityId, ComponentRegistry};
+use playground_core_ecs::{World, EntityId, ComponentRegistry, Component};
 use playground_core_types::{Shared, shared};
 use playground_core_server::{ChannelManager, Packet, Priority};
+use playground_systems_networking::NetworkingSystem;
 use crate::error::{UiError, UiResult};
 use crate::element::{ElementGraph, ElementId};
 use crate::components::*;
@@ -47,6 +48,7 @@ pub struct UiSystem {
     
     // Networking
     channel_manager: Option<Shared<ChannelManager>>,
+    networking_system: Option<Shared<NetworkingSystem>>,
     channel_id: u16,
     
     // State
@@ -75,6 +77,7 @@ impl UiSystem {
             frame_id: 0,
             dirty_elements: shared(Vec::new()),
             channel_manager: None,
+            networking_system: None,
             channel_id: 10,
             initialized: false,
             screen_size: [1920.0, 1080.0],
@@ -139,28 +142,46 @@ impl UiSystem {
     ) -> UiResult<EntityId> {
         let mut world = self.world.write().await;
         
-        // Create element with all components
-        let components: Vec<Box<dyn playground_core_ecs::Component>> = vec![
-            Box::new(UiElementComponent::new(element_type)),
-            Box::new(UiLayoutComponent::default()),
-            Box::new(UiStyleComponent::default()),
-            Box::new(UiInputComponent::default()),
-        ];
-        
-        // Add text component for text elements
-        let components = if element_type == "text" || element_type == "input" {
-            let mut comps = components;
-            comps.push(Box::new(UiTextComponent::new(String::new())));
-            comps
-        } else {
-            components
-        };
-        
-        let entities = world.spawn_batch(vec![components]).await
+        // Create an empty entity first (avoiding trait object issues)
+        let entities = world.spawn_batch(vec![vec![]]).await
             .map_err(|e| UiError::EcsError(e.to_string()))?;
         
         let entity = entities.into_iter().next()
             .ok_or_else(|| UiError::CreationFailed("Failed to create element".into()))?;
+        
+        // Now add components individually using add_component_raw
+        world.add_component_raw(
+            entity,
+            Box::new(UiElementComponent::new(element_type)),
+            UiElementComponent::component_id()
+        ).await.map_err(|e| UiError::EcsError(e.to_string()))?;
+        
+        world.add_component_raw(
+            entity,
+            Box::new(UiLayoutComponent::default()),
+            UiLayoutComponent::component_id()
+        ).await.map_err(|e| UiError::EcsError(e.to_string()))?;
+        
+        world.add_component_raw(
+            entity,
+            Box::new(UiStyleComponent::default()),
+            UiStyleComponent::component_id()
+        ).await.map_err(|e| UiError::EcsError(e.to_string()))?;
+        
+        world.add_component_raw(
+            entity,
+            Box::new(UiInputComponent::default()),
+            UiInputComponent::component_id()
+        ).await.map_err(|e| UiError::EcsError(e.to_string()))?;
+        
+        // Add text component for text elements
+        if element_type == "text" || element_type == "input" {
+            world.add_component_raw(
+                entity,
+                Box::new(UiTextComponent::new(String::new())),
+                UiTextComponent::component_id()
+            ).await.map_err(|e| UiError::EcsError(e.to_string()))?;
+        }
         
         drop(world);
         
@@ -359,11 +380,46 @@ impl UiSystem {
     async fn register_components(&self) -> UiResult<()> {
         let mut registry = self.registry.write().await;
         
-        registry.register::<UiElementComponent>();
-        registry.register::<UiLayoutComponent>();
-        registry.register::<UiStyleComponent>();
-        registry.register::<UiInputComponent>();
-        registry.register::<UiTextComponent>();
+        // Register components in the registry
+        registry.register::<UiElementComponent>().await
+            .map_err(|e| UiError::EcsError(e.to_string()))?;
+        registry.register::<UiLayoutComponent>().await
+            .map_err(|e| UiError::EcsError(e.to_string()))?;
+        registry.register::<UiStyleComponent>().await
+            .map_err(|e| UiError::EcsError(e.to_string()))?;
+        registry.register::<UiInputComponent>().await
+            .map_err(|e| UiError::EcsError(e.to_string()))?;
+        registry.register::<UiTextComponent>().await
+            .map_err(|e| UiError::EcsError(e.to_string()))?;
+        
+        drop(registry);
+        
+        // Also register storage in the world for each component
+        let world = self.world.read().await;
+        world.register_component_storage(
+            UiElementComponent::component_id(),
+            playground_core_ecs::StorageType::Dense
+        ).await.map_err(|e| UiError::EcsError(e.to_string()))?;
+        
+        world.register_component_storage(
+            UiLayoutComponent::component_id(),
+            playground_core_ecs::StorageType::Dense
+        ).await.map_err(|e| UiError::EcsError(e.to_string()))?;
+        
+        world.register_component_storage(
+            UiStyleComponent::component_id(),
+            playground_core_ecs::StorageType::Dense
+        ).await.map_err(|e| UiError::EcsError(e.to_string()))?;
+        
+        world.register_component_storage(
+            UiInputComponent::component_id(),
+            playground_core_ecs::StorageType::Dense
+        ).await.map_err(|e| UiError::EcsError(e.to_string()))?;
+        
+        world.register_component_storage(
+            UiTextComponent::component_id(),
+            playground_core_ecs::StorageType::Sparse
+        ).await.map_err(|e| UiError::EcsError(e.to_string()))?;
         
         Ok(())
     }
@@ -481,20 +537,32 @@ impl UiSystem {
     }
     
     async fn send_batch(&self, batch: &RenderCommandBatch) -> UiResult<()> {
-        if let Some(ref _manager) = self.channel_manager {
-            let _data = bincode::serialize(batch)
+        if let Some(ref networking) = self.networking_system {
+            // Serialize with bincode (efficient binary format)
+            let data = bincode::serialize(batch)
                 .map_err(|e| UiError::SerializationError(e.to_string()))?;
             
-            // TODO: Send packet through networking system
-            // For now, the render commands are generated but not sent
-            // The networking system needs to provide a proper send API
+            // Log that we're sending render commands
+            if let Some(dashboard) = networking.read().await.get_dashboard().await {
+                dashboard.log(
+                    playground_core_server::dashboard::LogLevel::Debug,
+                    format!("UI: Sending RenderBatch on channel {} (bincode, {} bytes)", 
+                        self.channel_id, data.len()),
+                    None
+                ).await;
+            }
             
-            // let packet = Packet {
-            //     channel_id: self.channel_id,
-            //     packet_type: 104, // RenderBatch type (matching browser expectation)
-            //     priority: Priority::High,
-            //     payload: bytes::Bytes::from(data),
-            // };
+            // Send render commands through networking system
+            // Packet type 104 = RenderBatch (matching browser expectation)
+            networking.read().await.send_packet(
+                self.channel_id,
+                104, // RenderBatch packet type
+                data,
+                playground_core_types::Priority::High
+            ).await.map_err(|e| UiError::NetworkError(e.to_string()))?;
+        } else {
+            // Log that networking is not connected
+            eprintln!("UI: WARNING - NetworkingSystem not connected, cannot send render commands!");
         }
         
         Ok(())
@@ -502,6 +570,17 @@ impl UiSystem {
     
     /// Main render method that generates and sends render commands
     pub async fn render(&mut self) -> UiResult<()> {
+        // Log render call
+        if let Some(ref networking) = self.networking_system {
+            if let Some(dashboard) = networking.read().await.get_dashboard().await {
+                dashboard.log(
+                    playground_core_server::dashboard::LogLevel::Debug,
+                    format!("UI: render() called, frame {}", self.frame_id),
+                    None
+                ).await;
+            }
+        }
+        
         // First update layout for any dirty elements
         self.update_layout().await?;
         
@@ -522,9 +601,37 @@ impl UiSystem {
             color: [0.133, 0.137, 0.153, 1.0], // Discord dark background
         });
         
+        // Add a test rectangle to see if rendering works
+        batch.push(RenderCommand::DrawQuad {
+            position: [100.0, 100.0],
+            size: [200.0, 150.0],
+            color: [1.0, 0.0, 0.0, 1.0], // Red rectangle
+        });
+        
         // Render the element tree starting from root
         if let Some(root) = self.root_entity {
+            // Log if we have a root
+            if let Some(ref networking) = self.networking_system {
+                if let Some(dashboard) = networking.read().await.get_dashboard().await {
+                    dashboard.log(
+                        playground_core_server::dashboard::LogLevel::Debug,
+                        format!("UI: Rendering root entity {:?}", root),
+                        None
+                    ).await;
+                }
+            }
             self.render_element_tree(root, &mut batch, &theme).await?;
+        } else {
+            // Log that we have no root
+            if let Some(ref networking) = self.networking_system {
+                if let Some(dashboard) = networking.read().await.get_dashboard().await {
+                    dashboard.log(
+                        playground_core_server::dashboard::LogLevel::Warning,
+                        "UI: No root entity to render!".to_string(),
+                        None
+                    ).await;
+                }
+            }
         }
         
         // Send the batch through channel 10
@@ -539,5 +646,9 @@ impl UiSystem {
     /// Set the channel manager for networking
     pub fn set_channel_manager(&mut self, manager: Shared<ChannelManager>) {
         self.channel_manager = Some(manager);
+    }
+    
+    pub fn set_networking_system(&mut self, networking: Shared<NetworkingSystem>) {
+        self.networking_system = Some(networking);
     }
 }

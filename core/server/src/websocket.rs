@@ -212,6 +212,31 @@ async fn handle_message(data: Bytes, state: &WebSocketState) -> anyhow::Result<(
 }
 
 async fn handle_control_message(packet: Packet, state: &WebSocketState) -> anyhow::Result<()> {
+    // Check for browser log messages (packet_type 200)
+    if packet.packet_type == 200 {
+        // Browser log message
+        if let Ok(log_data) = serde_json::from_slice::<serde_json::Value>(&packet.payload) {
+            if let (Some(level), Some(message)) = (
+                log_data.get("level").and_then(|v| v.as_str()),
+                log_data.get("message").and_then(|v| v.as_str()),
+            ) {
+                let log_level = match level {
+                    "error" => crate::dashboard::LogLevel::Error,
+                    "warning" | "warn" => crate::dashboard::LogLevel::Warning,
+                    "info" => crate::dashboard::LogLevel::Info,
+                    _ => crate::dashboard::LogLevel::Debug,
+                };
+                
+                state.dashboard.log(
+                    log_level,
+                    format!("[Browser] {}", message),
+                    None
+                ).await;
+            }
+        }
+        return Ok(());
+    }
+    
     // Check for MCP tool registration messages (packet_type 100 and 101)
     if packet.packet_type == 100 {
         // Register MCP tool

@@ -28,6 +28,27 @@ impl ChannelManager {
         }
     }
     
+    /// Register a channel with a specific ID
+    pub async fn register_channel(&mut self, channel_id: u16, name: String) -> NetworkResult<()> {
+        // Check if ID already taken
+        if self.id_to_name.read().await.contains_key(&channel_id) {
+            let existing_name = self.id_to_name.read().await.get(&channel_id).cloned();
+            if let Some(existing) = existing_name {
+                if existing != name {
+                    return Err(NetworkError::ChannelError(
+                        format!("Channel {} already registered as '{}'", channel_id, existing)
+                    ));
+                }
+            }
+            // Already registered with same name, that's OK
+            return Ok(());
+        }
+        
+        self.channels.write().await.insert(name.clone(), channel_id);
+        self.id_to_name.write().await.insert(channel_id, name);
+        Ok(())
+    }
+    
     /// Register a system channel (1-999)
     pub async fn register_system_channel(&mut self, name: &str, preferred_id: u16) -> NetworkResult<ChannelId> {
         if preferred_id == 0 || preferred_id >= 1000 {

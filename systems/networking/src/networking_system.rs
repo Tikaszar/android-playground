@@ -80,6 +80,23 @@ impl NetworkingSystem {
         Ok(())
     }
     
+    /// Register a System channel (1-999)
+    pub async fn register_system_channel(&self, system_name: &str, channel_id: u16) -> NetworkResult<ChannelId> {
+        if channel_id >= 1000 {
+            return Err(NetworkError::ChannelError("System channels must be < 1000".to_string()));
+        }
+        
+        let mut manager = self.channel_manager.write().await;
+        manager.register_channel(channel_id, system_name.to_string()).await?;
+        
+        // Register with the WebSocket server if connected
+        if let Some(ws) = &self.ws_client {
+            ws.register_channel(channel_id, system_name).await?;
+        }
+        
+        Ok(channel_id)
+    }
+    
     /// Register a Plugin for a dynamic channel (1000+)
     pub async fn register_plugin(&self, plugin_name: &str) -> NetworkResult<ChannelId> {
         let mut manager = self.channel_manager.write().await;
@@ -146,6 +163,16 @@ impl NetworkingSystem {
         data: Vec<u8>,
         priority: Priority,
     ) -> NetworkResult<()> {
+        // Log packet send
+        if let Some(ref dashboard) = self.dashboard {
+            dashboard.log(
+                playground_core_server::dashboard::LogLevel::Debug,
+                format!("NetworkingSystem: Sending packet type {} on channel {} ({} bytes)", 
+                    packet_type, channel, data.len()),
+                None
+            ).await;
+        }
+        
         // Send directly through WebSocket if connected
         if let Some(ws) = &self.ws_client {
             use playground_core_server::Packet;

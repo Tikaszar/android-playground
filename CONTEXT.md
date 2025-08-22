@@ -1,11 +1,37 @@
 # CONTEXT.md - Current Session Context
 
-## Active Session - 2025-08-21 (Session 5)
+## Active Session - 2025-08-22 (Session 6)
 
 ### Current Status
-**WebGL implementation complete, render pipeline connected** - Browser WebGL renderer created, UI system generates render commands, minor ECS spawning issue remains
+**Render pipeline fixed but UI still black** - Fixed ECS errors, byte order issues, connected networking, but browser still shows black screen
 
-### What Was Done This Session (2025-08-21 - Session 5)
+### What Was Done This Session (2025-08-22 - Session 6)
+- **Fixed ECS component registration** ✅
+  - Fixed trait object type erasure in create_element
+  - Added register_component_storage to World
+  - Components now spawn without errors
+  
+- **Connected UI to Networking** ✅
+  - UI system now has NetworkingSystem reference
+  - Can send render commands via channel 10
+  - 60fps render loop properly started
+  
+- **Fixed packet serialization** ✅
+  - Fixed byte order mismatch (little-endian → big-endian)
+  - Server and client now agree on packet format
+  - No more "Payload size mismatch" errors
+  
+- **Added browser logging** ✅
+  - Browser sends logs to server via channel 0, type 200
+  - Server displays browser logs with [Browser] prefix
+  - Added bincode deserializer to browser
+  
+- **Remaining issue** ⚠️
+  - Browser receives packets but doesn't render
+  - Bincode deserialization may have issues
+  - WebGL renderer may not be executing commands properly
+
+### Previous Session (2025-08-21 - Session 5)
 - **Created complete WebGL renderer for browser** ✅
   - webgl/context.js - WebGL2 context management
   - webgl/shaders.js - Shader compilation and programs  
