@@ -186,16 +186,18 @@ This is an experimental project between AI agents and developers. Each session b
 
 ## 🎮 Roadmap
 
-### Current Focus (2025-08-21)
-- ✅ Created WebGL2 renderer in systems/webgl
-- 🔄 Integrating renderer with systems/ui
-- 🔄 Fix UI rendering (black screen issue)
-- ⏳ Update browser to use WebGL instead of Canvas2D
-- ⏳ Complete Discord-style UI implementation
+### Current Focus (2025-08-22)
+- ✅ WebGL2 renderer fully working - Clear and DrawQuad commands render!
+- ✅ Server-controlled renderer initialization implemented
+- ✅ Resource caching with LRU eviction (100MB limit)
+- ✅ Clean shutdown protocol with proper resource disposal
+- 🔄 Implementing Discord-style UI layout with actual elements
+- ⏳ Text rendering implementation (DrawText command)
 
 ### Next Up
-- WebGL rendering pipeline
-- Client tracking improvements
+- Discord UI layout with sidebar and chat
+- Client lifecycle management improvements
+- Text rendering with Canvas/SDF
 - IDE feature implementation
 - Game design and mechanics (future)
 

@@ -6,12 +6,14 @@
  */
 
 import { WebGLRenderer } from './webgl/renderer.js';
+import { ResourceCache } from './webgl/cache.js';
 
 class UIFrameworkClient {
     constructor() {
         this.ws = null;
         this.canvas = null;
         this.renderer = null; // WebGL renderer instead of 2D context
+        this.resourceCache = new ResourceCache(); // Resource cache for shaders/textures
         this.channels = new Set();
         this.reconnectAttempts = 0;
         this.maxReconnectAttempts = 10;
@@ -186,9 +188,19 @@ class UIFrameworkClient {
             
             this.sendLog('debug', `Received packet on channel 10: type ${packetType}, size ${payloadSize}`);
             
-            // Handle UI system packets (RenderBatch is type 104)
-            if (packetType === 104) {
+            // Handle UI system packets
+            if (packetType === 104) { // RenderBatch
                 this.renderFrame(payload);
+            } else if (packetType === 106) { // RendererInit
+                this.initializeRenderer(payload);
+            } else if (packetType === 107) { // RendererShutdown
+                this.shutdownRenderer();
+            } else if (packetType === 108) { // LoadShader
+                this.loadShader(payload);
+            } else if (packetType === 109) { // LoadTexture
+                this.loadTexture(payload);
+            } else if (packetType === 110) { // UnloadResource
+                this.unloadResource(payload);
             } else {
                 console.log(`UI packet type ${packetType} on channel ${channelId}`);
                 this.sendLog('warning', `Unknown UI packet type ${packetType} on channel ${channelId}`);
@@ -620,6 +632,152 @@ class UIFrameworkClient {
         document.getElementById('loading').style.display = 'none';
         document.getElementById('error').style.display = 'block';
         this.canvas.style.display = 'none';
+    }
+    
+    // Initialize renderer with server-provided configuration
+    initializeRenderer(payload) {
+        try {
+            const initMsg = this.deserializeBincode(payload);
+            this.sendLog('info', `Initializing renderer with config: ${JSON.stringify(initMsg)}`);
+            
+            // Cache and compile shaders
+            if (initMsg.shaders && Array.isArray(initMsg.shaders)) {
+                for (const shader of initMsg.shaders) {
+                    this.sendLog('debug', `Loading shader: ${shader.id}`);
+                    // The shader manager will compile these
+                    if (this.renderer && this.renderer.shaders) {
+                        this.renderer.shaders.createProgram(
+                            shader.id,
+                            shader.vertex_source,
+                            shader.fragment_source
+                        );
+                        // Cache for reconnection
+                        this.resourceCache.cacheShader(shader.id, shader.id, {
+                            vertex: shader.vertex_source,
+                            fragment: shader.fragment_source
+                        });
+                    }
+                }
+            }
+            
+            // Set clear color
+            if (initMsg.clear_color && this.renderer) {
+                this.renderer.context.setClearColor(
+                    initMsg.clear_color[0],
+                    initMsg.clear_color[1],
+                    initMsg.clear_color[2],
+                    initMsg.clear_color[3]
+                );
+            }
+            
+            // Update viewport if provided
+            if (initMsg.viewport && this.renderer) {
+                this.renderer.context.updateViewport();
+            }
+            
+            this.sendLog('info', 'Renderer initialized successfully');
+            
+        } catch (e) {
+            this.sendLog('error', `Failed to initialize renderer: ${e.message}`);
+        }
+    }
+    
+    // Shutdown renderer and clean up resources
+    shutdownRenderer() {
+        this.sendLog('info', 'Shutting down renderer');
+        
+        if (this.renderer) {
+            // Dispose WebGL resources
+            if (this.renderer.buffers) {
+                this.renderer.buffers.dispose();
+            }
+            if (this.renderer.textures) {
+                // Dispose textures if there's a dispose method
+            }
+            if (this.renderer.shaders) {
+                // Dispose shaders if needed
+            }
+            
+            this.renderer = null;
+        }
+        
+        // Clear resource cache
+        this.resourceCache.clear();
+        
+        this.sendLog('info', 'Renderer shutdown complete');
+    }
+    
+    // Load a shader program
+    loadShader(payload) {
+        try {
+            const shaderMsg = this.deserializeBincode(payload);
+            
+            if (this.renderer && this.renderer.shaders) {
+                this.renderer.shaders.createProgram(
+                    shaderMsg.program.id,
+                    shaderMsg.program.vertex_source,
+                    shaderMsg.program.fragment_source
+                );
+                
+                // Cache for reconnection
+                this.resourceCache.cacheShader(shaderMsg.program.id, shaderMsg.program.id, {
+                    vertex: shaderMsg.program.vertex_source,
+                    fragment: shaderMsg.program.fragment_source
+                });
+                
+                this.sendLog('info', `Loaded shader: ${shaderMsg.program.id}`);
+            }
+        } catch (e) {
+            this.sendLog('error', `Failed to load shader: ${e.message}`);
+        }
+    }
+    
+    // Load a texture
+    loadTexture(payload) {
+        try {
+            const textureMsg = this.deserializeBincode(payload);
+            
+            if (this.renderer && this.renderer.textures) {
+                // Create texture from data
+                const texture = this.renderer.textures.createFromData(
+                    textureMsg.data,
+                    textureMsg.width,
+                    textureMsg.height,
+                    textureMsg.format
+                );
+                
+                // Cache for reconnection
+                this.resourceCache.cacheTexture(textureMsg.id, texture, {
+                    width: textureMsg.width,
+                    height: textureMsg.height,
+                    format: textureMsg.format
+                });
+                
+                this.sendLog('info', `Loaded texture: ${textureMsg.id}`);
+            }
+        } catch (e) {
+            this.sendLog('error', `Failed to load texture: ${e.message}`);
+        }
+    }
+    
+    // Unload a resource
+    unloadResource(payload) {
+        try {
+            const unloadMsg = this.deserializeBincode(payload);
+            
+            if (unloadMsg.resource_type === 'Shader') {
+                this.resourceCache.removeShader(unloadMsg.resource_id);
+                this.sendLog('info', `Unloaded shader: ${unloadMsg.resource_id}`);
+            } else if (unloadMsg.resource_type === 'Texture') {
+                this.resourceCache.removeTexture(unloadMsg.resource_id);
+                if (this.renderer && this.renderer.textures) {
+                    this.renderer.textures.delete(unloadMsg.resource_id);
+                }
+                this.sendLog('info', `Unloaded texture: ${unloadMsg.resource_id}`);
+            }
+        } catch (e) {
+            this.sendLog('error', `Failed to unload resource: ${e.message}`);
+        }
     }
 }
 

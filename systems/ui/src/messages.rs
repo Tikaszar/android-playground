@@ -25,6 +25,11 @@ pub enum UiPacketType {
     StateSync = 103,
     RenderBatch = 104,
     ThemeUpdate = 105,
+    RendererInit = 106,
+    RendererShutdown = 107,
+    LoadShader = 108,
+    LoadTexture = 109,
+    UnloadResource = 110,
     
     // Terminal-specific
     TerminalInput = 200,
@@ -51,6 +56,11 @@ impl TryFrom<u16> for UiPacketType {
             103 => Ok(UiPacketType::StateSync),
             104 => Ok(UiPacketType::RenderBatch),
             105 => Ok(UiPacketType::ThemeUpdate),
+            106 => Ok(UiPacketType::RendererInit),
+            107 => Ok(UiPacketType::RendererShutdown),
+            108 => Ok(UiPacketType::LoadShader),
+            109 => Ok(UiPacketType::LoadTexture),
+            110 => Ok(UiPacketType::UnloadResource),
             200 => Ok(UiPacketType::TerminalInput),
             201 => Ok(UiPacketType::TerminalOutput),
             202 => Ok(UiPacketType::TerminalConnect),
@@ -159,6 +169,79 @@ pub enum RenderCommand {
     DrawImage { position: Vector2<f32>, size: Vector2<f32>, texture_id: u32 },
     SetClipRect { position: Vector2<f32>, size: Vector2<f32> },
     ClearClipRect,
+}
+
+/// Renderer initialization message
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RendererInitMessage {
+    pub viewport: ViewportConfig,
+    pub clear_color: [f32; 4],
+    pub blend_mode: BlendMode,
+    pub shaders: Vec<ShaderProgram>,
+}
+
+/// Viewport configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ViewportConfig {
+    pub width: u32,
+    pub height: u32,
+    pub device_pixel_ratio: f32,
+}
+
+/// Blend mode configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum BlendMode {
+    Normal,
+    Additive,
+    Multiply,
+    Screen,
+}
+
+/// Shader program definition
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ShaderProgram {
+    pub id: String,
+    pub vertex_source: String,
+    pub fragment_source: String,
+}
+
+/// Load shader message
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LoadShaderMessage {
+    pub program: ShaderProgram,
+}
+
+/// Load texture message
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LoadTextureMessage {
+    pub id: u32,
+    pub width: u32,
+    pub height: u32,
+    pub format: TextureFormat,
+    pub data: Vec<u8>,
+}
+
+/// Texture format
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum TextureFormat {
+    RGBA8,
+    RGB8,
+    Alpha8,
+    R8,
+}
+
+/// Unload resource message
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UnloadResourceMessage {
+    pub resource_type: ResourceType,
+    pub resource_id: String,
+}
+
+/// Resource type
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum ResourceType {
+    Shader,
+    Texture,
 }
 
 /// Message serialization helpers

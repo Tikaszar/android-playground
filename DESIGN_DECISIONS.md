@@ -501,6 +501,53 @@ RenderCommand::DrawQuad {
 - logs/ directory for organization
 - Automatic file rotation by session
 
+## Renderer Initialization Architecture
+
+### Server-Controlled Renderer Initialization
+**Decision**: Server sends complete renderer configuration on client connect
+
+**Why**:
+- Ensures consistent rendering across all clients
+- Server can update shaders without client changes
+- Supports hot-reload of rendering resources
+- Centralized control over visual appearance
+
+**Implementation**:
+- RendererInit message with viewport, shaders, blend mode
+- Shaders sent as source code strings
+- Client compiles and caches shaders
+- Resources preserved across reconnection
+
+### Resource Caching Strategy
+**Decision**: Client-side LRU cache with 100MB limit
+
+**Why**:
+- Fast reconnection without re-downloading
+- Reduces network traffic on reconnect
+- Automatic memory management with eviction
+- Preserves compiled shaders (expensive operation)
+
+**Cache Management**:
+- LRU eviction when over limit
+- Use count tracking for prioritization
+- Separate caches for shaders and textures
+- Clear on explicit shutdown only
+
+### WebGL Shader Management
+**Decision**: Server provides shader source, client compiles
+
+**Why**:
+- Platform-specific optimizations possible
+- Easier debugging with source access
+- No binary shader format issues
+- Supports shader hot-reload
+
+**Shader Pipeline**:
+1. Server sends shader source in RendererInit
+2. Client compiles with WebGL2 context
+3. Cached with ID for reuse
+4. Uniforms set per batch, not per command
+
 ## Future Architectural Decisions (Planned)
 
 ### APK Packaging

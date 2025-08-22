@@ -99,6 +99,18 @@ export class WebGLRenderer {
         // Get projection matrix for current viewport
         const projection = this.context.getProjectionMatrix();
         
+        // Use quad shader program for drawing
+        const program = this.shaders.useProgram('quad');
+        if (!program) {
+            console.error('Quad shader program not found');
+            return;
+        }
+        
+        // Set projection and transform uniforms
+        this.gl.uniformMatrix3fv(program.uniforms.u_projection, false, projection);
+        this.gl.uniformMatrix3fv(program.uniforms.u_transform, false, this.currentTransform);
+        this.gl.uniform1i(program.uniforms.u_useTexture, 0); // No texture by default
+        
         // Execute each command
         for (const command of batch.commands) {
             this.executeCommand(command, projection);
@@ -108,6 +120,10 @@ export class WebGLRenderer {
         this.buffers.flush();
         
         this.frameCount++;
+    }
+    
+    isInitialized() {
+        return this.context && this.context.isReady() && this.shaders && this.buffers;
     }
     
     executeCommand(command, projection) {
@@ -209,6 +225,8 @@ export class WebGLRenderer {
             size[0], size[1],
             finalColor
         );
+        
+        this.drawCalls++;
     }
     
     drawText(text, position, size, color, projection) {

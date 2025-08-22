@@ -650,4 +650,179 @@ impl UiSystem {
     pub fn set_networking_system(&mut self, networking: Shared<NetworkingSystem>) {
         self.networking_system = Some(networking);
     }
+    
+    /// Send renderer initialization message to a new client
+    pub async fn initialize_client_renderer(&self, client_id: usize) -> UiResult<()> {
+        use crate::messages::{RendererInitMessage, ViewportConfig, BlendMode, ShaderProgram, UiPacketType};
+        
+        // Create initialization message with default shaders
+        let init_msg = RendererInitMessage {
+            viewport: ViewportConfig {
+                width: self.viewport.width,
+                height: self.viewport.height,
+                device_pixel_ratio: 1.0,
+            },
+            clear_color: [0.133, 0.137, 0.153, 1.0], // Discord dark background
+            blend_mode: BlendMode::Normal,
+            shaders: vec![
+                ShaderProgram {
+                    id: "quad".to_string(),
+                    vertex_source: self.get_quad_vertex_shader(),
+                    fragment_source: self.get_quad_fragment_shader(),
+                },
+                ShaderProgram {
+                    id: "line".to_string(),
+                    vertex_source: self.get_line_vertex_shader(),
+                    fragment_source: self.get_line_fragment_shader(),
+                },
+                ShaderProgram {
+                    id: "text".to_string(),
+                    vertex_source: self.get_text_vertex_shader(),
+                    fragment_source: self.get_text_fragment_shader(),
+                },
+            ],
+        };
+        
+        // Serialize the message
+        let data = bincode::serialize(&init_msg)
+            .map_err(|e| UiError::SerializationError(e.to_string()))?;
+        
+        // Send via networking system
+        if let Some(ref networking) = self.networking_system {
+            networking.read().await
+                .send_packet(self.channel_id, UiPacketType::RendererInit as u16, data, Priority::High)
+                .await
+                .map_err(|e| UiError::SerializationError(format!("Failed to send init packet: {}", e)))?;
+                
+            // Log the initialization
+            if let Some(dashboard) = networking.read().await.get_dashboard().await {
+                dashboard.log(
+                    playground_core_server::dashboard::LogLevel::Info,
+                    format!("Initialized renderer for client {}", client_id),
+                    Some(client_id)
+                ).await;
+            }
+        }
+        
+        Ok(())
+    }
+    
+    /// Get default quad vertex shader source
+    fn get_quad_vertex_shader(&self) -> String {
+        r#"#version 300 es
+        precision highp float;
+        
+        in vec2 a_position;
+        in vec2 a_texCoord;
+        in vec4 a_color;
+        
+        uniform mat3 u_projection;
+        uniform mat3 u_transform;
+        
+        out vec2 v_texCoord;
+        out vec4 v_color;
+        
+        void main() {
+            vec3 position = u_projection * u_transform * vec3(a_position, 1.0);
+            gl_Position = vec4(position.xy, 0.0, 1.0);
+            v_texCoord = a_texCoord;
+            v_color = a_color;
+        }"#.to_string()
+    }
+    
+    /// Get default quad fragment shader source
+    fn get_quad_fragment_shader(&self) -> String {
+        r#"#version 300 es
+        precision highp float;
+        
+        in vec2 v_texCoord;
+        in vec4 v_color;
+        
+        uniform sampler2D u_texture;
+        uniform bool u_useTexture;
+        
+        out vec4 fragColor;
+        
+        void main() {
+            if (u_useTexture) {
+                fragColor = texture(u_texture, v_texCoord) * v_color;
+            } else {
+                fragColor = v_color;
+            }
+        }"#.to_string()
+    }
+    
+    /// Get default line vertex shader source
+    fn get_line_vertex_shader(&self) -> String {
+        r#"#version 300 es
+        precision highp float;
+        
+        in vec2 a_position;
+        in vec4 a_color;
+        
+        uniform mat3 u_projection;
+        uniform mat3 u_transform;
+        
+        out vec4 v_color;
+        
+        void main() {
+            vec3 position = u_projection * u_transform * vec3(a_position, 1.0);
+            gl_Position = vec4(position.xy, 0.0, 1.0);
+            v_color = a_color;
+        }"#.to_string()
+    }
+    
+    /// Get default line fragment shader source
+    fn get_line_fragment_shader(&self) -> String {
+        r#"#version 300 es
+        precision highp float;
+        
+        in vec4 v_color;
+        out vec4 fragColor;
+        
+        void main() {
+            fragColor = v_color;
+        }"#.to_string()
+    }
+    
+    /// Get default text vertex shader source
+    fn get_text_vertex_shader(&self) -> String {
+        r#"#version 300 es
+        precision highp float;
+        
+        in vec2 a_position;
+        in vec2 a_texCoord;
+        in vec4 a_color;
+        
+        uniform mat3 u_projection;
+        uniform mat3 u_transform;
+        
+        out vec2 v_texCoord;
+        out vec4 v_color;
+        
+        void main() {
+            vec3 position = u_projection * u_transform * vec3(a_position, 1.0);
+            gl_Position = vec4(position.xy, 0.0, 1.0);
+            v_texCoord = a_texCoord;
+            v_color = a_color;
+        }"#.to_string()
+    }
+    
+    /// Get default text fragment shader source  
+    fn get_text_fragment_shader(&self) -> String {
+        r#"#version 300 es
+        precision highp float;
+        
+        in vec2 v_texCoord;
+        in vec4 v_color;
+        
+        uniform sampler2D u_texture;
+        
+        out vec4 fragColor;
+        
+        void main() {
+            float alpha = texture(u_texture, v_texCoord).a;
+            fragColor = vec4(v_color.rgb, v_color.a * alpha);
+        }"#.to_string()
+    }
 }
