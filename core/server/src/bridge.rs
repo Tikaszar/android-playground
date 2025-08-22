@@ -83,7 +83,7 @@ impl MessageHandler for WebSocketForwarder {
             let mut conn = conn_lock.write().await;
             if let Some(connection) = conn.as_mut() {
                 let packet_bytes = packet.serialize();
-                if let Err(e) = connection.sender.send(Message::Binary(packet_bytes)).await {
+                if let Err(e) = connection.send(Message::Binary(packet_bytes)).await {
                     self.websocket_state.dashboard.log(
                         crate::dashboard::LogLevel::Error,
                         format!("Failed to send to client {}: {}", conn_id, e),
@@ -126,7 +126,7 @@ impl Broadcaster for WebSocketBroadcaster {
             let mut conn = conn_lock.write().await;
             if let Some(connection) = conn.as_mut() {
                 let packet_bytes = packet.serialize();
-                if let Err(_e) = connection.sender.send(Message::Binary(packet_bytes)).await {
+                if let Err(_e) = connection.send(Message::Binary(packet_bytes)).await {
                     // Connection failed, mark as None
                     *conn = None;
                 }

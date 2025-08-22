@@ -1,36 +1,33 @@
 # CONTEXT.md - Current Session Context
 
-## Active Session - 2025-08-22 (Session 7)
+## Active Session - 2025-08-22 (Session 8)
 
 ### Current Status
-**Major Architecture Refactor** - Replaced WebSocket-based internal communication with MessageBus system
+**WebGL Rendering Working!** - Screen now shows grey background, MessageBus architecture complete
 
-### What Was Done This Session (2025-08-22 - Session 7)
-- **Identified Client #0 Issue** ✅
-  - Client #0 was NetworkingSystem connecting back to its own server via WebSocket
-  - Systems were using WebSocket for internal communication (architectural violation)
-  - Packets were being serialized/deserialized unnecessarily
+### What Was Done This Session (2025-08-22 - Session 8)
+- **Fixed MessageBus Pipeline** ✅
+  - UiSystem was publishing to its own internal ECS world, not shared MessageBus
+  - Changed UiSystem to use NetworkingSystem.send_packet() which publishes to shared MessageBus
+  - MessageBridge now successfully forwards messages from MessageBus to WebSocket clients
+  - Browser receives RenderBatch packets on channel 10
   
-- **Implemented MessageBus Architecture** ✅
-  - Created MessageBus in core/ecs for internal system communication
-  - Added GameMessageBus to systems/logic for plugin/app messaging
-  - Created MessageBridge in core/server to bridge internal messages to WebSocket clients
-  - Systems now communicate via direct memory instead of WebSocket
+- **Fixed Bincode Deserialization in Browser** ✅
+  - JavaScript was reading RenderCommandBatch fields in wrong order
+  - Bincode serializes in declaration order: commands, viewport, frame_id
+  - JavaScript was trying to read frame_id first
+  - Added support for missing command variants (SetClipRect, ClearClipRect, PushState, PopState)
+  - Batches now parse successfully with 4 commands per frame
   
-- **Updated Systems to Use MessageBus** ✅
-  - UiSystem now publishes to MessageBus instead of NetworkingSystem.send_packet()
-  - NetworkingSystem WebSocketClient removed (partially - needs completion)
-  - Direct packet broadcast fix for WebSocket clients
+- **WebGL Rendering Partially Working** ✅
+  - Clear command executes - screen shows grey Discord background (0.133, 0.137, 0.153)
+  - Commands are received and parsed correctly
+  - DrawQuad (red rectangle) not yet visible - needs WebGL implementation check
   
-- **Fixed WebSocket Broadcasting** ✅
-  - Fixed issue where only first client received packets
-  - Implemented direct broadcast to all WebSocket clients
-  - Browser now connects as Client #1, #2, etc.
-  
-- **Remaining Tasks** ⚠️
-  - Complete NetworkingSystem refactor (remove all WebSocketClient references)
-  - Wire up MessageBridge in server initialization
-  - Test that browser receives packets via new architecture
+- **Debugging Improvements** ✅
+  - Added sendLog() to JavaScript for server-side logging from browser
+  - Better error messages showing exact parsing failures
+  - Hex dump of received bytes for debugging
 
 ### Previous Session (2025-08-21 - Session 5)
 - **Created complete WebGL renderer for browser** ✅
@@ -100,16 +97,17 @@ Browser (app.js)
 - ✅ **Plugins layer** - UI Framework plugin compiles successfully
 - ✅ **Apps layer** - playground-editor builds successfully
 
-### Next Immediate Steps (Session 6)
-1. **Fix ECS entity spawning** - Resolve trait object type erasure issue
-   - Change spawn_batch to avoid dyn Component type names
-   - Use add_component_raw with explicit ComponentIds
-2. **Connect networking for render commands** - Send via channel 10
-   - Fix WebSocket packet sending from UI to browser
-   - Ensure channel manager is properly connected
-3. **Test Discord UI rendering** - Verify visual output
-   - Debug WebGL command execution
-   - Check render command generation
+### Next Immediate Steps (Session 9)
+1. **Fix DrawQuad rendering in WebGL** - Red rectangle should be visible
+   - Check WebGL shader uniforms and vertex data
+   - Verify transform matrices and viewport setup
+2. **Fix client tracking in Dashboard** - Remove disconnected clients properly
+   - Currently clients accumulate and never get removed
+3. **Add verbose logging toggle** - Too many debug logs flooding dashboard
+   - Add environment variable or config for debug level
+4. **Implement Discord UI layout** - Get actual UI elements rendering
+   - Fix ECS entity spawning for UI elements
+   - Generate proper render commands from UI tree
 
 ### Build Command
 ```bash

@@ -34,9 +34,16 @@ pub struct WebSocketState {
     pub dashboard: Arc<Dashboard>,
 }
 
-struct WebSocketConnection {
+pub struct WebSocketConnection {
     id: usize,
     sender: futures_util::stream::SplitSink<WebSocket, Message>,
+}
+
+impl WebSocketConnection {
+    pub async fn send(&mut self, message: Message) -> Result<(), String> {
+        use futures_util::SinkExt;
+        self.sender.send(message).await.map_err(|e| e.to_string())
+    }
 }
 
 impl WebSocketState {

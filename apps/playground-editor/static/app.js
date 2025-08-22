@@ -289,25 +289,44 @@ class UIFrameworkClient {
     
     // Deserialize bincode format (simplified for RenderCommandBatch)
     deserializeBincode(payload) {
-        console.log('Deserializing bincode payload:', payload.length, 'bytes');
+        this.sendLog('debug', `Deserializing bincode payload: ${payload.length} bytes`);
+        
+        // Log first few bytes for debugging
+        const firstBytes = Array.from(payload.slice(0, Math.min(32, payload.length)))
+            .map(b => b.toString(16).padStart(2, '0'))
+            .join(' ');
+        this.sendLog('debug', `First bytes: ${firstBytes}`);
+        
         const view = new DataView(payload.buffer, payload.byteOffset, payload.byteLength);
         let offset = 0;
         
-        // Read frame_id (u64)
-        const frameId = Number(view.getBigUint64(offset, true)); // little-endian
-        offset += 8;
-        console.log('Frame ID:', frameId);
+        // RenderCommandBatch fields are serialized in declaration order:
+        // 1. commands: Vec<RenderCommand>
+        // 2. viewport: Option<Viewport>  
+        // 3. frame_id: u64
         
         // Read commands vector length (u64 for bincode)
-        const commandsLen = Number(view.getBigUint64(offset, true));
+        if (offset + 8 > payload.length) {
+            throw new Error(`Not enough bytes for commands length at offset ${offset}`);
+        }
+        const commandsLen = Number(view.getBigUint64(offset, true)); // little-endian
         offset += 8;
-        console.log('Commands count:', commandsLen);
+        this.sendLog('debug', `Commands count: ${commandsLen}`);
+        
+        // Sanity check
+        if (commandsLen > 1000) {
+            throw new Error(`Unreasonable commands count: ${commandsLen}`);
+        }
         
         const commands = [];
         for (let i = 0; i < commandsLen; i++) {
-            // Read command variant index (u32)
+            // Read command variant index (bincode uses u32 for enum discriminants)
+            if (offset + 4 > payload.length) {
+                throw new Error(`Not enough bytes for variant at offset ${offset}, need 4, have ${payload.length - offset}`);
+            }
             const variantIndex = view.getUint32(offset, true);
             offset += 4;
+            this.sendLog('debug', `Command ${i}: variant ${variantIndex} at offset ${offset-4}`);
             
             // Parse command based on variant
             let command;
@@ -348,12 +367,40 @@ class UIFrameworkClient {
                     offset += 32;
                     break;
                     
+                case 6: // SetClipRect
+                    command = {
+                        SetClipRect: {
+                            position: [
+                                view.getFloat32(offset, true),
+                                view.getFloat32(offset + 4, true)
+                            ],
+                            size: [
+                                view.getFloat32(offset + 8, true),
+                                view.getFloat32(offset + 12, true)
+                            ]
+                        }
+                    };
+                    offset += 16;
+                    break;
+                    
+                case 7: // ClearClipRect
+                    command = { ClearClipRect: {} };
+                    // No data to read
+                    break;
+                    
+                case 10: // PushState
+                    command = { PushState: {} };
+                    // No data to read
+                    break;
+                    
+                case 11: // PopState
+                    command = { PopState: {} };
+                    // No data to read
+                    break;
+                    
                 // Add more command types as needed
                 default:
-                    console.warn(`Unknown command variant: ${variantIndex}`);
-                    // Skip unknown command (this is approximate, need actual size)
-                    offset += 32; 
-                    break;
+                    throw new Error(`Unknown command variant: ${variantIndex} at offset ${offset-4}`);
             }
             
             if (command) {
@@ -361,9 +408,30 @@ class UIFrameworkClient {
             }
         }
         
+        // Read viewport: Option<Viewport>
+        const hasViewport = view.getUint8(offset);
+        offset += 1;
+        let viewport = null;
+        if (hasViewport === 1) {
+            viewport = {
+                x: view.getUint32(offset, true),
+                y: view.getUint32(offset + 4, true),
+                width: view.getUint32(offset + 8, true),
+                height: view.getUint32(offset + 12, true)
+            };
+            offset += 16;
+        }
+        
+        // Read frame_id (u64) - comes last in the struct
+        const frameId = Number(view.getBigUint64(offset, true));
+        offset += 8;
+        
+        this.sendLog('debug', `Parsed batch: frameId=${frameId}, commands=${commandsLen}, viewport=${viewport ? 'yes' : 'no'}`);
+        
         return {
             frame_id: frameId,
-            commands: commands
+            commands: commands,
+            viewport: viewport
         };
     }
     

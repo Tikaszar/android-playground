@@ -553,12 +553,16 @@ impl UiSystem {
             }
         }
         
-        // Publish to the message bus instead of using NetworkingSystem
+        // Use NetworkingSystem to send the packet, which will publish to the shared MessageBus
         // The MessageBridge in core/server will forward this to WebSocket clients
-        self.world.read().await
-            .publish(self.channel_id, data)
-            .await
-            .map_err(|e| UiError::SerializationError(format!("Failed to publish: {:?}", e)))?;
+        if let Some(ref networking) = self.networking_system {
+            networking.read().await
+                .send_packet(self.channel_id, 104, data, Priority::High)
+                .await
+                .map_err(|e| UiError::SerializationError(format!("Failed to send packet: {}", e)))?;
+        } else {
+            return Err(UiError::NotInitialized);
+        }
         
         Ok(())
     }

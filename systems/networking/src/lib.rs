@@ -41,6 +41,8 @@ pub enum NetworkError {
     NotConnected,
     #[error("Channel not found: {0}")]
     ChannelNotFound(u16),
+    #[error("Send error: {0}")]
+    SendError(String),
 }
 
 pub type NetworkResult<T> = Result<T, NetworkError>;

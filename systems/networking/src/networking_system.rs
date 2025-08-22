@@ -20,6 +20,8 @@ pub struct NetworkingSystem {
     packet_queue: Arc<RwLock<PacketQueue>>,
     // Dashboard reference (only available after server starts)
     dashboard: Option<Arc<playground_core_server::Dashboard>>,
+    // MessageBus for internal system communication
+    message_bus: Option<Arc<playground_core_ecs::MessageBus>>,
 }
 
 impl NetworkingSystem {
@@ -32,6 +34,7 @@ impl NetworkingSystem {
             channel_manager: Arc::new(RwLock::new(ChannelManager::new())),
             packet_queue: Arc::new(RwLock::new(PacketQueue::new())),
             dashboard: None,
+            message_bus: None,
         })
     }
     
@@ -45,8 +48,9 @@ impl NetworkingSystem {
         // Start the core server internally 
         // Note: We no longer connect via WebSocket - systems use MessageBus
         match Self::start_core_server().await {
-            Ok(dashboard) => {
+            Ok((dashboard, message_bus)) => {
                 self.dashboard = Some(dashboard);
+                self.message_bus = Some(message_bus);
             }
             Err(e) => {
                 eprintln!("Core server startup failed: {}", e);
@@ -72,10 +76,7 @@ impl NetworkingSystem {
         let mut manager = self.channel_manager.write().await;
         manager.register_channel(channel_id, system_name.to_string()).await?;
         
-        // Register with the WebSocket server if connected
-        if let Some(ws) = &self.ws_client {
-            ws.register_channel(channel_id, system_name).await?;
-        }
+        // Note: Channel registration now happens via MessageBus, not WebSocket
         
         Ok(channel_id)
     }
@@ -85,10 +86,7 @@ impl NetworkingSystem {
         let mut manager = self.channel_manager.write().await;
         let channel_id = manager.register_plugin_channel(plugin_name).await?;
         
-        // Register with the WebSocket server
-        if let Some(ws) = &self.ws_client {
-            ws.register_channel(channel_id, plugin_name).await?;
-        }
+        // Note: Channel registration now happens via MessageBus, not WebSocket
         
         Ok(channel_id)
     }
@@ -159,10 +157,14 @@ impl NetworkingSystem {
         // Publish to the message bus instead of WebSocket
         // The MessageBridge in core/server will forward to WebSocket clients
         use bytes::Bytes;
-        self.world.read().await
-            .publish(channel, Bytes::from(data.clone()))
-            .await
-            .map_err(|e| NetworkError::SendError(format!("Failed to publish: {:?}", e)))?;
+        if let Some(ref message_bus) = self.message_bus {
+            message_bus
+                .publish(channel, Bytes::from(data.clone()))
+                .await
+                .map_err(|e| NetworkError::SendError(format!("Failed to publish: {:?}", e)))?;
+        } else {
+            return Err(NetworkError::NotConnected);
+        }
         
         // Also queue it locally for tracking (if still needed)
         let mut queue = self.packet_queue.write().await;
@@ -171,34 +173,14 @@ impl NetworkingSystem {
     
     /// Process incoming packets for a channel
     pub async fn receive_packets(&self, channel: ChannelId) -> NetworkResult<Vec<IncomingPacket>> {
-        let mut result = Vec::new();
+        // Note: With MessageBus, systems subscribe directly to channels
+        // This method is kept for backward compatibility but may not be needed
         
-        // Get packets from WebSocket
-        if let Some(ws) = &self.ws_client {
-            let packets = ws.receive_packets().await;
-            
-            // Filter for requested channel and convert to IncomingPacket
-            for packet in packets {
-                if packet.channel_id == channel {
-                    result.push(IncomingPacket {
-                        channel,
-                        packet_type: packet.packet_type,
-                        data: packet.payload.to_vec(),
-                        timestamp: std::time::SystemTime::now()
-                            .duration_since(std::time::UNIX_EPOCH)
-                            .unwrap()
-                            .as_millis() as u64,
-                    });
-                }
-            }
-        }
-        
-        // Also check local queue
+        // Check local queue for any queued packets
         let queue = self.packet_queue.read().await;
         let local_packets = queue.get_incoming(channel).await?;
-        result.extend(local_packets);
         
-        Ok(result)
+        Ok(local_packets)
     }
     
     /// Create a peer-to-peer connection entity
@@ -325,8 +307,8 @@ impl NetworkingSystem {
     }
     
     /// Start the core server internally (called by initialize)
-    /// This version starts the server and returns immediately with the dashboard reference
-    async fn start_core_server() -> Result<Arc<playground_core_server::Dashboard>, Box<dyn std::error::Error>> {
+    /// This version starts the server and returns immediately with the dashboard and message bus references
+    async fn start_core_server() -> Result<(Arc<playground_core_server::Dashboard>, Arc<playground_core_ecs::MessageBus>), Box<dyn std::error::Error>> {
         use playground_core_server::{
             Dashboard, McpServer, WebSocketState, websocket_handler,
             list_plugins, reload_plugin, root,
@@ -351,6 +333,22 @@ impl NetworkingSystem {
         
         // Create WebSocketState with the dashboard
         let ws_state = Arc::new(WebSocketState::new_with_dashboard(dashboard.clone()));
+        
+        // Create MessageBus and MessageBridge to connect internal systems to WebSocket
+        use playground_core_ecs::MessageBus;
+        use playground_core_server::MessageBridge;
+        
+        let message_bus = Arc::new(MessageBus::new());
+        let message_bridge = MessageBridge::new(message_bus.clone(), ws_state.clone());
+        
+        // Setup standard channel bridges (UI on channel 10, etc.)
+        message_bridge.setup_standard_bridges().await;
+        
+        dashboard.log(
+            LogLevel::Info,
+            "MessageBridge initialized - internal systems connected to WebSocket".to_string(),
+            None
+        ).await;
         
         // Create MCP server
         let mcp_server = McpServer::new();
@@ -401,6 +399,6 @@ impl NetworkingSystem {
         // Give server a moment to fully start
         tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
         
-        Ok(dashboard_clone)
+        Ok((dashboard_clone, message_bus))
     }
 }
