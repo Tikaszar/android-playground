@@ -347,15 +347,12 @@ impl UiInterface {
     
     /// Create a mobile Discord layout optimized for phones
     pub async fn create_mobile_discord_layout(&mut self) -> LogicResult<DiscordLayout> {
-        // Simple logging using tracing for now since we can't access dashboard easily here
-        tracing::info!("[UI-IF] create_mobile_discord_layout() called");
+        // UiInterface doesn't have dashboard access, logging happens in UiSystem
         
         let mut ui = self.ui_system.write().await;
-        tracing::info!("[UI-IF] Got write lock on UI system");
         
         // Get root element
         let root_option = ui.get_root_element();
-        tracing::info!("[UI-IF] get_root_element() returned: {:?}", root_option);
         
         let root = root_option
             .ok_or_else(|| {
@@ -366,25 +363,21 @@ impl UiInterface {
                     Make sure SystemsManager.initialize_all() was called before creating UI elements.",
                     initialized
                 );
-                tracing::error!("[UI-IF] ✗ {}", error_msg);
                 LogicError::SystemError(error_msg)
             })?;
         
-        tracing::info!("[UI-IF] ✓ Got root element: {:?}", root);
         
         // Mobile uses tabs or drawer for channel list, not side-by-side
         // Create main container with swipe navigation
-        tracing::info!("[UI-IF] Creating main container...");
+        // Create main container with swipe navigation
         let main_container = ui.create_element_with_id(
             "main-container".to_string(),
             "panel".to_string(),
             Some(root),
         ).await
             .map_err(|e| {
-                tracing::error!("[UI-IF] Failed to create main container: {}", e);
                 LogicError::SystemError(format!("Failed to create main container: {}", e))
             })?;
-        tracing::info!("[UI-IF] Main container created: {:?}", main_container);
         
         // Full screen container
         ui.set_element_bounds(main_container, ElementBounds::new(0.0, 0.0, 360.0, 800.0))
@@ -452,6 +445,9 @@ impl UiInterface {
             ..Default::default()
         };
         ui.set_element_style(main_content, main_style).await.ok();
+        
+        // About to return the layout
+        drop(ui); // Explicitly drop the lock before returning
         
         Ok(DiscordLayout {
             sidebar,

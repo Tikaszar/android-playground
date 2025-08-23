@@ -1,28 +1,35 @@
 # CONTEXT.md - Current Session Context
 
-## Active Session - 2025-08-22 (Session 11)
+## Active Session - 2025-08-23 (Session 12)
 
 ### Current Status
-**Debugging UI Framework Plugin initialization** - Plugin is running but Discord UI creation is failing silently
+**Critical Deadlock Issue in ECS World** - Multiple async lock deadlocks preventing UI creation
 
-### What Was Done This Session (2025-08-22 - Session 11)
-- **Added Dashboard Logging Support** ✅
-  - Added `SystemsManager::log()` method for plugins to use dashboard
-  - Updated UI Framework Plugin to use dashboard logging
-  - Added comprehensive logging throughout initialization
-  - Found that plugin IS running but failing at `create_mobile_discord_layout()`
+### What Was Done This Session (2025-08-23 - Session 12)
+- **Dashboard Logging Implementation** ✅
+  - Replaced all `tracing::info!` calls with dashboard logging
+  - Added `log()` method to UiSystem that uses NetworkingSystem's dashboard
+  - Dashboard now properly captures all UI system operations
+  - Logs show exact hang location: `world.remove_component_raw()`
   
-- **Debugging UI Framework Plugin** 🔄
-  - Plugin initializes successfully 
-  - Channels 1200-1209 register correctly
-  - MCP tools register successfully
-  - Fails silently when calling `create_mobile_discord_layout()`
-  - Added tracing logs to identify exact failure point
+- **Identified Multiple Deadlock Issues** ❌
+  1. **First Deadlock**: `world.update_component()` called while holding world read lock
+     - Fixed by using manual remove/add operations
+  2. **Second Deadlock**: Holding write guard across async await points
+     - Attempted fix with scoped blocks - didn't work
+  3. **Root Cause**: Fundamental architecture issue with async locks in ECS
   
-- **Issue Identified** ⚠️
-  - The UI Framework Plugin hangs at `create_mobile_discord_layout()`
-  - Likely the root element is None or there's a deadlock
-  - Need to check terminal output for tracing logs to see exact failure
+- **Debugging Progress** 📊
+  - UI elements ARE created successfully (entities 1-5)
+  - Hang occurs when setting style on first element
+  - Specifically hangs in `remove_component_raw()` at line 373
+  - The method tries to acquire internal locks while we hold outer lock
+  
+- **Architecture Problems Found** ⚠️
+  - `Shared<World>` with internal `Shared<HashMap>` fields causes nested locking
+  - Async methods on World can't be called safely while holding World lock
+  - The ECS design with nested RwLocks is fundamentally problematic for async
+  - Need to redesign how components are updated without nested locks
   
 - **Implemented UiRenderer in systems/ui** ✅
   - UiSystem now implements core/ui::UiRenderer trait
@@ -213,9 +220,27 @@ Browser (app.js)
    - Show channel name in header
    - Animate drawer open/close
 
+### Next Steps Required (Session 13)
+1. **Fix ECS Deadlock Architecture** 🔴 CRITICAL
+   - Option A: Remove nested Shared<> in World struct
+   - Option B: Make component operations synchronous (non-async)
+   - Option C: Use message passing instead of direct lock access
+   - Option D: Redesign World to not need locks for component access
+   
+2. **Specific Fix Needed**
+   - `world.remove_component_raw()` hangs trying to get `self.storages.read().await`
+   - This happens while we already have a write lock on World
+   - Even though they're separate locks, something is blocking
+   - Possibly related to how async executors handle nested locks
+   
+3. **Temporary Workaround**
+   - Skip style updates for now to unblock UI creation
+   - Or pre-create all styles in components at creation time
+   - Focus on getting basic UI working first
+
 ### Build Command
 ```bash
-cargo run -p playground-apps-editor  # Currently builds successfully
+cargo run -p playground-apps-editor  # Builds but hangs at runtime
 ```
 
 ### Key Architecture Points
@@ -223,3 +248,4 @@ cargo run -p playground-apps-editor  # Currently builds successfully
 - Browser is pure view, server has all logic
 - Render commands sent via WebSocket channel 10
 - 60fps frame batching for efficiency
+- **PROBLEM**: Nested async RwLocks in ECS causing deadlocks

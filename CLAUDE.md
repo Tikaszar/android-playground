@@ -165,3 +165,4 @@ http://localhost:8080/mcp
 - Server-side authority (browser is pure view)
 - Conversational IDE is primary interface
 - Only the User csn execute cargo run. Always include usage instructions
+- ask the User to cargo run, never cargo run as an AI Agent

@@ -92,27 +92,41 @@ impl UiSystem {
     }
     
     pub async fn initialize(&mut self) -> UiResult<()> {
+        self.log("Info", format!("[UiSystem] initialize() called, initialized={}", self.initialized)).await;
+        
         if self.initialized {
             return Err(UiError::AlreadyInitialized);
         }
         
         // Register all component types
+        self.log("Info", "[UiSystem] Registering components...".to_string()).await;
         self.register_components().await?;
+        self.log("Info", "[UiSystem] Components registered".to_string()).await;
         
         // Load default themes
+        self.log("Info", "[UiSystem] Loading default themes...".to_string()).await;
         let mut theme_mgr = self.theme_manager.write().await;
         theme_mgr.load_default_themes()?;
         drop(theme_mgr);
+        self.log("Info", "[UiSystem] Themes loaded".to_string()).await;
         
         // Create root element
-        self.root_entity = Some(self.create_root().await?);
+        self.log("Info", "[UiSystem] Creating root element...".to_string()).await;
+        let root_entity = self.create_root().await?;
+        self.log("Info", format!("[UiSystem] Root element created: {:?}", root_entity)).await;
+        self.root_entity = Some(root_entity);
+        self.log("Info", format!("[UiSystem] root_entity set to: {:?}", self.root_entity)).await;
         
         // Initialize mobile features if on mobile
+        self.log("Info", "[UiSystem] Initializing mobile features...".to_string()).await;
         let mut mobile = self.mobile_features.write().await;
         mobile.initialize().await?;
         drop(mobile);
+        self.log("Info", "[UiSystem] Mobile features initialized".to_string()).await;
         
         self.initialized = true;
+        self.log("Info", format!("[UiSystem] Initialization complete, initialized={}, root_entity={:?}", 
+                     self.initialized, self.root_entity)).await;
         Ok(())
     }
     
@@ -147,7 +161,9 @@ impl UiSystem {
         element_type: &str,
         parent: Option<EntityId>,
     ) -> UiResult<EntityId> {
+        self.log("Info", format!("[UiSystem] create_element called: type={}, parent={:?}", element_type, parent)).await;
         let mut world = self.world.write().await;
+        self.log("Info", "[UiSystem] Got world write lock".to_string()).await;
         
         // Create an empty entity first (avoiding trait object issues)
         let entities = world.spawn_batch(vec![vec![]]).await
@@ -191,16 +207,22 @@ impl UiSystem {
         }
         
         drop(world);
+        self.log("Info", format!("[UiSystem] World lock dropped, entity created: {:?}", entity)).await;
         
         // Add to element graph
         if let Some(parent) = parent {
+            self.log("Info", format!("[UiSystem] Adding entity {:?} as child of {:?}", entity, parent)).await;
             let mut graph = self.element_graph.write().await;
             graph.add_child(parent, entity)?;
+            drop(graph);
+            self.log("Info", "[UiSystem] Added to element graph".to_string()).await;
         }
         
         // Mark as dirty for layout
+        self.log("Info", format!("[UiSystem] Marking entity {:?} as dirty", entity)).await;
         self.dirty_elements.write().await.push(entity);
         
+        self.log("Info", format!("[UiSystem] create_element complete, returning entity: {:?}", entity)).await;
         Ok(entity)
     }
     
@@ -283,6 +305,7 @@ impl UiSystem {
     // Public API methods for plugins
     
     pub fn get_root_element(&self) -> Option<ElementId> {
+        // Log is async but this method is not, so we can't log here
         self.root_entity
     }
     
@@ -291,6 +314,8 @@ impl UiSystem {
     }
     
     pub async fn set_element_style(&mut self, element: ElementId, style: crate::types::ElementStyle) -> UiResult<()> {
+        self.log("Info", format!("[UiSystem] set_element_style called for element: {:?}", element)).await;
+        
         // Convert public ElementStyle to internal UiStyleComponent
         let ui_style = UiStyleComponent {
             background_color: Some(nalgebra::Vector4::new(
@@ -334,16 +359,38 @@ impl UiSystem {
             custom_styles: std::collections::HashMap::new(),
         };
         
-        // Update component in world using the update_component pattern
-        let world = self.world.read().await;
-        world.update_component(element, |_style: &mut UiStyleComponent| {
-            *_style = ui_style;
-        }).await.map_err(|e| UiError::EcsError(e.to_string()))?;
-        drop(world);
+        // Update component in world
+        // We need to use the World directly without holding a guard across await points
+        self.log("Info", "[UiSystem] Updating style component...".to_string()).await;
+        
+        // Clone the Arc to avoid holding any guards
+        let world_ref = self.world.clone();
+        
+        // Now work with the World through the Arc, not through a guard
+        // First remove the old component
+        {
+            let world = world_ref.write().await;
+            let _ = world.remove_component_raw(element, UiStyleComponent::component_id()).await;
+        }
+        
+        // Then add the new component
+        {
+            let world = world_ref.write().await;
+            world.add_component_raw(
+                element,
+                Box::new(ui_style),
+                UiStyleComponent::component_id()
+            ).await.map_err(|e| UiError::EcsError(e.to_string()))?;
+        }
+        
+        self.log("Info", "[UiSystem] Style component updated".to_string()).await;
+        
+        self.log("Info", format!("[UiSystem] Style component updated for element: {:?}", element)).await;
         
         // Mark as dirty for re-render
         self.dirty_elements.write().await.push(element);
         
+        self.log("Info", format!("[UiSystem] set_element_style complete for element: {:?}", element)).await;
         Ok(())
     }
     
@@ -371,10 +418,19 @@ impl UiSystem {
             max_size: crate::components::Size { width: None, height: None },
         };
         
-        let world = self.world.read().await;
-        world.update_component(element, |_layout: &mut UiLayoutComponent| {
-            *_layout = layout;
-        }).await.map_err(|e| UiError::EcsError(e.to_string()))?;
+        // Use write lock and manual remove/add to avoid deadlock
+        let world = self.world.write().await;
+        
+        // Remove old layout component if it exists
+        let _ = world.remove_component_raw(element, UiLayoutComponent::component_id()).await;
+        
+        // Add the new layout component
+        world.add_component_raw(
+            element,
+            Box::new(layout),
+            UiLayoutComponent::component_id()
+        ).await.map_err(|e| UiError::EcsError(e.to_string()))?;
+        
         drop(world);
         
         // Mark as dirty
@@ -398,15 +454,38 @@ impl UiSystem {
         element_type: String,
         parent: Option<ElementId>,
     ) -> UiResult<ElementId> {
+        self.log("Info", format!("[UiSystem] create_element_with_id called: id={}, type={}, parent={:?}", 
+                     id, element_type, parent)).await;
+        
         let entity = self.create_element(&element_type, parent).await?;
+        self.log("Info", format!("[UiSystem] Element created with entity: {:?}", entity)).await;
         
         // Update element component with the id
+        self.log("Info", "[UiSystem] Getting world read lock to update component...".to_string()).await;
         let world = self.world.read().await;
-        world.update_component(entity, |elem: &mut UiElementComponent| {
-            elem.id = id;
-        }).await.map_err(|e| UiError::EcsError(e.to_string()))?;
+        self.log("Info", "[UiSystem] Got world read lock, updating component...".to_string()).await;
+        
+        // Get the current element component
+        let elem_box = world.get_component_raw(entity, UiElementComponent::component_id()).await
+            .map_err(|e| UiError::EcsError(e.to_string()))?;
+        
+        // Deserialize, update, and re-serialize
+        let bytes = elem_box.serialize().await.map_err(|e| UiError::EcsError(e.to_string()))?;
+        let mut elem = UiElementComponent::deserialize(&bytes).await
+            .map_err(|e| UiError::EcsError(e.to_string()))?;
+        elem.id = id.clone();
+        
+        // Remove old and add new
+        let _ = world.remove_component_raw(entity, UiElementComponent::component_id()).await;
+        world.add_component_raw(
+            entity,
+            Box::new(elem),
+            UiElementComponent::component_id()
+        ).await.map_err(|e| UiError::EcsError(e.to_string()))?;
+        
         drop(world);
         
+        self.log("Info", format!("[UiSystem] Component updated with id={}", id)).await;
         Ok(entity)
     }
     
@@ -682,6 +761,23 @@ impl UiSystem {
     
     pub fn set_networking_system(&mut self, networking: Shared<NetworkingSystem>) {
         self.networking_system = Some(networking);
+    }
+    
+    /// Log a message to the dashboard via NetworkingSystem
+    async fn log(&self, level: &str, message: String) {
+        if let Some(ref networking) = self.networking_system {
+            if let Some(dashboard) = networking.read().await.get_dashboard().await {
+                use playground_core_server::dashboard::LogLevel;
+                let log_level = match level {
+                    "error" | "Error" => LogLevel::Error,
+                    "warn" | "Warning" => LogLevel::Warning,
+                    "info" | "Info" => LogLevel::Info,
+                    "debug" | "Debug" => LogLevel::Debug,
+                    _ => LogLevel::Info,
+                };
+                dashboard.log(log_level, message, None).await;
+            }
+        }
     }
     
     /// Send renderer initialization message to a new client
