@@ -2,6 +2,30 @@
 
 This file tracks the detailed history of development sessions, including achievements, bug fixes, and implementation progress.
 
+## Session: 2025-08-23 - Partial Deadlock Resolution (Session 14)
+
+### What Was Accomplished
+1. **Fixed Multiple Lock-Holding Issues**
+   - Changed World storages from Box<dyn ComponentStorage> to Arc<dyn ComponentStorage>
+   - Refactored 10+ World methods to clone Arc references instead of holding locks
+   - Fixed get_dirty_entities, clear_dirty, spawn_batch, despawn_immediate
+   - Updated Query trait to work with Arc instead of Box
+
+2. **Fixed Log Method Deadlocks**
+   - UiSystem::log was holding networking lock while calling dashboard.log
+   - Refactored to get dashboard reference, drop lock, then log
+   - Applied same pattern to initialize_client_renderer
+
+3. **Improved Debugging**
+   - Added detailed logging to track component operations
+   - Discovered elements have default style components on creation
+   - Identified hang occurs in storage.remove() for existing components
+
+### Remaining Issue
+- storage.remove() hangs when removing existing style component
+- System no longer completely deadlocks - other operations continue
+- Need to investigate SparseStorage::remove implementation
+
 ## Session: 2025-08-23 - ECS Deadlock Fix (Session 13)
 
 ### What Was Accomplished

@@ -234,6 +234,45 @@ pub struct UiSystem {
 
 **Key Principle**: If a struct has internal Shared<> fields, don't wrap it in another Shared<>
 
+### Avoiding Lock-Holding Across Await Points
+**Decision**: Never hold RwLock guards across await points
+
+**Why**:
+- Holding locks across await points causes deadlocks
+- Async executors can switch tasks at await points
+- Other tasks may need the same locks
+
+**Pattern**:
+```rust
+// WRONG
+let guard = shared_data.read().await;
+let result = guard.some_async_method().await; // Holds lock across await
+
+// CORRECT
+let data = {
+    let guard = shared_data.read().await;
+    guard.clone() // or extract needed data
+}; // Lock released here
+let result = data.some_async_method().await;
+```
+
+### Storage References Use Arc
+**Decision**: ComponentStorage uses Arc<dyn ComponentStorage> not Box
+
+**Why**:
+- Need to clone storage references to avoid holding locks
+- Box<dyn Trait> cannot be cloned
+- Arc allows shared ownership without locks
+
+**Implementation Change**:
+```rust
+// OLD
+storages: Shared<HashMap<ComponentId, Box<dyn ComponentStorage>>>
+
+// NEW
+storages: Shared<HashMap<ComponentId, Arc<dyn ComponentStorage>>>
+```
+
 ### Shared<T> Pattern for Concurrency
 **Decision**: Use Shared<T> type alias for ALL concurrent access
 

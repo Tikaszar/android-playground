@@ -356,13 +356,25 @@ impl UiSystem {
         self.log("Info", "[UiSystem] Updating style component...".to_string()).await;
         
         // World is Arc<World> now, we can call methods directly
-        let _ = self.world.remove_component_raw(element, UiStyleComponent::component_id()).await;
+        let component_id = UiStyleComponent::component_id();
+        
+        // Check if component exists first
+        let has_component = self.world.has_component(element, component_id).await;
+        self.log("Info", format!("[UiSystem] Entity has style component: {}", has_component)).await;
+        
+        if has_component {
+            // Remove the old component
+            self.log("Info", format!("[UiSystem] Removing existing component for entity {:?}", element)).await;
+            let _ = self.world.remove_component_raw(element, component_id).await;
+            self.log("Info", "[UiSystem] Existing component removed".to_string()).await;
+        }
         
         // Add the new component
+        self.log("Info", format!("[UiSystem] Adding new component for entity {:?}", element)).await;
         self.world.add_component_raw(
             element,
             Box::new(ui_style),
-            UiStyleComponent::component_id()
+            component_id
         ).await.map_err(|e| UiError::EcsError(e.to_string()))?;
         
         self.log("Info", "[UiSystem] Style component updated".to_string()).await;
@@ -736,7 +748,13 @@ impl UiSystem {
     /// Log a message to the dashboard via NetworkingSystem
     async fn log(&self, level: &str, message: String) {
         if let Some(ref networking) = self.networking_system {
-            if let Some(dashboard) = networking.read().await.get_dashboard().await {
+            // Get dashboard reference without holding lock across await
+            let dashboard = {
+                let networking_guard = networking.read().await;
+                networking_guard.get_dashboard().await
+            };
+            
+            if let Some(dashboard) = dashboard {
                 use playground_core_server::dashboard::LogLevel;
                 let log_level = match level {
                     "error" | "Error" => LogLevel::Error,
@@ -788,13 +806,21 @@ impl UiSystem {
         
         // Send via networking system
         if let Some(ref networking) = self.networking_system {
-            networking.read().await
+            // Get networking guard once
+            let networking_guard = networking.read().await;
+            
+            // Send packet
+            networking_guard
                 .send_packet(self.channel_id, UiPacketType::RendererInit as u16, data, Priority::High)
                 .await
                 .map_err(|e| UiError::SerializationError(format!("Failed to send init packet: {}", e)))?;
-                
+            
+            // Get dashboard without holding networking lock
+            let dashboard = networking_guard.get_dashboard().await;
+            drop(networking_guard); // Release the lock
+            
             // Log the initialization
-            if let Some(dashboard) = networking.read().await.get_dashboard().await {
+            if let Some(dashboard) = dashboard {
                 dashboard.log(
                     playground_core_server::dashboard::LogLevel::Info,
                     format!("Initialized renderer for client {}", client_id),

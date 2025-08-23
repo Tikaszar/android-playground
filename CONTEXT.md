@@ -1,17 +1,27 @@
 # CONTEXT.md - Current Session Context
 
-## Active Session - 2025-08-23 (Session 13)
+## Active Session - 2025-08-23 (Session 14)
 
 ### Current Status
-**ECS Deadlock Fixed** ✅ - Changed UiSystem to use `Arc<World>` instead of `Shared<World>`
+**Partial Deadlock Fix** 🟡 - System no longer completely hangs, but UI creation still blocked
 
-### What Was Done This Session (2025-08-23 - Session 13)
-- **Fixed Critical ECS Deadlock Issue** ✅
-  - Root cause: UiSystem had `world: Shared<World>` (Arc<RwLock<World>>)
-  - World internally already had Shared<> fields, causing nested locking
-  - Solution: Changed to `world: Arc<World>` since World handles its own locking
-  - Updated all UI system files to work with Arc<World> directly
-  - No more holding locks across await points
+### What Was Done This Session (2025-08-23 - Session 14)
+- **Fixed Nested Lock Issues in core/ecs** ✅
+  - Changed storages from `Box<dyn ComponentStorage>` to `Arc<dyn ComponentStorage>`
+  - Refactored all World methods to not hold locks across await points
+  - Fixed `remove_component_raw`, `add_component_raw`, `get_component_raw` to clone Arc refs
+  - Updated Query trait to use Arc instead of Box
+  
+- **Fixed Log Method Deadlocks** ✅
+  - UiSystem log method was holding locks on networking/dashboard
+  - Refactored to release locks before await calls
+  - Applied same fix to `initialize_client_renderer`
+  
+- **Discovered Root Issue** 🔴
+  - Elements are created with default UiStyleComponent (line 189 in create_element)
+  - When setting style, it tries to remove existing component
+  - The remove operation hangs even though component exists
+  - Issue appears to be in storage.remove() implementation
   
 - **Systematic Code Updates** ✅
   - Modified UiSystem struct to use `Arc<World>` instead of `Shared<World>`

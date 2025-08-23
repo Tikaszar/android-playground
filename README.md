@@ -186,12 +186,13 @@ This is an experimental project between AI agents and developers. Each session b
 
 ## 🎮 Roadmap
 
-### Current Focus (2025-08-22)
+### Current Focus (2025-08-23)
 - ✅ WebGL2 renderer fully working - Clear and DrawQuad commands render!
 - ✅ Server-controlled renderer initialization implemented
 - ✅ Resource caching with LRU eviction (100MB limit)
 - ✅ Clean shutdown protocol with proper resource disposal
-- 🔄 Implementing Discord-style UI layout with actual elements
+- 🟡 Fixing ECS deadlock issues - partial progress
+- 🔴 Discord UI creation blocked by component removal hang
 - ⏳ Text rendering implementation (DrawText command)
 
 ### Next Up
