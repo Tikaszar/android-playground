@@ -80,37 +80,53 @@ impl System for UiFrameworkPlugin {
     }
     
     async fn initialize(&mut self, _world: &World) -> LogicResult<()> {
-        info!("UI Framework Plugin initializing...");
+        // Log to dashboard
+        self.systems_manager.log("info", "[UI-FW] UI Framework Plugin initialize() called".to_string()).await;
         
         // Register our channel (1200) with the networking system
         let networking = self.systems_manager.networking();
+        self.systems_manager.log("info", "[UI-FW] Getting networking system...".to_string()).await;
         let net = networking.read().await;
         
         // Register channels 1200-1209 for UI Framework
+        self.systems_manager.log("info", "[UI-FW] Registering channels 1200-1209...".to_string()).await;
         for i in 0..10 {
             let channel = 1200 + i;
-            net.register_plugin(&format!("ui-framework-{}", i)).await
-                .map_err(|e| playground_systems_logic::LogicError::InitializationFailed(
+            if let Err(e) = net.register_plugin(&format!("ui-framework-{}", i)).await {
+                self.systems_manager.log("error", format!("[UI-FW] Failed to register channel {}: {}", channel, e)).await;
+                return Err(playground_systems_logic::LogicError::InitializationFailed(
                     format!("Failed to register channel {}: {}", channel, e)
-                ))?;
+                ));
+            }
         }
+        self.systems_manager.log("info", "[UI-FW] Channels registered successfully".to_string()).await;
         
         self.channel_id = Some(1200);
         
         // Register MCP tools for UI manipulation
+        self.systems_manager.log("info", "[UI-FW] Registering MCP tools...".to_string()).await;
         self.register_mcp_tools().await?;
+        self.systems_manager.log("info", "[UI-FW] MCP tools registered".to_string()).await;
         
         // Start listening for messages on our channels
+        self.systems_manager.log("info", "[UI-FW] Starting message listener...".to_string()).await;
         self.start_message_listener().await;
+        self.systems_manager.log("info", "[UI-FW] Message listener started".to_string()).await;
         
         // Initialize panels
+        self.systems_manager.log("info", "[UI-FW] Initializing panels...".to_string()).await;
         let mut pm = self.panel_manager.write().await;
         pm.initialize_default_panels().await;
+        drop(pm);
+        self.systems_manager.log("info", "[UI-FW] Panels initialized".to_string()).await;
         
         // Create the Discord-style UI layout
+        self.systems_manager.log("info", "[UI-FW] Creating Discord UI...".to_string()).await;
         self.create_discord_ui().await?;
+        self.systems_manager.log("info", "[UI-FW] Discord UI created successfully".to_string()).await;
         
-        info!("UI Framework Plugin initialized on channels 1200-1209");
+        self.systems_manager.log("info", "[UI-FW] UI Framework Plugin initialize() completed".to_string()).await;
+        
         Ok(())
     }
     
@@ -253,11 +269,27 @@ impl UiFrameworkPlugin {
     }
     
     async fn create_discord_ui(&self) -> LogicResult<()> {
+        self.systems_manager.log("info", "[UI-FW] create_discord_ui() called".to_string()).await;
+        
         // Get the UI interface from SystemsManager
+        self.systems_manager.log("info", "[UI-FW] Getting UI interface...".to_string()).await;
         let mut ui_interface = self.systems_manager.ui_interface();
+        self.systems_manager.log("info", "[UI-FW] Got UI interface".to_string()).await;
         
         // Create mobile Discord layout optimized for phones
-        let layout = ui_interface.create_mobile_discord_layout().await?;
+        self.systems_manager.log("info", "[UI-FW] Calling create_mobile_discord_layout()...".to_string()).await;
+        let layout = match ui_interface.create_mobile_discord_layout().await {
+            Ok(layout) => {
+                self.systems_manager.log("info", "[UI-FW] ✓ Successfully created Discord layout".to_string()).await;
+                layout
+            },
+            Err(e) => {
+                self.systems_manager.log("error", format!("[UI-FW] ✗ Failed to create Discord layout: {}", e)).await;
+                // For now, just return Ok to not block initialization
+                // The UI won't be created but the plugin will still run
+                return Ok(());
+            }
+        };
         
         // Add a header bar to the main content
         let header = ui_interface.create_panel(

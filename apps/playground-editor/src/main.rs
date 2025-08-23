@@ -15,21 +15,41 @@ async fn main() -> Result<()> {
     
     // Create SystemsManager
     let systems = Arc::new(SystemsManager::new(world.clone()).await?);
+    eprintln!("[MAIN] SystemsManager created");
     systems.initialize_all().await?;
+    eprintln!("[MAIN] SystemsManager.initialize_all() completed");
+    
+    // Check if UI system has root element
+    {
+        let ui = systems.ui();
+        let ui_read = ui.read().await;
+        let has_root = ui_read.get_root_element().is_some();
+        eprintln!("[MAIN] UI System has root element: {}", has_root);
+        eprintln!("[MAIN] UI System initialized: {}", ui_read.is_initialized());
+    }
     
     // Load and register the UI Framework Plugin as a System
     use playground_plugins_ui_framework::UiFrameworkPlugin;
     
+    eprintln!("[MAIN] Creating UI Framework Plugin...");
     let mut ui_plugin = UiFrameworkPlugin::new(systems.clone());
+    eprintln!("[MAIN] UI Framework Plugin created");
     
     // Initialize the plugin
-    ui_plugin.initialize(&*world.read().await).await?;
+    eprintln!("[MAIN] Calling ui_plugin.initialize()...");
+    match ui_plugin.initialize(&*world.read().await).await {
+        Ok(_) => eprintln!("[MAIN] ✓ UI Framework Plugin initialized successfully"),
+        Err(e) => {
+            eprintln!("[MAIN] ✗ Failed to initialize UI Framework Plugin: {}", e);
+            return Err(e.into());
+        }
+    }
+    eprintln!("[MAIN] After ui_plugin.initialize()");
     
     // Register the plugin as a System in the World
     world.write().await.register_plugin_system(Box::new(ui_plugin)).await?;
     
-    // Start the render loop for UI system
-    systems.start_render_loop().await?;
+    // Note: render loop already started in systems.initialize_all()
     
     // Start the main update loop that runs all Systems
     let world_for_update = world.clone();

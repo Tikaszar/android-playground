@@ -286,6 +286,10 @@ impl UiSystem {
         self.root_entity
     }
     
+    pub fn is_initialized(&self) -> bool {
+        self.initialized
+    }
+    
     pub async fn set_element_style(&mut self, element: ElementId, style: crate::types::ElementStyle) -> UiResult<()> {
         // Convert public ElementStyle to internal UiStyleComponent
         let ui_style = UiStyleComponent {

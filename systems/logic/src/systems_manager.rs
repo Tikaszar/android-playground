@@ -178,6 +178,21 @@ impl SystemsManager {
         self.world.clone()
     }
     
+    /// Log a message to the dashboard
+    pub async fn log(&self, level: &str, message: String) {
+        if let Some(dashboard) = self.networking.read().await.get_dashboard().await {
+            use playground_core_server::dashboard::LogLevel;
+            let log_level = match level {
+                "error" | "Error" => LogLevel::Error,
+                "warn" | "Warning" => LogLevel::Warning,
+                "info" | "Info" => LogLevel::Info,
+                "debug" | "Debug" => LogLevel::Debug,
+                _ => LogLevel::Info,
+            };
+            dashboard.log(log_level, message, None).await;
+        }
+    }
+    
     /// Start the render loop at 60fps
     pub async fn start_render_loop(&self) -> LogicResult<()> {
         use std::time::{Duration, Instant};

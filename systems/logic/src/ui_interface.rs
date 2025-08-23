@@ -9,6 +9,7 @@ use playground_systems_ui::{
     DiscordLayout, FontWeight, TextAlign
 };
 use async_trait::async_trait;
+use std::sync::Arc;
 
 /// High-level interface for plugins to interact with the UI system
 /// This provides a clean API without exposing internal ECS details
@@ -16,6 +17,7 @@ pub struct UiInterface {
     ui_system: Shared<UiSystem>,
     // Track mapping between core ElementIds and internal ElementIds
     element_mapping: Shared<std::collections::HashMap<CoreElementId, ElementId>>,
+    systems_manager: Option<Arc<crate::SystemsManager>>,
 }
 
 impl UiInterface {
@@ -23,6 +25,15 @@ impl UiInterface {
         Self { 
             ui_system,
             element_mapping: shared(std::collections::HashMap::new()),
+            systems_manager: None,
+        }
+    }
+    
+    pub fn with_systems_manager(ui_system: Shared<UiSystem>, systems_manager: Arc<crate::SystemsManager>) -> Self {
+        Self { 
+            ui_system,
+            element_mapping: shared(std::collections::HashMap::new()),
+            systems_manager: Some(systems_manager),
         }
     }
     
@@ -336,20 +347,44 @@ impl UiInterface {
     
     /// Create a mobile Discord layout optimized for phones
     pub async fn create_mobile_discord_layout(&mut self) -> LogicResult<DiscordLayout> {
+        // Simple logging using tracing for now since we can't access dashboard easily here
+        tracing::info!("[UI-IF] create_mobile_discord_layout() called");
+        
         let mut ui = self.ui_system.write().await;
+        tracing::info!("[UI-IF] Got write lock on UI system");
         
         // Get root element
-        let root = ui.get_root_element()
-            .ok_or_else(|| LogicError::SystemError("No root element".to_string()))?;
+        let root_option = ui.get_root_element();
+        tracing::info!("[UI-IF] get_root_element() returned: {:?}", root_option);
+        
+        let root = root_option
+            .ok_or_else(|| {
+                // Log more information about the state
+                let initialized = ui.is_initialized();
+                let error_msg = format!(
+                    "No root element found. UI System initialized: {}. \
+                    Make sure SystemsManager.initialize_all() was called before creating UI elements.",
+                    initialized
+                );
+                tracing::error!("[UI-IF] ✗ {}", error_msg);
+                LogicError::SystemError(error_msg)
+            })?;
+        
+        tracing::info!("[UI-IF] ✓ Got root element: {:?}", root);
         
         // Mobile uses tabs or drawer for channel list, not side-by-side
         // Create main container with swipe navigation
+        tracing::info!("[UI-IF] Creating main container...");
         let main_container = ui.create_element_with_id(
             "main-container".to_string(),
             "panel".to_string(),
             Some(root),
         ).await
-            .map_err(|e| LogicError::SystemError(format!("Failed to create main container: {}", e)))?;
+            .map_err(|e| {
+                tracing::error!("[UI-IF] Failed to create main container: {}", e);
+                LogicError::SystemError(format!("Failed to create main container: {}", e))
+            })?;
+        tracing::info!("[UI-IF] Main container created: {:?}", main_container);
         
         // Full screen container
         ui.set_element_bounds(main_container, ElementBounds::new(0.0, 0.0, 360.0, 800.0))
