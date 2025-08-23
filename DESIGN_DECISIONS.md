@@ -210,6 +210,30 @@ This file documents key architectural decisions, why they were made, and how the
 
 ## Threading Model
 
+### World Architecture - Arc<World> not Shared<World>
+**Decision**: UiSystem and other systems use `Arc<World>` not `Shared<World>`
+
+**Why**:
+- World already has internal Shared<> fields for its components
+- Adding Shared<World> creates nested RwLock situation
+- Nested locks cause deadlocks in async code
+- World's methods handle their own internal locking
+
+**Implementation**:
+```rust
+// WRONG - causes deadlock
+pub struct UiSystem {
+    world: Shared<World>,  // Arc<RwLock<World>>
+}
+
+// CORRECT
+pub struct UiSystem {
+    world: Arc<World>,  // World handles its own locking
+}
+```
+
+**Key Principle**: If a struct has internal Shared<> fields, don't wrap it in another Shared<>
+
 ### Shared<T> Pattern for Concurrency
 **Decision**: Use Shared<T> type alias for ALL concurrent access
 

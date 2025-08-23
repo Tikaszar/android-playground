@@ -1,11 +1,27 @@
 # CONTEXT.md - Current Session Context
 
-## Active Session - 2025-08-23 (Session 12)
+## Active Session - 2025-08-23 (Session 13)
 
 ### Current Status
-**Critical Deadlock Issue in ECS World** - Multiple async lock deadlocks preventing UI creation
+**ECS Deadlock Fixed** ✅ - Changed UiSystem to use `Arc<World>` instead of `Shared<World>`
 
-### What Was Done This Session (2025-08-23 - Session 12)
+### What Was Done This Session (2025-08-23 - Session 13)
+- **Fixed Critical ECS Deadlock Issue** ✅
+  - Root cause: UiSystem had `world: Shared<World>` (Arc<RwLock<World>>)
+  - World internally already had Shared<> fields, causing nested locking
+  - Solution: Changed to `world: Arc<World>` since World handles its own locking
+  - Updated all UI system files to work with Arc<World> directly
+  - No more holding locks across await points
+  
+- **Systematic Code Updates** ✅
+  - Modified UiSystem struct to use `Arc<World>` instead of `Shared<World>`
+  - Updated all methods in system.rs to call World methods directly
+  - Fixed InputManager to accept `&Arc<World>` instead of `&Shared<World>`
+  - Updated LayoutEngine and all layout modules (flexbox, absolute, docking)
+  - Removed all `.read().await` and `.write().await` calls on World
+  - World's methods handle their own internal locking via Shared<> fields
+
+### Previous Session (2025-08-23 - Session 12)
 - **Dashboard Logging Implementation** ✅
   - Replaced all `tracing::info!` calls with dashboard logging
   - Added `log()` method to UiSystem that uses NetworkingSystem's dashboard

@@ -1,6 +1,7 @@
 use playground_core_rendering::{RenderCommand, RenderCommandBatch, Viewport};
 use playground_core_ecs::{World, EntityId, ComponentRegistry, Component};
 use playground_core_types::{Shared, shared};
+use std::sync::Arc;
 use playground_core_server::{ChannelManager, Packet, Priority};
 use playground_systems_networking::NetworkingSystem;
 use playground_core_ui::{
@@ -24,7 +25,7 @@ use async_trait::async_trait;
 
 pub struct UiSystem {
     // Core ECS
-    world: Shared<World>,
+    world: Arc<World>,
     registry: Shared<ComponentRegistry>,
     
     // Element management
@@ -66,7 +67,7 @@ pub struct UiSystem {
 impl UiSystem {
     pub fn new() -> Self {
         let registry = shared(ComponentRegistry::new());
-        let world = shared(World::with_registry(registry.clone()));
+        let world = Arc::new(World::with_registry(registry.clone()));
         
         Self {
             world,
@@ -162,36 +163,34 @@ impl UiSystem {
         parent: Option<EntityId>,
     ) -> UiResult<EntityId> {
         self.log("Info", format!("[UiSystem] create_element called: type={}, parent={:?}", element_type, parent)).await;
-        let mut world = self.world.write().await;
-        self.log("Info", "[UiSystem] Got world write lock".to_string()).await;
         
-        // Create an empty entity first (avoiding trait object issues)
-        let entities = world.spawn_batch(vec![vec![]]).await
+        // Now that world is Arc<World>, we can call methods directly without locking
+        let entities = self.world.spawn_batch(vec![vec![]]).await
             .map_err(|e| UiError::EcsError(e.to_string()))?;
         
         let entity = entities.into_iter().next()
             .ok_or_else(|| UiError::CreationFailed("Failed to create element".into()))?;
         
-        // Now add components individually using add_component_raw
-        world.add_component_raw(
+        // Add components directly - World handles its own internal locking
+        self.world.add_component_raw(
             entity,
             Box::new(UiElementComponent::new(element_type)),
             UiElementComponent::component_id()
         ).await.map_err(|e| UiError::EcsError(e.to_string()))?;
         
-        world.add_component_raw(
+        self.world.add_component_raw(
             entity,
             Box::new(UiLayoutComponent::default()),
             UiLayoutComponent::component_id()
         ).await.map_err(|e| UiError::EcsError(e.to_string()))?;
         
-        world.add_component_raw(
+        self.world.add_component_raw(
             entity,
             Box::new(UiStyleComponent::default()),
             UiStyleComponent::component_id()
         ).await.map_err(|e| UiError::EcsError(e.to_string()))?;
         
-        world.add_component_raw(
+        self.world.add_component_raw(
             entity,
             Box::new(UiInputComponent::default()),
             UiInputComponent::component_id()
@@ -199,15 +198,14 @@ impl UiSystem {
         
         // Add text component for text elements
         if element_type == "text" || element_type == "input" {
-            world.add_component_raw(
+            self.world.add_component_raw(
                 entity,
                 Box::new(UiTextComponent::new(String::new())),
                 UiTextComponent::component_id()
             ).await.map_err(|e| UiError::EcsError(e.to_string()))?;
         }
         
-        drop(world);
-        self.log("Info", format!("[UiSystem] World lock dropped, entity created: {:?}", entity)).await;
+        self.log("Info", format!("[UiSystem] Entity created: {:?}", entity)).await;
         
         // Add to element graph
         if let Some(parent) = parent {
@@ -232,38 +230,32 @@ impl UiSystem {
         graph.remove_element(element);
         drop(graph);
         
-        // Remove from world
-        self.world.write().await.despawn_batch(vec![element]).await
+        // Remove from world - World has Arc now and handles its own internal locking
+        self.world.despawn_batch(vec![element]).await
             .map_err(|e| UiError::EcsError(e.to_string()))?;
         
         Ok(())
     }
     
     pub async fn set_element_text(&mut self, element: EntityId, text: String) -> UiResult<()> {
-        // Get the current component
-        let world = self.world.read().await;
-        let current_component = world.get_component::<UiElementComponent>(element).await
+        // Get the current component - World is Arc now and handles its own internal locking
+        let current_component = self.world.get_component::<UiElementComponent>(element).await
             .map_err(|e| UiError::EcsError(e.to_string()))?;
         
         // Create updated component with new text
         let mut updated_component = current_component.clone();
         updated_component.text_content = Some(text);
         
-        drop(world);
-        
         // Remove old component and add updated one
-        let mut world = self.world.write().await;
-        world.remove_component_raw(element, UiElementComponent::component_id()).await
+        self.world.remove_component_raw(element, UiElementComponent::component_id()).await
             .map_err(|e| UiError::EcsError(e.to_string()))?;
         
-        world.add_component_raw(
+        self.world.add_component_raw(
             element,
             Box::new(updated_component),
             UiElementComponent::component_id()
         ).await
             .map_err(|e| UiError::EcsError(e.to_string()))?;
-        
-        drop(world);
         
         // Mark as dirty for re-render
         self.dirty_elements.write().await.push(element);
@@ -363,25 +355,15 @@ impl UiSystem {
         // We need to use the World directly without holding a guard across await points
         self.log("Info", "[UiSystem] Updating style component...".to_string()).await;
         
-        // Clone the Arc to avoid holding any guards
-        let world_ref = self.world.clone();
+        // World is Arc<World> now, we can call methods directly
+        let _ = self.world.remove_component_raw(element, UiStyleComponent::component_id()).await;
         
-        // Now work with the World through the Arc, not through a guard
-        // First remove the old component
-        {
-            let world = world_ref.write().await;
-            let _ = world.remove_component_raw(element, UiStyleComponent::component_id()).await;
-        }
-        
-        // Then add the new component
-        {
-            let world = world_ref.write().await;
-            world.add_component_raw(
-                element,
-                Box::new(ui_style),
-                UiStyleComponent::component_id()
-            ).await.map_err(|e| UiError::EcsError(e.to_string()))?;
-        }
+        // Add the new component
+        self.world.add_component_raw(
+            element,
+            Box::new(ui_style),
+            UiStyleComponent::component_id()
+        ).await.map_err(|e| UiError::EcsError(e.to_string()))?;
         
         self.log("Info", "[UiSystem] Style component updated".to_string()).await;
         
@@ -418,20 +400,16 @@ impl UiSystem {
             max_size: crate::components::Size { width: None, height: None },
         };
         
-        // Use write lock and manual remove/add to avoid deadlock
-        let world = self.world.write().await;
-        
+        // World handles its own locking - don't lock it here
         // Remove old layout component if it exists
-        let _ = world.remove_component_raw(element, UiLayoutComponent::component_id()).await;
+        let _ = self.world.remove_component_raw(element, UiLayoutComponent::component_id()).await;
         
         // Add the new layout component
-        world.add_component_raw(
+        self.world.add_component_raw(
             element,
             Box::new(layout),
             UiLayoutComponent::component_id()
         ).await.map_err(|e| UiError::EcsError(e.to_string()))?;
-        
-        drop(world);
         
         // Mark as dirty
         self.dirty_elements.write().await.push(element);
@@ -460,13 +438,11 @@ impl UiSystem {
         let entity = self.create_element(&element_type, parent).await?;
         self.log("Info", format!("[UiSystem] Element created with entity: {:?}", entity)).await;
         
-        // Update element component with the id
-        self.log("Info", "[UiSystem] Getting world read lock to update component...".to_string()).await;
-        let world = self.world.read().await;
-        self.log("Info", "[UiSystem] Got world read lock, updating component...".to_string()).await;
+        // Update element component with the id - World handles its own locking
+        self.log("Info", "[UiSystem] Updating component with id...".to_string()).await;
         
         // Get the current element component
-        let elem_box = world.get_component_raw(entity, UiElementComponent::component_id()).await
+        let elem_box = self.world.get_component_raw(entity, UiElementComponent::component_id()).await
             .map_err(|e| UiError::EcsError(e.to_string()))?;
         
         // Deserialize, update, and re-serialize
@@ -476,14 +452,12 @@ impl UiSystem {
         elem.id = id.clone();
         
         // Remove old and add new
-        let _ = world.remove_component_raw(entity, UiElementComponent::component_id()).await;
-        world.add_component_raw(
+        let _ = self.world.remove_component_raw(entity, UiElementComponent::component_id()).await;
+        self.world.add_component_raw(
             entity,
             Box::new(elem),
             UiElementComponent::component_id()
         ).await.map_err(|e| UiError::EcsError(e.to_string()))?;
-        
-        drop(world);
         
         self.log("Info", format!("[UiSystem] Component updated with id={}", id)).await;
         Ok(entity)
@@ -506,29 +480,28 @@ impl UiSystem {
         
         drop(registry);
         
-        // Also register storage in the world for each component
-        let world = self.world.read().await;
-        world.register_component_storage(
+        // Also register storage in the world for each component - World handles its own locking
+        self.world.register_component_storage(
             UiElementComponent::component_id(),
             playground_core_ecs::StorageType::Dense
         ).await.map_err(|e| UiError::EcsError(e.to_string()))?;
         
-        world.register_component_storage(
+        self.world.register_component_storage(
             UiLayoutComponent::component_id(),
             playground_core_ecs::StorageType::Dense
         ).await.map_err(|e| UiError::EcsError(e.to_string()))?;
         
-        world.register_component_storage(
+        self.world.register_component_storage(
             UiStyleComponent::component_id(),
             playground_core_ecs::StorageType::Dense
         ).await.map_err(|e| UiError::EcsError(e.to_string()))?;
         
-        world.register_component_storage(
+        self.world.register_component_storage(
             UiInputComponent::component_id(),
             playground_core_ecs::StorageType::Dense
         ).await.map_err(|e| UiError::EcsError(e.to_string()))?;
         
-        world.register_component_storage(
+        self.world.register_component_storage(
             UiTextComponent::component_id(),
             playground_core_ecs::StorageType::Sparse
         ).await.map_err(|e| UiError::EcsError(e.to_string()))?;
@@ -537,9 +510,8 @@ impl UiSystem {
     }
     
     async fn create_root(&self) -> UiResult<EntityId> {
-        // Create an empty entity first
-        let mut world = self.world.write().await;
-        let entities = world.spawn_batch(vec![vec![]]).await
+        // Create an empty entity first - World handles its own locking
+        let entities = self.world.spawn_batch(vec![vec![]]).await
             .map_err(|e| UiError::EcsError(e.to_string()))?;
         
         let entity = entities.into_iter().next()
@@ -548,7 +520,7 @@ impl UiSystem {
         // Now add components individually (avoiding trait object issues)
         let mut root_element = UiElementComponent::new("root");
         root_element.visible = true;
-        world.add_component_raw(
+        self.world.add_component_raw(
             entity, 
             Box::new(root_element),
             UiElementComponent::component_id()
@@ -562,7 +534,7 @@ impl UiSystem {
             height: self.screen_size[1],
         };
         root_layout.layout_type = LayoutType::Absolute;
-        world.add_component_raw(
+        self.world.add_component_raw(
             entity,
             Box::new(root_layout),
             UiLayoutComponent::component_id()
@@ -570,13 +542,13 @@ impl UiSystem {
         
         let mut root_style = UiStyleComponent::default();
         root_style.visible = true;
-        world.add_component_raw(
+        self.world.add_component_raw(
             entity,
             Box::new(root_style),
             UiStyleComponent::component_id()
         ).await.map_err(|e| UiError::EcsError(e.to_string()))?;
         
-        world.add_component_raw(
+        self.world.add_component_raw(
             entity,
             Box::new(UiInputComponent::default()),
             UiInputComponent::component_id()
@@ -612,14 +584,12 @@ impl UiSystem {
         batch: &mut RenderCommandBatch,
         theme: &Theme,
     ) -> UiResult<()> {
-        let world = self.world.read().await;
-        
-        // Get all components for this element
-        let element = world.get_component::<UiElementComponent>(entity).await
+        // Get all components for this element - World handles its own locking
+        let element = self.world.get_component::<UiElementComponent>(entity).await
             .map_err(|e| UiError::EcsError(e.to_string()))?;
-        let layout = world.get_component::<UiLayoutComponent>(entity).await
+        let layout = self.world.get_component::<UiLayoutComponent>(entity).await
             .map_err(|e| UiError::EcsError(e.to_string()))?;
-        let style = world.get_component::<UiStyleComponent>(entity).await
+        let style = self.world.get_component::<UiStyleComponent>(entity).await
             .map_err(|e| UiError::EcsError(e.to_string()))?;
         
         // Convert to render commands
@@ -984,9 +954,7 @@ impl UiRenderer for UiSystem {
         };
         
         // Convert parent ID if provided
-        let parent_entity = if let Some(parent_id) = parent {
-            // Find entity by matching UUID
-            let world = self.world.read().await;
+        let parent_entity = if let Some(_parent_id) = parent {
             // For now, we'll need to maintain a mapping between CoreElementId and EntityId
             // This is a simplification - in production you'd have a proper mapping
             None
@@ -1114,10 +1082,8 @@ impl UiRenderer for UiSystem {
         self.screen_size = [width, height];
         
         // Update root element bounds
-        if let Some(root) = self.root_entity {
-            let world = self.world.read().await;
-            // Update root layout bounds to match viewport
-            drop(world);
+        if let Some(_root) = self.root_entity {
+            // TODO: Update root layout bounds to match viewport
         }
         
         Ok(())

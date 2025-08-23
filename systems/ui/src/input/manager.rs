@@ -1,6 +1,7 @@
 use playground_core_ecs::{World, EntityId};
 use playground_core_types::Shared;
 use std::collections::HashMap;
+use std::sync::Arc;
 use crate::error::{UiError, UiResult};
 use crate::element::{ElementGraph, ElementId};
 use crate::components::{UiElementComponent, UiInputComponent, UiTextComponent};
@@ -29,7 +30,7 @@ impl InputManager {
         &mut self,
         event: InputEvent,
         graph: &Shared<ElementGraph>,
-        world: &Shared<World>,
+        world: &Arc<World>,
     ) -> UiResult<bool> {
         match event {
             InputEvent::MouseMove { x, y } => {
@@ -81,23 +82,21 @@ impl InputManager {
         x: f32,
         y: f32,
         graph: &Shared<ElementGraph>,
-        world: &Shared<World>,
+        world: &Arc<World>,
     ) -> UiResult<bool> {
         let hit = self.hit_test(x, y, graph, world).await?;
         
         if hit != self.hovered_element {
             // Clear old hover
             if let Some(old) = self.hovered_element {
-                let world_lock = world.write().await;
-                let _ = world_lock.update_component::<UiElementComponent>(old, |elem| {
+                let _ = world.update_component::<UiElementComponent>(old, |elem| {
                     elem.hovered = false;
                 }).await;
             }
             
             // Set new hover
             if let Some(new) = hit {
-                let world_lock = world.write().await;
-                let _ = world_lock.update_component::<UiElementComponent>(new, |elem| {
+                let _ = world.update_component::<UiElementComponent>(new, |elem| {
                     elem.hovered = true;
                 }).await;
             }
@@ -114,7 +113,7 @@ impl InputManager {
         x: f32,
         y: f32,
         graph: &Shared<ElementGraph>,
-        world: &Shared<World>,
+        world: &Arc<World>,
     ) -> UiResult<bool> {
         let hit = self.hit_test(x, y, graph, world).await?;
         
@@ -125,15 +124,13 @@ impl InputManager {
             if self.focused_element != Some(element) {
                 // Clear old focus
                 if let Some(old) = self.focused_element {
-                    let world_lock = world.write().await;
-                    let _ = world_lock.update_component::<UiElementComponent>(old, |elem| {
+                    let _ = world.update_component::<UiElementComponent>(old, |elem| {
                         elem.focused = false;
                     }).await;
                 }
                 
                 // Set new focus
-                let world_lock = world.write().await;
-                let _ = world_lock.update_component::<UiElementComponent>(element, |elem| {
+                let _ = world.update_component::<UiElementComponent>(element, |elem| {
                     elem.focused = true;
                 }).await;
                 
@@ -151,16 +148,15 @@ impl InputManager {
         x: f32,
         y: f32,
         graph: &Shared<ElementGraph>,
-        world: &Shared<World>,
+        world: &Arc<World>,
     ) -> UiResult<bool> {
         if let Some(pressed) = self.pressed_element {
             let hit = self.hit_test(x, y, graph, world).await?;
             
             // Click event if released on same element
             if hit == Some(pressed) {
-                // Handle click
-                let world_lock = world.read().await;
-                let input = world_lock.get_component::<UiInputComponent>(pressed).await
+                // Handle click - world is Arc<World> now, call methods directly
+                let input = world.get_component::<UiInputComponent>(pressed).await
                     .map_err(|e| UiError::EcsError(e.to_string()))?;
                 
                 if input.on_click.is_some() {
@@ -179,13 +175,11 @@ impl InputManager {
         &mut self,
         key: Key,
         _modifiers: Modifiers,
-        world: &Shared<World>,
+        world: &Arc<World>,
     ) -> UiResult<bool> {
         if let Some(focused) = self.focused_element {
-            let world_lock = world.read().await;
-            
-            // Check if element accepts input
-            let input = world_lock.get_component::<UiInputComponent>(focused).await
+            // Check if element accepts input - world is Arc<World> now
+            let input = world.get_component::<UiInputComponent>(focused).await
                 .map_err(|e| UiError::EcsError(e.to_string()))?;
             
             if input.accepts_input {
@@ -195,10 +189,8 @@ impl InputManager {
                         // Tab navigation would go here
                     }
                     Key::Escape => {
-                        // Clear focus
-                        drop(world_lock);
-                        let world_lock = world.write().await;
-                        let _ = world_lock.update_component::<UiElementComponent>(focused, |elem| {
+                        // Clear focus - world is Arc<World> now
+                        let _ = world.update_component::<UiElementComponent>(focused, |elem| {
                             elem.focused = false;
                         }).await;
                         self.focused_element = None;
@@ -218,13 +210,11 @@ impl InputManager {
     async fn handle_text_input(
         &mut self,
         text: String,
-        world: &Shared<World>,
+        world: &Arc<World>,
     ) -> UiResult<bool> {
         if let Some(focused) = self.focused_element {
-            let world_lock = world.write().await;
-            
-            // Check if element has text component
-            if let Ok(text_comp) = world_lock.get_component::<UiTextComponent>(focused).await {
+            // Check if element has text component - world is Arc<World> now
+            if let Ok(text_comp) = world.get_component::<UiTextComponent>(focused).await {
                 if text_comp.editable {
                     let new_text = {
                         let mut text_content = text_comp.text.clone();
@@ -234,13 +224,13 @@ impl InputManager {
                     let new_cursor = text_comp.cursor_position + text.len();
                     
                     // Update text component
-                    world_lock.update_component::<UiTextComponent>(focused, |tc| {
+                    world.update_component::<UiTextComponent>(focused, |tc| {
                         tc.text = new_text.clone();
                         tc.cursor_position = new_cursor;
                     }).await.map_err(|e| UiError::EcsError(e.to_string()))?;
                     
                     // Update element text content
-                    world_lock.update_component::<UiElementComponent>(focused, |elem| {
+                    world.update_component::<UiElementComponent>(focused, |elem| {
                         elem.text_content = Some(new_text);
                     }).await.map_err(|e| UiError::EcsError(e.to_string()))?;
                     
@@ -257,7 +247,7 @@ impl InputManager {
         _x: f32,
         _y: f32,
         _graph: &Shared<ElementGraph>,
-        _world: &Shared<World>,
+        _world: &Arc<World>,
     ) -> UiResult<Option<ElementId>> {
         // Simple hit test - find topmost element containing point
         // In real implementation, would traverse tree in reverse order

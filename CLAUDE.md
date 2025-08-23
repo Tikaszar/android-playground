@@ -48,6 +48,13 @@ This file contains critical memory for Claude Code when working with this reposi
 ## #current-violations
 None! All architecture violations fixed ✅
 
+## #ecs-architecture-fix
+**CRITICAL**: UiSystem uses `Arc<World>` not `Shared<World>`
+- World internally has Shared<> fields for its own locking
+- Adding another layer with Shared<World> causes nested lock deadlocks
+- Solution: `world: Arc<World>` in UiSystem
+- World's methods handle all internal locking
+
 ## #immediate-goals
 1. ~~Fix UI rendering~~ - COMPLETED! ✅
    - WebGL Clear command working (grey background)

@@ -2,6 +2,31 @@
 
 This file tracks the detailed history of development sessions, including achievements, bug fixes, and implementation progress.
 
+## Session: 2025-08-23 - ECS Deadlock Fix (Session 13)
+
+### What Was Accomplished
+1. **Fixed Critical ECS Deadlock**
+   - Identified root cause: nested Shared<> (Arc<RwLock>) in World structure
+   - UiSystem had `world: Shared<World>` but World already has internal Shared<> fields
+   - Holding outer lock while calling async methods that acquire inner locks = deadlock
+   - Solution: Changed UiSystem to use `world: Arc<World>` instead
+   - World's methods handle their own internal locking
+
+2. **Systematic Refactoring**
+   - Updated UiSystem struct field from `Shared<World>` to `Arc<World>`
+   - Fixed all World method calls to work directly on Arc<World>
+   - Updated InputManager to accept `&Arc<World>` instead of `&Shared<World>`
+   - Fixed LayoutEngine and all layout modules (flexbox, absolute, docking)
+   - Removed all `.read().await` and `.write().await` calls on World
+   - Fixed ~50+ locations across multiple files
+
+### Key Learning
+**Never wrap a struct in Shared<> if it already has internal Shared<> fields**
+- Creates nested locking situations
+- Async executors can't handle nested locks well
+- Causes deadlocks when holding outer lock across await points
+- Solution: Let the struct handle its own internal locking
+
 ## Session: 2025-08-22 - Mobile Discord UI Implementation (Session 10)
 
 ### What Was Accomplished

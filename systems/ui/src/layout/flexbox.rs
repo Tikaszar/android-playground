@@ -1,5 +1,6 @@
 use playground_core_ecs::{World, EntityId};
 use playground_core_types::Shared;
+use std::sync::Arc;
 use crate::error::{UiError, UiResult};
 use crate::element::ElementGraph;
 use crate::components::{UiLayoutComponent, ElementBounds};
@@ -15,14 +16,12 @@ impl FlexboxLayout {
         &mut self,
         entity: EntityId,
         graph: &Shared<ElementGraph>,
-        world: &Shared<World>,
+        world: &Arc<World>,
         screen_size: [f32; 2],
     ) -> UiResult<()> {
-        // Simplified flexbox layout
-        let world_lock = world.write().await;
-        
+        // Simplified flexbox layout - world is Arc<World> now
         // Get the current layout for reading
-        let layout = world_lock.get_component::<UiLayoutComponent>(entity).await
+        let layout = world.get_component::<UiLayoutComponent>(entity).await
             .map_err(|e| UiError::EcsError(e.to_string()))?;
         
         let mut bounds = layout.bounds;
@@ -39,12 +38,10 @@ impl FlexboxLayout {
         
         // Update the component if bounds changed
         if needs_update {
-            world_lock.update_component::<UiLayoutComponent>(entity, |l| {
+            world.update_component::<UiLayoutComponent>(entity, |l| {
                 l.bounds = bounds;
             }).await.map_err(|e| UiError::EcsError(e.to_string()))?;
         }
-        
-        drop(world_lock);
         
         // Layout children
         let graph_lock = graph.read().await;
@@ -52,8 +49,6 @@ impl FlexboxLayout {
             let mut child_y = bounds.y + padding[0];
             
             for &child in children {
-                let world_lock = world.write().await;
-                
                 // Calculate new bounds for child
                 let new_bounds = ElementBounds {
                     x: bounds.x + padding[3],
@@ -62,14 +57,12 @@ impl FlexboxLayout {
                     height: 50.0, // Default height
                 };
                 
-                // Update child layout
-                world_lock.update_component::<UiLayoutComponent>(child, |layout| {
+                // Update child layout - world is Arc<World> now
+                world.update_component::<UiLayoutComponent>(child, |layout| {
                     layout.bounds = new_bounds;
                 }).await.map_err(|e| UiError::EcsError(e.to_string()))?;
                 
                 child_y += new_bounds.height + 10.0; // Spacing
-                
-                drop(world_lock);
             }
         }
         
