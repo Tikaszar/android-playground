@@ -273,27 +273,34 @@ storages: Shared<HashMap<ComponentId, Box<dyn ComponentStorage>>>
 storages: Shared<HashMap<ComponentId, Arc<dyn ComponentStorage>>>
 ```
 
-### Shared<T> Pattern for Concurrency
-**Decision**: Use Shared<T> type alias for ALL concurrent access
+### Handle<T> vs Shared<T> Pattern
+**Decision**: Two distinct types for different concurrency patterns
 
 **Implementation**:
 ```rust
 // core/types/src/shared.rs
-pub type Shared<T> = Arc<RwLock<T>>;
+pub type Handle<T> = Arc<T>;  // External reference
+pub type Shared<T> = Arc<RwLock<T>>;  // Internal state
+
+pub fn handle<T>(value: T) -> Handle<T> {
+    Arc::new(value)
+}
 pub fn shared<T>(value: T) -> Shared<T> {
     Arc::new(RwLock::new(value))
 }
 ```
 
 **Why**:
-- Single source of truth for concurrent access patterns
-- Cleaner API than Arc<RwLock<T>> everywhere
-- Easy to audit - just search for "Shared<"
-- If implementation needs to change, one place to update
+- **Handle<T>**: For external references to objects that manage their own internal locking
+- **Shared<T>**: For internal mutable state within a class (private fields only)
+- Prevents nested RwLock deadlocks
+- Clear ownership semantics
+- No `.read().await` needed when using Handle
 
-**Usage**:
-- Core/Systems: `use playground_core_types::{Shared, shared};`
-- Plugins/Apps: `use playground_systems_logic::{Shared, shared};`
+**Usage Rules**:
+- Use Handle when object has internal Shared fields
+- Use Shared for simple data structures (HashMap, Vec, etc.)
+- Never expose Shared fields publicly - only through methods
 
 ### tokio::sync::RwLock ONLY
 **Decision**: Use ONLY tokio::sync::RwLock, NEVER parking_lot::RwLock

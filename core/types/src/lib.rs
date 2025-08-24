@@ -17,5 +17,5 @@ pub use message::Message;
 pub use networking::{ChannelId, Priority, Packet, ControlMessageType};
 pub use plugin_metadata::{PluginId, PluginMetadata, Version};
 pub use render_context::RenderContext;
-pub use shared::{Shared, shared};
+pub use shared::{Handle, handle, Shared, shared};
 pub use stateful::Stateful;

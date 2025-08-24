@@ -1,9 +1,8 @@
 use std::collections::{HashMap, VecDeque};
-use std::sync::Arc;
-use playground_core_types::{Shared, shared};
+use playground_core_types::{Handle, handle, Shared, shared};
 use crate::entity::{EntityId, EntityAllocator};
 use crate::component::{Component, ComponentId, ComponentRegistry, ComponentBox};
-use crate::storage::{ComponentStorage, SparseStorage, DenseStorage, StorageType};
+use crate::storage::{ComponentStorage, StorageImpl, StorageType};
 use crate::query::{Query, QueryBuilder};
 use crate::error::{EcsError, EcsResult};
 use crate::messaging::{MessageBus, ChannelId};
@@ -72,26 +71,26 @@ impl GarbageCollector {
 
 pub struct World {
     entities: Shared<HashMap<EntityId, Vec<ComponentId>>>,
-    storages: Shared<HashMap<ComponentId, Arc<dyn ComponentStorage>>>,
+    storages: Shared<HashMap<ComponentId, Handle<StorageImpl>>>,
     allocator: Shared<EntityAllocator>,
-    registry: Shared<ComponentRegistry>,
-    gc: Shared<GarbageCollector>,
+    registry: Handle<ComponentRegistry>,
+    gc: Handle<GarbageCollector>,
     memory_stats: Shared<MemoryStats>,
-    message_bus: Shared<MessageBus>,
+    message_bus: Handle<MessageBus>,
 }
 
 impl World {
     pub fn new() -> Self {
-        Self::with_registry(shared(ComponentRegistry::new()))
+        Self::with_registry(handle(ComponentRegistry::new()))
     }
     
-    pub fn with_registry(registry: Shared<ComponentRegistry>) -> Self {
+    pub fn with_registry(registry: Handle<ComponentRegistry>) -> Self {
         Self {
             entities: shared(HashMap::new()),
             storages: shared(HashMap::new()),
             allocator: shared(EntityAllocator::new()),
             registry,
-            gc: shared(GarbageCollector::new()),
+            gc: handle(GarbageCollector::new()),
             memory_stats: shared(MemoryStats {
                 total_entities: 0,
                 total_components: 0,
@@ -99,16 +98,16 @@ impl World {
                 pool_limit: 100 * 1024 * 1024,
                 growth_rate: 0.0,
             }),
-            message_bus: shared(MessageBus::new()),
+            message_bus: handle(MessageBus::new()),
         }
     }
     
     pub async fn register_component<T: Component>(&self) -> EcsResult<()> {
-        self.registry.read().await.register::<T>().await?;
+        self.registry.register::<T>().await?;
         
         let component_id = T::component_id();
         if !self.storages.read().await.contains_key(&component_id) {
-            let storage: Arc<dyn ComponentStorage> = Arc::new(SparseStorage::new(component_id));
+            let storage = handle(StorageImpl::new_sparse(component_id));
             self.storages.write().await.insert(component_id, storage);
         }
         
@@ -116,14 +115,14 @@ impl World {
     }
     
     pub async fn register_component_with_storage<T: Component>(&self, storage_type: StorageType) -> EcsResult<()> {
-        self.registry.read().await.register::<T>().await?;
+        self.registry.register::<T>().await?;
         
         let component_id = T::component_id();
         if !self.storages.read().await.contains_key(&component_id) {
-            let storage: Arc<dyn ComponentStorage> = match storage_type {
-                StorageType::Dense => Arc::new(DenseStorage::new(component_id)),
-                StorageType::Sparse | StorageType::Pooled => Arc::new(SparseStorage::new(component_id)),
-            };
+            let storage = handle(match storage_type {
+                StorageType::Dense => StorageImpl::new_dense(component_id),
+                StorageType::Sparse | StorageType::Pooled => StorageImpl::new_sparse(component_id),
+            });
             self.storages.write().await.insert(component_id, storage);
         }
         
@@ -145,8 +144,7 @@ impl World {
                 
                 // Get component ID without holding registry lock
                 let component_id = {
-                    let registry = self.registry.read().await;
-                    let info = registry.get_info_by_name(type_name).await
+                    let info = self.registry.get_info_by_name(type_name).await
                         .ok_or_else(|| EcsError::ComponentNotRegistered(type_name.to_string()))?;
                     info.id
                 };
@@ -177,8 +175,7 @@ impl World {
     
     pub async fn despawn_batch(&self, entities: Vec<EntityId>) -> EcsResult<()> {
         for entity in entities {
-            let gc = self.gc.read().await;
-            gc.queue_for_collection(entity).await;
+            self.gc.queue_for_collection(entity).await;
         }
         Ok(())
     }
@@ -212,11 +209,11 @@ impl World {
     pub async fn register_component_storage(&self, component_id: ComponentId, storage_type: StorageType) -> EcsResult<()> {
         let mut storages = self.storages.write().await;
         if !storages.contains_key(&component_id) {
-            let storage: Arc<dyn ComponentStorage> = match storage_type {
-                StorageType::Dense => Arc::new(DenseStorage::new(component_id)),
-                StorageType::Sparse => Arc::new(SparseStorage::new(component_id)),
-                StorageType::Pooled => Arc::new(SparseStorage::new(component_id)), // Use sparse for now
-            };
+            let storage = handle(match storage_type {
+                StorageType::Dense => StorageImpl::new_dense(component_id),
+                StorageType::Sparse => StorageImpl::new_sparse(component_id),
+                StorageType::Pooled => StorageImpl::new_sparse(component_id), // Use sparse for now
+            });
             storages.insert(component_id, storage);
         }
         Ok(())
@@ -328,14 +325,14 @@ impl World {
     }
     
     pub async fn run_gc(&self) -> EcsResult<usize> {
-        self.gc.read().await.collect_incremental(self).await
+        self.gc.collect_incremental(self).await
     }
     
     pub async fn get_dirty_entities(&self) -> Vec<(EntityId, Vec<ComponentId>)> {
         let mut result: Vec<(EntityId, Vec<ComponentId>)> = Vec::new();
         
         // Clone storage references to avoid holding lock across await
-        let storages_list: Vec<(ComponentId, Arc<dyn ComponentStorage>)> = {
+        let storages_list: Vec<(ComponentId, Handle<StorageImpl>)> = {
             let storages = self.storages.read().await;
             storages.iter().map(|(id, storage)| (*id, storage.clone())).collect()
         };
@@ -356,7 +353,7 @@ impl World {
     
     pub async fn clear_dirty(&self) -> EcsResult<()> {
         // Clone storage references to avoid holding lock across await
-        let storages_list: Vec<Arc<dyn ComponentStorage>> = {
+        let storages_list: Vec<Handle<StorageImpl>> = {
             let storages = self.storages.read().await;
             storages.values().cloned().collect()
         };
@@ -375,9 +372,8 @@ impl World {
         
         let total_components = self.storages.read().await.len();
         
-        let registry = self.registry.read().await;
-        let pool_usage = registry.current_pool_usage().await;
-        let pool_limit = registry.pool_limit();
+        let pool_usage = self.registry.current_pool_usage().await;
+        let pool_limit = self.registry.pool_limit();
         
         MemoryStats {
             total_entities,
@@ -411,7 +407,7 @@ impl World {
     
     /// Publish a message to a channel
     pub async fn publish(&self, channel: ChannelId, message: impl Into<Bytes>) -> EcsResult<()> {
-        self.message_bus.read().await.publish(channel, message.into()).await
+        self.message_bus.publish(channel, message.into()).await
     }
     
     /// Subscribe to a channel with a handler
@@ -420,11 +416,11 @@ impl World {
         channel: ChannelId,
         handler: std::sync::Arc<dyn crate::messaging::MessageHandler>,
     ) -> EcsResult<()> {
-        self.message_bus.read().await.subscribe(channel, handler).await
+        self.message_bus.subscribe(channel, handler).await
     }
     
     /// Get the message bus for advanced operations
-    pub fn message_bus(&self) -> Shared<MessageBus> {
+    pub fn message_bus(&self) -> Handle<MessageBus> {
         self.message_bus.clone()
     }
 }

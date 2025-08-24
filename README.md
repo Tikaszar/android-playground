@@ -83,6 +83,8 @@ core/           # Foundation layer
 - **Hot-Reload**: Change plugins without restart
 - **Server Authority**: Browser is pure view, logic on server
 - **NO unsafe code**: 100% safe Rust
+- **NO dyn**: Use Handle<T> pattern instead of trait objects
+- **Handle vs Shared**: Handle<T> for external refs, Shared<T> for internal state
 - **Async Everything**: Built on tokio
 - **ECS Architecture**: Two-layer design (core/ecs + systems/logic)
 

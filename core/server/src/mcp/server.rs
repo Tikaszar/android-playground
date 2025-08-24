@@ -5,7 +5,7 @@ use axum::{
     routing::{any, get, post},
     Json, Router,
 };
-use std::sync::Arc;
+use playground_core_types::{Handle, handle};
 use tracing::{info, error};
 use serde_json::{json, Value};
 use uuid::Uuid;
@@ -18,24 +18,24 @@ use super::{
 
 /// MCP Server state
 struct McpState {
-    session_manager: Arc<SessionManager>,
+    session_manager: Handle<SessionManager>,
 }
 
 /// MCP Server implementation
 pub struct McpServer {
-    session_manager: Arc<SessionManager>,
+    session_manager: Handle<SessionManager>,
 }
 
 impl McpServer {
     pub fn new() -> Self {
         Self {
-            session_manager: Arc::new(SessionManager::new()),
+            session_manager: handle(SessionManager::new()),
         }
     }
 
     /// Create router for MCP endpoints
-    pub fn router(&self) -> Router<Arc<WebSocketState>> {
-        let mcp_state = Arc::new(McpState {
+    pub fn router(&self) -> Router<Handle<WebSocketState>> {
+        let mcp_state = handle(McpState {
             session_manager: self.session_manager.clone(),
         });
 
@@ -70,8 +70,8 @@ impl Default for McpServer {
 
 /// Main streamable-http handler
 async fn handle_streamable(
-    State(ws_state): State<Arc<WebSocketState>>,
-    axum::extract::Extension(mcp_state): axum::extract::Extension<Arc<McpState>>,
+    State(ws_state): State<Handle<WebSocketState>>,
+    axum::extract::Extension(mcp_state): axum::extract::Extension<Handle<McpState>>,
     req: Request,
 ) -> impl IntoResponse {
     let method = req.method().clone();
@@ -103,7 +103,7 @@ async fn handle_streamable(
 
 /// List active sessions
 async fn list_sessions(
-    axum::extract::Extension(mcp_state): axum::extract::Extension<Arc<McpState>>,
+    axum::extract::Extension(mcp_state): axum::extract::Extension<Handle<McpState>>,
 ) -> Json<Value> {
     let sessions = mcp_state.session_manager.list_sessions().await;
     Json(json!({
@@ -113,7 +113,7 @@ async fn list_sessions(
 
 /// Create a new session
 async fn create_session(
-    axum::extract::Extension(mcp_state): axum::extract::Extension<Arc<McpState>>,
+    axum::extract::Extension(mcp_state): axum::extract::Extension<Handle<McpState>>,
     Json(body): Json<Value>,
 ) -> Json<Value> {
     let session_id = body.get("sessionId")
@@ -130,7 +130,7 @@ async fn create_session(
 /// End a session
 async fn end_session(
     Path(id): Path<String>,
-    axum::extract::Extension(mcp_state): axum::extract::Extension<Arc<McpState>>,
+    axum::extract::Extension(mcp_state): axum::extract::Extension<Handle<McpState>>,
 ) -> StatusCode {
     if mcp_state.session_manager.remove_session(&id).await.is_some() {
         StatusCode::NO_CONTENT

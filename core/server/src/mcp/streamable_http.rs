@@ -300,7 +300,7 @@ async fn handle_post(
                 
                 "list_channels" => {
                     // Get channel manager info
-                    let channels = ws_state.channel_manager.read().await.list_channels().await;
+                    let channels = ws_state.channel_manager.list_channels().await;
                     let channel_info = channels
                         .into_iter()
                         .map(|info| format!("  - Channel {}: {} ({})", info.id, info.name, info.owner))

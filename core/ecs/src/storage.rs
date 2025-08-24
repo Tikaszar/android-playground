@@ -1,6 +1,6 @@
 use async_trait::async_trait;
 use std::collections::HashMap;
-use playground_core_types::{Shared, shared};
+use playground_core_types::{Handle, handle, Shared, shared};
 use crate::entity::EntityId;
 use crate::component::{ComponentBox, ComponentId};
 use crate::error::{EcsError, EcsResult};
@@ -397,6 +397,123 @@ impl ComponentStorage for DenseStorage {
     async fn clear_dirty(&self) -> EcsResult<()> {
         self.dirty.write().await.clear();
         Ok(())
+    }
+}
+
+/// Concrete storage implementation enum to avoid dyn trait objects
+pub enum StorageImpl {
+    Sparse(Handle<SparseStorage>),
+    Dense(Handle<DenseStorage>),
+}
+
+impl StorageImpl {
+    pub fn new_sparse(component_id: ComponentId) -> Self {
+        StorageImpl::Sparse(handle(SparseStorage::new(component_id)))
+    }
+    
+    pub fn new_dense(component_id: ComponentId) -> Self {
+        StorageImpl::Dense(handle(DenseStorage::new(component_id)))
+    }
+}
+
+#[async_trait]
+impl ComponentStorage for StorageImpl {
+    fn storage_type(&self) -> StorageType {
+        match self {
+            StorageImpl::Sparse(s) => s.storage_type(),
+            StorageImpl::Dense(s) => s.storage_type(),
+        }
+    }
+    
+    async fn insert(&self, entity: EntityId, component: ComponentBox) -> EcsResult<()> {
+        match self {
+            StorageImpl::Sparse(s) => s.insert(entity, component).await,
+            StorageImpl::Dense(s) => s.insert(entity, component).await,
+        }
+    }
+    
+    async fn insert_batch(&self, components: Vec<(EntityId, ComponentBox)>) -> EcsResult<()> {
+        match self {
+            StorageImpl::Sparse(s) => s.insert_batch(components).await,
+            StorageImpl::Dense(s) => s.insert_batch(components).await,
+        }
+    }
+    
+    async fn remove(&self, entity: EntityId) -> EcsResult<ComponentBox> {
+        match self {
+            StorageImpl::Sparse(s) => s.remove(entity).await,
+            StorageImpl::Dense(s) => s.remove(entity).await,
+        }
+    }
+    
+    async fn remove_batch(&self, entities: Vec<EntityId>) -> EcsResult<Vec<ComponentBox>> {
+        match self {
+            StorageImpl::Sparse(s) => s.remove_batch(entities).await,
+            StorageImpl::Dense(s) => s.remove_batch(entities).await,
+        }
+    }
+    
+    async fn get_raw(&self, entity: EntityId) -> EcsResult<ComponentBox> {
+        match self {
+            StorageImpl::Sparse(s) => s.get_raw(entity).await,
+            StorageImpl::Dense(s) => s.get_raw(entity).await,
+        }
+    }
+    
+    async fn get_raw_mut(&self, entity: EntityId) -> EcsResult<Shared<ComponentBox>> {
+        match self {
+            StorageImpl::Sparse(s) => s.get_raw_mut(entity).await,
+            StorageImpl::Dense(s) => s.get_raw_mut(entity).await,
+        }
+    }
+    
+    async fn contains(&self, entity: EntityId) -> bool {
+        match self {
+            StorageImpl::Sparse(s) => s.contains(entity).await,
+            StorageImpl::Dense(s) => s.contains(entity).await,
+        }
+    }
+    
+    async fn clear(&self) -> EcsResult<()> {
+        match self {
+            StorageImpl::Sparse(s) => s.clear().await,
+            StorageImpl::Dense(s) => s.clear().await,
+        }
+    }
+    
+    async fn len(&self) -> usize {
+        match self {
+            StorageImpl::Sparse(s) => s.len().await,
+            StorageImpl::Dense(s) => s.len().await,
+        }
+    }
+    
+    async fn entities(&self) -> Vec<EntityId> {
+        match self {
+            StorageImpl::Sparse(s) => s.entities().await,
+            StorageImpl::Dense(s) => s.entities().await,
+        }
+    }
+    
+    async fn mark_dirty(&self, entity: EntityId) -> EcsResult<()> {
+        match self {
+            StorageImpl::Sparse(s) => s.mark_dirty(entity).await,
+            StorageImpl::Dense(s) => s.mark_dirty(entity).await,
+        }
+    }
+    
+    async fn get_dirty(&self) -> Vec<EntityId> {
+        match self {
+            StorageImpl::Sparse(s) => s.get_dirty().await,
+            StorageImpl::Dense(s) => s.get_dirty().await,
+        }
+    }
+    
+    async fn clear_dirty(&self) -> EcsResult<()> {
+        match self {
+            StorageImpl::Sparse(s) => s.clear_dirty().await,
+            StorageImpl::Dense(s) => s.clear_dirty().await,
+        }
     }
 }
 

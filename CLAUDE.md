@@ -9,7 +9,9 @@ This file contains critical memory for Claude Code when working with this reposi
 - **NO turbofish** - Use `.with_component(ComponentId)` instead of `::<T>`
 - **NO TODOs** - Complete all implementations fully
 - **NO incomplete code** - Everything must compile and work
-- **Shared<T> for concurrency** - Use our Shared<T> type (Arc<tokio::sync::RwLock<T>>)
+- **NO dyn** - Use enums or Handle<T> instead of trait objects
+- **Handle<T> for external refs** - Use Handle<T> (Arc<T>) for referencing objects with internal state
+- **Shared<T> for internal state** - Use Shared<T> (Arc<RwLock<T>>) ONLY for private fields
 - **tokio::sync::RwLock ONLY** - NEVER use parking_lot::RwLock (Send issues)
 - **NO DashMap** - Use Shared<HashMap> instead
 - **Result everywhere** - All fallible operations return Result<T, Error>
@@ -85,12 +87,18 @@ None! All architecture violations fixed ✅
 
 ## #key-apis
 ```rust
-// Shared type for concurrency
-use playground_systems_logic::{Shared, shared}; // For plugins/apps
-use playground_core_types::{Shared, shared};    // For core/systems
+// Handle<T> for external references, Shared<T> for internal state
+use playground_core_types::{Handle, handle, Shared, shared};
 
-let data: Shared<HashMap<String, Value>> = shared(HashMap::new());
-let guard = data.read().await;  // or write().await
+// External reference to object with internal state
+let world: Handle<World> = handle(World::new());
+world.some_method().await;  // No .read().await needed!
+
+// Internal mutable state (private fields only)
+struct MyStruct {
+    data: Shared<HashMap<String, Value>>,  // INTERNAL state
+}
+let guard = self.data.read().await;  // or write().await
 
 // ECS Query (NO TURBOFISH!)
 query.with_component(Position::component_id())

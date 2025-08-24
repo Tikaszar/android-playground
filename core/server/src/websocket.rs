@@ -10,7 +10,7 @@ use axum::{
 };
 use std::sync::Arc;
 use std::collections::HashMap;
-use tokio::sync::RwLock;
+use playground_core_types::{Handle, handle, Shared, shared};
 use futures_util::{StreamExt, SinkExt};
 use bytes::{Bytes, BytesMut, BufMut};
 // Dashboard logging is used instead of tracing
@@ -27,11 +27,11 @@ pub struct McpTool {
 }
 
 pub struct WebSocketState {
-    pub channel_manager: Arc<RwLock<ChannelManager>>,
-    pub batcher: Arc<FrameBatcher>,
-    pub connections: Arc<RwLock<Vec<Arc<RwLock<Option<WebSocketConnection>>>>>>,
-    pub mcp_tools: Arc<RwLock<HashMap<String, McpTool>>>, // Dynamic MCP tool registry
-    pub dashboard: Arc<Dashboard>,
+    pub channel_manager: Handle<ChannelManager>,
+    pub batcher: Handle<FrameBatcher>,
+    pub connections: Shared<Vec<Shared<Option<WebSocketConnection>>>>,
+    pub mcp_tools: Shared<HashMap<String, McpTool>>, // Dynamic MCP tool registry
+    pub dashboard: Handle<Dashboard>,
 }
 
 pub struct WebSocketConnection {
@@ -48,23 +48,23 @@ impl WebSocketConnection {
 
 impl WebSocketState {
     pub fn new() -> Self {
-        let dashboard = Arc::new(Dashboard::new());
+        let dashboard = handle(Dashboard::new());
         
         Self {
-            channel_manager: Arc::new(RwLock::new(ChannelManager::new())),
-            batcher: Arc::new(FrameBatcher::new(2000, 60)), // 60fps, support up to 2000 channels
-            connections: Arc::new(RwLock::new(Vec::new())),
-            mcp_tools: Arc::new(RwLock::new(HashMap::new())),
+            channel_manager: handle(ChannelManager::new()),
+            batcher: handle(FrameBatcher::new(2000, 60)), // 60fps, support up to 2000 channels
+            connections: shared(Vec::new()),
+            mcp_tools: shared(HashMap::new()),
             dashboard,
         }
     }
     
-    pub fn new_with_dashboard(dashboard: Arc<Dashboard>) -> Self {
+    pub fn new_with_dashboard(dashboard: Handle<Dashboard>) -> Self {
         Self {
-            channel_manager: Arc::new(RwLock::new(ChannelManager::new())),
-            batcher: Arc::new(FrameBatcher::new(2000, 60)), // 60fps, support up to 2000 channels
-            connections: Arc::new(RwLock::new(Vec::new())),
-            mcp_tools: Arc::new(RwLock::new(HashMap::new())),
+            channel_manager: handle(ChannelManager::new()),
+            batcher: handle(FrameBatcher::new(2000, 60)), // 60fps, support up to 2000 channels
+            connections: shared(Vec::new()),
+            mcp_tools: shared(HashMap::new()),
             dashboard,
         }
     }
@@ -101,12 +101,12 @@ impl WebSocketState {
 
 pub async fn websocket_handler(
     ws: WebSocketUpgrade,
-    State(state): State<Arc<WebSocketState>>,
+    State(state): State<Handle<WebSocketState>>,
 ) -> Response {
     ws.on_upgrade(move |socket| handle_websocket(socket, state))
 }
 
-async fn handle_websocket(socket: WebSocket, state: Arc<WebSocketState>) {
+async fn handle_websocket(socket: WebSocket, state: Handle<WebSocketState>) {
     let (mut sender, mut receiver) = socket.split();
     
     // Get client IP (placeholder - in real implementation, extract from request headers)
@@ -115,10 +115,10 @@ async fn handle_websocket(socket: WebSocket, state: Arc<WebSocketState>) {
     let connection_id = {
         let mut connections = state.connections.write().await;
         let id = connections.len();
-        connections.push(Arc::new(RwLock::new(Some(WebSocketConnection {
+        connections.push(shared(Some(WebSocketConnection {
             id,
             sender,
-        }))));
+        })));
         id
     };
     
@@ -346,7 +346,7 @@ async fn handle_control_message(packet: Packet, state: &WebSocketState) -> anyho
             
             let name = name.split(':').next().unwrap_or(&name).to_string();
             
-            match state.channel_manager.write().await.register_system(name.clone(), channel_id).await {
+            match state.channel_manager.register_system(name.clone(), channel_id).await {
                 Ok(id) => {
                     let response = create_register_response(id);
                     state.batcher.queue_packet(response).await;
@@ -365,7 +365,7 @@ async fn handle_control_message(packet: Packet, state: &WebSocketState) -> anyho
         ControlMessageType::RegisterPlugin => {
             let name = String::from_utf8(packet.payload.to_vec())?;
             
-            match state.channel_manager.write().await.register_plugin(name.clone()).await {
+            match state.channel_manager.register_plugin(name.clone()).await {
                 Ok(id) => {
                     let response = create_register_response(id);
                     state.batcher.queue_packet(response).await;
@@ -384,7 +384,7 @@ async fn handle_control_message(packet: Packet, state: &WebSocketState) -> anyho
         ControlMessageType::QueryChannel => {
             let name = String::from_utf8(packet.payload.to_vec())?;
             
-            if let Some(info) = state.channel_manager.read().await.get_channel_by_name(&name).await {
+            if let Some(info) = state.channel_manager.get_channel_by_name(&name).await {
                 let response = create_query_response(info.id, info.name);
                 state.batcher.queue_packet(response).await;
             } else {
@@ -393,7 +393,7 @@ async fn handle_control_message(packet: Packet, state: &WebSocketState) -> anyho
             }
         }
         ControlMessageType::ListChannels => {
-            let channels = state.channel_manager.read().await.list_channels().await;
+            let channels = state.channel_manager.list_channels().await;
             let response = create_list_response(channels);
             state.batcher.queue_packet(response).await;
         }

@@ -1,6 +1,6 @@
 use playground_core_rendering::{RenderCommand, RenderCommandBatch, Viewport};
 use playground_core_ecs::{World, EntityId, ComponentRegistry, Component};
-use playground_core_types::{Shared, shared};
+use playground_core_types::{Handle, handle, Shared, shared};
 use std::sync::Arc;
 use playground_core_server::{ChannelManager, Packet, Priority};
 use playground_systems_networking::NetworkingSystem;
@@ -26,7 +26,7 @@ use async_trait::async_trait;
 pub struct UiSystem {
     // Core ECS
     world: Arc<World>,
-    registry: Shared<ComponentRegistry>,
+    registry: Handle<ComponentRegistry>,
     
     // Element management
     element_graph: Shared<ElementGraph>,
@@ -56,7 +56,7 @@ pub struct UiSystem {
     
     // Networking
     channel_manager: Option<Shared<ChannelManager>>,
-    networking_system: Option<Shared<NetworkingSystem>>,
+    networking_system: Option<Handle<NetworkingSystem>>,
     channel_id: u16,
     
     // State
@@ -66,7 +66,7 @@ pub struct UiSystem {
 
 impl UiSystem {
     pub fn new() -> Self {
-        let registry = shared(ComponentRegistry::new());
+        let registry = handle(ComponentRegistry::new());
         let world = Arc::new(World::with_registry(registry.clone()));
         
         Self {
@@ -476,7 +476,7 @@ impl UiSystem {
     }
     
     async fn register_components(&self) -> UiResult<()> {
-        let mut registry = self.registry.write().await;
+        // Registry has internal locking, no need for external lock
         
         // Register components in the registry
         registry.register::<UiElementComponent>().await
@@ -650,8 +650,7 @@ impl UiSystem {
         // Use NetworkingSystem to send the packet, which will publish to the shared MessageBus
         // The MessageBridge in core/server will forward this to WebSocket clients
         if let Some(ref networking) = self.networking_system {
-            networking.read().await
-                .send_packet(self.channel_id, 104, data, Priority::High)
+            networking.send_packet(self.channel_id, 104, data, Priority::High)
                 .await
                 .map_err(|e| UiError::SerializationError(format!("Failed to send packet: {}", e)))?;
         } else {
@@ -741,18 +740,15 @@ impl UiSystem {
         self.channel_manager = Some(manager);
     }
     
-    pub fn set_networking_system(&mut self, networking: Shared<NetworkingSystem>) {
+    pub fn set_networking_system(&mut self, networking: Handle<NetworkingSystem>) {
         self.networking_system = Some(networking);
     }
     
     /// Log a message to the dashboard via NetworkingSystem
     async fn log(&self, level: &str, message: String) {
         if let Some(ref networking) = self.networking_system {
-            // Get dashboard reference without holding lock across await
-            let dashboard = {
-                let networking_guard = networking.read().await;
-                networking_guard.get_dashboard().await
-            };
+            // Get dashboard reference
+            let dashboard = networking.get_dashboard().await;
             
             if let Some(dashboard) = dashboard {
                 use playground_core_server::dashboard::LogLevel;
@@ -806,18 +802,13 @@ impl UiSystem {
         
         // Send via networking system
         if let Some(ref networking) = self.networking_system {
-            // Get networking guard once
-            let networking_guard = networking.read().await;
-            
             // Send packet
-            networking_guard
-                .send_packet(self.channel_id, UiPacketType::RendererInit as u16, data, Priority::High)
+            networking.send_packet(self.channel_id, UiPacketType::RendererInit as u16, data, Priority::High)
                 .await
                 .map_err(|e| UiError::SerializationError(format!("Failed to send init packet: {}", e)))?;
             
-            // Get dashboard without holding networking lock
-            let dashboard = networking_guard.get_dashboard().await;
-            drop(networking_guard); // Release the lock
+            // Get dashboard
+            let dashboard = networking.get_dashboard().await;
             
             // Log the initialization
             if let Some(dashboard) = dashboard {

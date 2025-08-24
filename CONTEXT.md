@@ -1,11 +1,32 @@
 # CONTEXT.md - Current Session Context
 
-## Active Session - 2025-08-23 (Session 14)
+## Active Session - 2025-08-24 (Session 15)
 
 ### Current Status
-**Partial Deadlock Fix** 🟡 - System no longer completely hangs, but UI creation still blocked
+**Major Architecture Refactor** ✅ - Introduced Handle<T> vs Shared<T> pattern to prevent deadlocks
 
-### What Was Done This Session (2025-08-23 - Session 14)
+### What Was Done This Session (2025-08-24 - Session 15)
+- **Introduced Handle<T> Type** ✅
+  - Added `Handle<T> = Arc<T>` for external references to objects with internal state
+  - Distinguished from `Shared<T> = Arc<RwLock<T>>` for internal mutable state
+  - Rule: Use Handle when object manages its own locking, Shared for private fields only
+  
+- **Removed dyn Usage in ECS** ✅
+  - Created `StorageImpl` enum to avoid `dyn ComponentStorage`
+  - Changed World to use `Handle<StorageImpl>` instead of `Arc<dyn ComponentStorage>`
+  - Updated Query trait to use concrete types
+  
+- **Fixed core/* Packages** ✅
+  - core/ecs: World uses Handle for ComponentRegistry, GarbageCollector, MessageBus
+  - core/server: Fixed ChannelManager and WebSocketState to use Shared/Handle properly
+  - Replaced all raw `Arc<RwLock<>>` with proper Shared<> types
+  
+- **Architecture Principle Established** ✅
+  - **Handle<T>**: External reference to an object that manages its own internal state
+  - **Shared<T>**: Internal mutable state within a class (private fields only)
+  - This prevents nested RwLock deadlocks by ensuring clear ownership patterns
+
+### Previous Session (2025-08-23 - Session 14)
 - **Fixed Nested Lock Issues in core/ecs** ✅
   - Changed storages from `Box<dyn ComponentStorage>` to `Arc<dyn ComponentStorage>`
   - Refactored all World methods to not hold locks across await points

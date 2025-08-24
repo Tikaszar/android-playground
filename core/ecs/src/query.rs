@@ -1,18 +1,17 @@
 use std::marker::PhantomData;
 use std::collections::HashMap;
-use std::sync::Arc;
 use async_trait::async_trait;
-use playground_core_types::{Shared, shared};
+use playground_core_types::{Handle, Shared, shared};
 use crate::entity::EntityId;
 use crate::component::{Component, ComponentId};
-use crate::storage::ComponentStorage;
+use crate::storage::{ComponentStorage, StorageImpl};
 use crate::error::{EcsError, EcsResult};
 
 #[async_trait]
 pub trait Query: Send + Sync {
-    async fn execute(&self, storages: &Shared<HashMap<ComponentId, Arc<dyn ComponentStorage>>>) -> EcsResult<Vec<EntityId>>;
+    async fn execute(&self, storages: &Shared<HashMap<ComponentId, Handle<StorageImpl>>>) -> EcsResult<Vec<EntityId>>;
     
-    async fn matches(&self, entity: EntityId, storages: &Shared<HashMap<ComponentId, Arc<dyn ComponentStorage>>>) -> bool;
+    async fn matches(&self, entity: EntityId, storages: &Shared<HashMap<ComponentId, Handle<StorageImpl>>>) -> bool;
 }
 
 pub struct ComponentIdQuery {
@@ -32,7 +31,7 @@ impl ComponentIdQuery {
 
 #[async_trait]
 impl Query for ComponentIdQuery {
-    async fn execute(&self, storages: &Shared<HashMap<ComponentId, Arc<dyn ComponentStorage>>>) -> EcsResult<Vec<EntityId>> {
+    async fn execute(&self, storages: &Shared<HashMap<ComponentId, Handle<StorageImpl>>>) -> EcsResult<Vec<EntityId>> {
         if self.include {
             if let Some(storage) = storages.read().await.get(&self.component_id) {
                 Ok(storage.entities().await)
@@ -44,7 +43,7 @@ impl Query for ComponentIdQuery {
         }
     }
     
-    async fn matches(&self, entity: EntityId, storages: &Shared<HashMap<ComponentId, Arc<dyn ComponentStorage>>>) -> bool {
+    async fn matches(&self, entity: EntityId, storages: &Shared<HashMap<ComponentId, Handle<StorageImpl>>>) -> bool {
         if let Some(storage) = storages.read().await.get(&self.component_id) {
             let contains = storage.contains(entity).await;
             if self.include { contains } else { !contains }
@@ -68,7 +67,7 @@ impl<T: Component> WithComponent<T> {
 
 #[async_trait]
 impl<T: Component> Query for WithComponent<T> {
-    async fn execute(&self, storages: &Shared<HashMap<ComponentId, Arc<dyn ComponentStorage>>>) -> EcsResult<Vec<EntityId>> {
+    async fn execute(&self, storages: &Shared<HashMap<ComponentId, Handle<StorageImpl>>>) -> EcsResult<Vec<EntityId>> {
         let component_id = T::component_id();
         
         if let Some(storage) = storages.read().await.get(&component_id) {
@@ -78,7 +77,7 @@ impl<T: Component> Query for WithComponent<T> {
         }
     }
     
-    async fn matches(&self, entity: EntityId, storages: &Shared<HashMap<ComponentId, Arc<dyn ComponentStorage>>>) -> bool {
+    async fn matches(&self, entity: EntityId, storages: &Shared<HashMap<ComponentId, Handle<StorageImpl>>>) -> bool {
         let component_id = T::component_id();
         
         if let Some(storage) = storages.read().await.get(&component_id) {
@@ -103,11 +102,11 @@ impl<T: Component> WithoutComponent<T> {
 
 #[async_trait]
 impl<T: Component> Query for WithoutComponent<T> {
-    async fn execute(&self, _storages: &Shared<HashMap<ComponentId, Arc<dyn ComponentStorage>>>) -> EcsResult<Vec<EntityId>> {
+    async fn execute(&self, _storages: &Shared<HashMap<ComponentId, Handle<StorageImpl>>>) -> EcsResult<Vec<EntityId>> {
         Err(EcsError::QueryError("WithoutComponent cannot be executed standalone".into()))
     }
     
-    async fn matches(&self, entity: EntityId, storages: &Shared<HashMap<ComponentId, Arc<dyn ComponentStorage>>>) -> bool {
+    async fn matches(&self, entity: EntityId, storages: &Shared<HashMap<ComponentId, Handle<StorageImpl>>>) -> bool {
         let component_id = T::component_id();
         
         if let Some(storage) = storages.read().await.get(&component_id) {
@@ -130,7 +129,7 @@ impl AndQuery {
 
 #[async_trait]
 impl Query for AndQuery {
-    async fn execute(&self, storages: &Shared<HashMap<ComponentId, Arc<dyn ComponentStorage>>>) -> EcsResult<Vec<EntityId>> {
+    async fn execute(&self, storages: &Shared<HashMap<ComponentId, Handle<StorageImpl>>>) -> EcsResult<Vec<EntityId>> {
         if self.queries.is_empty() {
             return Ok(Vec::new());
         }
@@ -150,7 +149,7 @@ impl Query for AndQuery {
         Ok(result)
     }
     
-    async fn matches(&self, entity: EntityId, storages: &Shared<HashMap<ComponentId, Arc<dyn ComponentStorage>>>) -> bool {
+    async fn matches(&self, entity: EntityId, storages: &Shared<HashMap<ComponentId, Handle<StorageImpl>>>) -> bool {
         for query in &self.queries {
             if !query.matches(entity, storages).await {
                 return false;
@@ -172,7 +171,7 @@ impl OrQuery {
 
 #[async_trait]
 impl Query for OrQuery {
-    async fn execute(&self, storages: &Shared<HashMap<ComponentId, Arc<dyn ComponentStorage>>>) -> EcsResult<Vec<EntityId>> {
+    async fn execute(&self, storages: &Shared<HashMap<ComponentId, Handle<StorageImpl>>>) -> EcsResult<Vec<EntityId>> {
         let mut result = Vec::new();
         let mut seen = std::collections::HashSet::new();
         
@@ -188,7 +187,7 @@ impl Query for OrQuery {
         Ok(result)
     }
     
-    async fn matches(&self, entity: EntityId, storages: &Shared<HashMap<ComponentId, Arc<dyn ComponentStorage>>>) -> bool {
+    async fn matches(&self, entity: EntityId, storages: &Shared<HashMap<ComponentId, Handle<StorageImpl>>>) -> bool {
         for query in &self.queries {
             if query.matches(entity, storages).await {
                 return true;
@@ -240,11 +239,11 @@ struct EmptyQuery;
 
 #[async_trait]
 impl Query for EmptyQuery {
-    async fn execute(&self, _storages: &Shared<HashMap<ComponentId, Arc<dyn ComponentStorage>>>) -> EcsResult<Vec<EntityId>> {
+    async fn execute(&self, _storages: &Shared<HashMap<ComponentId, Handle<StorageImpl>>>) -> EcsResult<Vec<EntityId>> {
         Ok(Vec::new())
     }
     
-    async fn matches(&self, _entity: EntityId, _storages: &Shared<HashMap<ComponentId, Arc<dyn ComponentStorage>>>) -> bool {
+    async fn matches(&self, _entity: EntityId, _storages: &Shared<HashMap<ComponentId, Handle<StorageImpl>>>) -> bool {
         true
     }
 }
@@ -269,7 +268,7 @@ impl CachedQuery {
 
 #[async_trait]
 impl Query for CachedQuery {
-    async fn execute(&self, storages: &Shared<HashMap<ComponentId, Arc<dyn ComponentStorage>>>) -> EcsResult<Vec<EntityId>> {
+    async fn execute(&self, storages: &Shared<HashMap<ComponentId, Handle<StorageImpl>>>) -> EcsResult<Vec<EntityId>> {
         if let Some(cached) = self.cache.read().await.as_ref() {
             return Ok(cached.clone());
         }
@@ -279,7 +278,7 @@ impl Query for CachedQuery {
         Ok(result)
     }
     
-    async fn matches(&self, entity: EntityId, storages: &Shared<HashMap<ComponentId, Arc<dyn ComponentStorage>>>) -> bool {
+    async fn matches(&self, entity: EntityId, storages: &Shared<HashMap<ComponentId, Handle<StorageImpl>>>) -> bool {
         self.inner.matches(entity, storages).await
     }
 }

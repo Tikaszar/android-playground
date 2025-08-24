@@ -1,6 +1,5 @@
 use std::collections::HashMap;
-use std::sync::Arc;
-use tokio::sync::RwLock;
+use playground_core_types::{Shared, shared};
 use anyhow::{Result, bail};
 
 #[derive(Debug, Clone)]
@@ -11,9 +10,9 @@ pub struct ChannelInfo {
 }
 
 pub struct ChannelManager {
-    channels: Arc<RwLock<HashMap<u16, ChannelInfo>>>,
-    name_to_id: Arc<RwLock<HashMap<String, u16>>>,
-    next_plugin_channel: Arc<RwLock<u16>>,
+    channels: Shared<HashMap<u16, ChannelInfo>>,
+    name_to_id: Shared<HashMap<String, u16>>,
+    next_plugin_channel: Shared<u16>,
 }
 
 impl ChannelManager {
@@ -29,9 +28,9 @@ impl ChannelManager {
         name_to_id.insert("control".to_string(), 0);
         
         Self {
-            channels: Arc::new(RwLock::new(channels)),
-            name_to_id: Arc::new(RwLock::new(name_to_id)),
-            next_plugin_channel: Arc::new(RwLock::new(1000)),
+            channels: shared(channels),
+            name_to_id: shared(name_to_id),
+            next_plugin_channel: shared(1000),
         }
     }
     
