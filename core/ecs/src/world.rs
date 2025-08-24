@@ -1,8 +1,8 @@
 use std::collections::{HashMap, VecDeque};
 use playground_core_types::{Handle, handle, Shared, shared};
 use crate::entity::{EntityId, EntityAllocator};
-use crate::component::{Component, ComponentId, ComponentRegistry, ComponentBox};
-use crate::storage::{ComponentStorage, StorageImpl, StorageType};
+use crate::component::{Component, ComponentData, ComponentId, ComponentRegistry, ComponentBox};
+use crate::storage::{ComponentStorage, StorageType, Storage};
 use crate::query::{Query, QueryBuilder};
 use crate::error::{EcsError, EcsResult};
 use crate::messaging::{MessageBus, ChannelId};
@@ -71,7 +71,7 @@ impl GarbageCollector {
 
 pub struct World {
     entities: Shared<HashMap<EntityId, Vec<ComponentId>>>,
-    storages: Shared<HashMap<ComponentId, Handle<StorageImpl>>>,
+    storages: Shared<HashMap<ComponentId, Handle<ComponentStorage>>>,
     allocator: Shared<EntityAllocator>,
     registry: Handle<ComponentRegistry>,
     gc: Handle<GarbageCollector>,
@@ -102,26 +102,26 @@ impl World {
         }
     }
     
-    pub async fn register_component<T: Component>(&self) -> EcsResult<()> {
+    pub async fn register_component<T: ComponentData>(&self) -> EcsResult<()> {
         self.registry.register::<T>().await?;
         
         let component_id = T::component_id();
         if !self.storages.read().await.contains_key(&component_id) {
-            let storage = handle(StorageImpl::new_sparse(component_id));
+            let storage = handle(ComponentStorage::new_sparse(component_id));
             self.storages.write().await.insert(component_id, storage);
         }
         
         Ok(())
     }
     
-    pub async fn register_component_with_storage<T: Component>(&self, storage_type: StorageType) -> EcsResult<()> {
+    pub async fn register_component_with_storage<T: ComponentData>(&self, storage_type: StorageType) -> EcsResult<()> {
         self.registry.register::<T>().await?;
         
         let component_id = T::component_id();
         if !self.storages.read().await.contains_key(&component_id) {
             let storage = handle(match storage_type {
-                StorageType::Dense => StorageImpl::new_dense(component_id),
-                StorageType::Sparse | StorageType::Pooled => StorageImpl::new_sparse(component_id),
+                StorageType::Dense => ComponentStorage::new_dense(component_id),
+                StorageType::Sparse | StorageType::Pooled => ComponentStorage::new_sparse(component_id),
             });
             self.storages.write().await.insert(component_id, storage);
         }
@@ -140,14 +140,8 @@ impl World {
             let mut component_ids = Vec::new();
             
             for component in bundle {
-                let type_name = std::any::type_name_of_val(&*component);
-                
-                // Get component ID without holding registry lock
-                let component_id = {
-                    let info = self.registry.get_info_by_name(type_name).await
-                        .ok_or_else(|| EcsError::ComponentNotRegistered(type_name.to_string()))?;
-                    info.id
-                };
+                let component_id = component.component_id();
+                let type_name = component.component_name();
                 
                 component_ids.push(component_id);
                 
@@ -210,9 +204,9 @@ impl World {
         let mut storages = self.storages.write().await;
         if !storages.contains_key(&component_id) {
             let storage = handle(match storage_type {
-                StorageType::Dense => StorageImpl::new_dense(component_id),
-                StorageType::Sparse => StorageImpl::new_sparse(component_id),
-                StorageType::Pooled => StorageImpl::new_sparse(component_id), // Use sparse for now
+                StorageType::Dense => ComponentStorage::new_dense(component_id),
+                StorageType::Sparse => ComponentStorage::new_sparse(component_id),
+                StorageType::Pooled => ComponentStorage::new_sparse(component_id), // Use sparse for now
             });
             storages.insert(component_id, storage);
         }
@@ -279,14 +273,14 @@ impl World {
         }
     }
     
-    pub async fn get_component<T: Component>(&self, entity: EntityId) -> EcsResult<T> {
+    pub async fn get_component<T: ComponentData>(&self, entity: EntityId) -> EcsResult<T> {
         let component_box = self.get_component_raw(entity, T::component_id()).await?;
         // Deserialize from bytes
-        let bytes = component_box.serialize().await?;
-        T::deserialize(&bytes).await
+        let bytes = component_box.serialize();
+        T::deserialize(&bytes).map_err(|e| e.into())
     }
     
-    pub async fn update_component<T: Component>(&self, entity: EntityId, updater: impl FnOnce(&mut T)) -> EcsResult<()> {
+    pub async fn update_component<T: ComponentData>(&self, entity: EntityId, updater: impl FnOnce(&mut T)) -> EcsResult<()> {
         // Get the component
         let component = self.get_component::<T>(entity).await?;
         
@@ -296,7 +290,7 @@ impl World {
         
         // Remove old and add new
         self.remove_component_raw(entity, T::component_id()).await?;
-        let component_box = Box::new(updated) as ComponentBox;
+        let component_box = Box::new(Component::new(updated));
         self.add_component_raw(entity, component_box, T::component_id()).await?;
         
         Ok(())
@@ -332,7 +326,7 @@ impl World {
         let mut result: Vec<(EntityId, Vec<ComponentId>)> = Vec::new();
         
         // Clone storage references to avoid holding lock across await
-        let storages_list: Vec<(ComponentId, Handle<StorageImpl>)> = {
+        let storages_list: Vec<(ComponentId, Handle<ComponentStorage>)> = {
             let storages = self.storages.read().await;
             storages.iter().map(|(id, storage)| (*id, storage.clone())).collect()
         };
@@ -353,7 +347,7 @@ impl World {
     
     pub async fn clear_dirty(&self) -> EcsResult<()> {
         // Clone storage references to avoid holding lock across await
-        let storages_list: Vec<Handle<StorageImpl>> = {
+        let storages_list: Vec<Handle<ComponentStorage>> = {
             let storages = self.storages.read().await;
             storages.values().cloned().collect()
         };

@@ -13,7 +13,7 @@ pub enum StorageType {
 }
 
 #[async_trait]
-pub trait ComponentStorage: Send + Sync {
+pub trait Storage: Send + Sync {
     fn storage_type(&self) -> StorageType;
     
     async fn insert(&self, entity: EntityId, component: ComponentBox) -> EcsResult<()>;
@@ -64,7 +64,7 @@ impl SparseStorage {
 }
 
 #[async_trait]
-impl ComponentStorage for SparseStorage {
+impl Storage for SparseStorage {
     fn storage_type(&self) -> StorageType {
         StorageType::Sparse
     }
@@ -133,9 +133,8 @@ impl ComponentStorage for SparseStorage {
             })?;
         
         let component = shared_comp.read().await;
-        let bytes = component.serialize().await
-            .unwrap_or_else(|_| bytes::Bytes::new());
-        Ok(Box::new(RawComponent { data: bytes }) as ComponentBox)
+        let bytes = component.serialize();
+        Ok(Box::new(Component::from_bytes(bytes, self.component_id, String::new(), 0)))
     }
     
     async fn get_raw_mut(&self, entity: EntityId) -> EcsResult<Shared<ComponentBox>> {
@@ -210,7 +209,7 @@ impl DenseStorage {
 }
 
 #[async_trait]
-impl ComponentStorage for DenseStorage {
+impl Storage for DenseStorage {
     fn storage_type(&self) -> StorageType {
         StorageType::Dense
     }
@@ -400,134 +399,178 @@ impl ComponentStorage for DenseStorage {
     }
 }
 
-/// Concrete storage implementation enum to avoid dyn trait objects
-pub enum StorageImpl {
-    Sparse(Handle<SparseStorage>),
-    Dense(Handle<DenseStorage>),
+// Concrete ComponentStorage struct - abstract class pattern
+pub struct ComponentStorage {
+    // Private fields for storage state
+    components: Shared<HashMap<EntityId, Shared<ComponentBox>>>,
+    dirty: Shared<HashMap<EntityId, ()>>,
+    component_id: ComponentId,
+    storage_type: StorageType,
+    // Dense storage specific fields (only used when storage_type is Dense)
+    entities: Option<Shared<Vec<EntityId>>>,
+    entity_to_index: Option<Shared<HashMap<EntityId, usize>>>,
 }
 
-impl StorageImpl {
+impl ComponentStorage {
     pub fn new_sparse(component_id: ComponentId) -> Self {
-        StorageImpl::Sparse(handle(SparseStorage::new(component_id)))
+        Self {
+            components: shared(HashMap::new()),
+            dirty: shared(HashMap::new()),
+            component_id,
+            storage_type: StorageType::Sparse,
+            entities: None,
+            entity_to_index: None,
+        }
     }
     
     pub fn new_dense(component_id: ComponentId) -> Self {
-        StorageImpl::Dense(handle(DenseStorage::new(component_id)))
+        Self {
+            components: shared(HashMap::new()),
+            dirty: shared(HashMap::new()),
+            component_id,
+            storage_type: StorageType::Dense,
+            entities: Some(shared(Vec::new())),
+            entity_to_index: Some(shared(HashMap::new())),
+        }
     }
 }
 
 #[async_trait]
-impl ComponentStorage for StorageImpl {
+impl Storage for ComponentStorage {
     fn storage_type(&self) -> StorageType {
-        match self {
-            StorageImpl::Sparse(s) => s.storage_type(),
-            StorageImpl::Dense(s) => s.storage_type(),
-        }
+        self.storage_type
     }
     
     async fn insert(&self, entity: EntityId, component: ComponentBox) -> EcsResult<()> {
-        match self {
-            StorageImpl::Sparse(s) => s.insert(entity, component).await,
-            StorageImpl::Dense(s) => s.insert(entity, component).await,
+        match self.storage_type {
+            StorageType::Sparse => {
+                self.components.write().await.insert(entity, shared(component));
+                self.dirty.write().await.insert(entity, ());
+            }
+            StorageType::Dense => {
+                let entities = self.entities.as_ref().unwrap();
+                let entity_to_index = self.entity_to_index.as_ref().unwrap();
+                
+                if let Some(index) = entity_to_index.read().await.get(&entity).copied() {
+                    let mut components = self.components.write().await;
+                    components.insert(entity, shared(component));
+                    self.dirty.write().await.insert(entity, ());
+                } else {
+                    let mut entities_guard = entities.write().await;
+                    let index = entities_guard.len();
+                    entities_guard.push(entity);
+                    drop(entities_guard);
+                    
+                    self.components.write().await.insert(entity, shared(component));
+                    entity_to_index.write().await.insert(entity, index);
+                    self.dirty.write().await.insert(entity, ());
+                }
+            }
+            _ => {}
         }
+        Ok(())
     }
     
-    async fn insert_batch(&self, components: Vec<(EntityId, ComponentBox)>) -> EcsResult<()> {
-        match self {
-            StorageImpl::Sparse(s) => s.insert_batch(components).await,
-            StorageImpl::Dense(s) => s.insert_batch(components).await,
+    async fn insert_batch(&self, batch: Vec<(EntityId, ComponentBox)>) -> EcsResult<()> {
+        for (entity, component) in batch {
+            self.insert(entity, component).await?;
         }
+        Ok(())
     }
     
     async fn remove(&self, entity: EntityId) -> EcsResult<ComponentBox> {
-        match self {
-            StorageImpl::Sparse(s) => s.remove(entity).await,
-            StorageImpl::Dense(s) => s.remove(entity).await,
+        self.dirty.write().await.remove(&entity);
+        
+        let shared_comp = self.components.write().await.remove(&entity)
+            .ok_or_else(|| EcsError::ComponentNotFound {
+                entity,
+                component: format!("{:?}", self.component_id),
+            })?;
+        
+        // Try to extract the component from Shared
+        match std::sync::Arc::try_unwrap(shared_comp) {
+            Ok(rwlock) => Ok(rwlock.into_inner()),
+            Err(_) => Err(EcsError::ComponentInUse)
         }
     }
     
     async fn remove_batch(&self, entities: Vec<EntityId>) -> EcsResult<Vec<ComponentBox>> {
-        match self {
-            StorageImpl::Sparse(s) => s.remove_batch(entities).await,
-            StorageImpl::Dense(s) => s.remove_batch(entities).await,
+        let mut results = Vec::with_capacity(entities.len());
+        for entity in entities {
+            if let Ok(component) = self.remove(entity).await {
+                results.push(component);
+            }
         }
+        Ok(results)
     }
     
     async fn get_raw(&self, entity: EntityId) -> EcsResult<ComponentBox> {
-        match self {
-            StorageImpl::Sparse(s) => s.get_raw(entity).await,
-            StorageImpl::Dense(s) => s.get_raw(entity).await,
-        }
+        let components = self.components.read().await;
+        let shared_comp = components.get(&entity)
+            .ok_or_else(|| EcsError::ComponentNotFound {
+                entity,
+                component: format!("{:?}", self.component_id),
+            })?;
+        
+        let component = shared_comp.read().await;
+        let bytes = component.serialize();
+        Ok(Box::new(Component::from_bytes(bytes, self.component_id, String::new(), 0)))
     }
     
     async fn get_raw_mut(&self, entity: EntityId) -> EcsResult<Shared<ComponentBox>> {
-        match self {
-            StorageImpl::Sparse(s) => s.get_raw_mut(entity).await,
-            StorageImpl::Dense(s) => s.get_raw_mut(entity).await,
-        }
+        let components = self.components.read().await;
+        components.get(&entity)
+            .cloned()
+            .ok_or_else(|| EcsError::ComponentNotFound {
+                entity,
+                component: format!("{:?}", self.component_id),
+            })
     }
     
     async fn contains(&self, entity: EntityId) -> bool {
-        match self {
-            StorageImpl::Sparse(s) => s.contains(entity).await,
-            StorageImpl::Dense(s) => s.contains(entity).await,
-        }
+        self.components.read().await.contains_key(&entity)
     }
     
     async fn clear(&self) -> EcsResult<()> {
-        match self {
-            StorageImpl::Sparse(s) => s.clear().await,
-            StorageImpl::Dense(s) => s.clear().await,
+        self.components.write().await.clear();
+        self.dirty.write().await.clear();
+        if let Some(entities) = &self.entities {
+            entities.write().await.clear();
         }
+        if let Some(entity_to_index) = &self.entity_to_index {
+            entity_to_index.write().await.clear();
+        }
+        Ok(())
     }
     
     async fn len(&self) -> usize {
-        match self {
-            StorageImpl::Sparse(s) => s.len().await,
-            StorageImpl::Dense(s) => s.len().await,
-        }
+        self.components.read().await.len()
+    }
+    
+    async fn is_empty(&self) -> bool {
+        self.len().await == 0
     }
     
     async fn entities(&self) -> Vec<EntityId> {
-        match self {
-            StorageImpl::Sparse(s) => s.entities().await,
-            StorageImpl::Dense(s) => s.entities().await,
-        }
+        self.components.read().await.keys().copied().collect()
     }
     
     async fn mark_dirty(&self, entity: EntityId) -> EcsResult<()> {
-        match self {
-            StorageImpl::Sparse(s) => s.mark_dirty(entity).await,
-            StorageImpl::Dense(s) => s.mark_dirty(entity).await,
+        if self.components.read().await.contains_key(&entity) {
+            self.dirty.write().await.insert(entity, ());
+            Ok(())
+        } else {
+            Err(EcsError::EntityNotFound(entity))
         }
     }
     
     async fn get_dirty(&self) -> Vec<EntityId> {
-        match self {
-            StorageImpl::Sparse(s) => s.get_dirty().await,
-            StorageImpl::Dense(s) => s.get_dirty().await,
-        }
+        self.dirty.read().await.keys().copied().collect()
     }
     
     async fn clear_dirty(&self) -> EcsResult<()> {
-        match self {
-            StorageImpl::Sparse(s) => s.clear_dirty().await,
-            StorageImpl::Dense(s) => s.clear_dirty().await,
-        }
+        self.dirty.write().await.clear();
+        Ok(())
     }
 }
 
-struct RawComponent {
-    data: bytes::Bytes,
-}
-
-#[async_trait]
-impl crate::component::Component for RawComponent {
-    async fn serialize(&self) -> EcsResult<bytes::Bytes> {
-        Ok(self.data.clone())
-    }
-    
-    async fn deserialize(bytes: &bytes::Bytes) -> EcsResult<Self> {
-        Ok(Self { data: bytes.clone() })
-    }
-}

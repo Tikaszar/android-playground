@@ -9,7 +9,8 @@ This file contains critical memory for Claude Code when working with this reposi
 - **NO turbofish** - Use `.with_component(ComponentId)` instead of `::<T>`
 - **NO TODOs** - Complete all implementations fully
 - **NO incomplete code** - Everything must compile and work
-- **NO dyn** - Use enums or Handle<T> instead of trait objects
+- **NO dyn** - Use concrete types/base classes instead of trait objects
+- **NO enums for type erasure** - Use concrete wrapper types instead
 - **Handle<T> for external refs** - Use Handle<T> (Arc<T>) for referencing objects with internal state
 - **Shared<T> for internal state** - Use Shared<T> (Arc<RwLock<T>>) ONLY for private fields
 - **tokio::sync::RwLock ONLY** - NEVER use parking_lot::RwLock (Send issues)

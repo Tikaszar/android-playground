@@ -39,7 +39,22 @@ This file documents key architectural decisions, why they were made, and how the
 - Binary serialization is more efficient
 - Maintains type safety throughout
 
-**Alternative**: Use trait objects and serialization
+**Alternative**: Use concrete types and serialization
+
+### NO dyn - Concrete Types Only
+**Decision**: Avoid all `dyn` trait objects
+
+**Why**:
+- Type erasure happens at compile time, not runtime
+- Better performance without vtable indirection
+- Clearer ownership and lifetime semantics
+- Forces better architectural decisions
+
+**Implementation**:
+- Component is a concrete struct, not a trait
+- ComponentStorage is a concrete type with internal dispatch
+- Query system uses component IDs directly
+- Base class pattern: Component stores serialized data
 
 ### NO Turbofish Syntax
 **Decision**: Use `.with_component(ComponentId)` instead of `::<T>`

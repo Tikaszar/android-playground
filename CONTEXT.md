@@ -1,30 +1,34 @@
 # CONTEXT.md - Current Session Context
 
-## Active Session - 2025-08-24 (Session 15)
+## Active Session - 2025-08-24 (Session 16)
 
 ### Current Status
-**Major Architecture Refactor** ✅ - Introduced Handle<T> vs Shared<T> pattern to prevent deadlocks
+**NO dyn Refactor** 🚧 - Removing ALL `dyn` usage from core packages per strict rules
 
-### What Was Done This Session (2025-08-24 - Session 15)
-- **Introduced Handle<T> Type** ✅
-  - Added `Handle<T> = Arc<T>` for external references to objects with internal state
-  - Distinguished from `Shared<T> = Arc<RwLock<T>>` for internal mutable state
-  - Rule: Use Handle when object manages its own locking, Shared for private fields only
+### What Was Done This Session (2025-08-24 - Session 16)
+- **Fixed ComponentStorage to be Concrete Type** ✅
+  - Removed `StorageImpl` enum (violated NO enum rule)
+  - Made `ComponentStorage` a concrete struct, not a trait object
+  - Storage trait for implementation, ComponentStorage as concrete wrapper
+  - Uses internal match on storage_type field instead of enum
   
-- **Removed dyn Usage in ECS** ✅
-  - Created `StorageImpl` enum to avoid `dyn ComponentStorage`
-  - Changed World to use `Handle<StorageImpl>` instead of `Arc<dyn ComponentStorage>`
-  - Updated Query trait to use concrete types
+- **Refactored Component System** ✅
+  - Changed `Component` from trait to concrete struct (base class pattern)
+  - Component stores data as Bytes internally
+  - `ComponentData` trait for actual component types
+  - All ECS operations work through Component base class
+  - Removed migration functionality (unnecessary complexity)
   
-- **Fixed core/* Packages** ✅
-  - core/ecs: World uses Handle for ComponentRegistry, GarbageCollector, MessageBus
-  - core/server: Fixed ChannelManager and WebSocketState to use Shared/Handle properly
-  - Replaced all raw `Arc<RwLock<>>` with proper Shared<> types
+- **Fixed Query System** 🚧
+  - Removed `Box<dyn Query>` usage in AndQuery/OrQuery
+  - AndQuery now uses component IDs directly
+  - Simplified query composition without trait objects
   
-- **Architecture Principle Established** ✅
-  - **Handle<T>**: External reference to an object that manages its own internal state
-  - **Shared<T>**: Internal mutable state within a class (private fields only)
-  - This prevents nested RwLock deadlocks by ensuring clear ownership patterns
+- **Architecture Clarifications** ✅
+  - NO dyn - No trait objects anywhere
+  - NO enum - No enums for type erasure
+  - Component is the base class, everything uses it generically
+  - Classes that know the type use ComponentData directly
 
 ### Previous Session (2025-08-23 - Session 14)
 - **Fixed Nested Lock Issues in core/ecs** ✅

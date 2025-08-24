@@ -1,14 +1,62 @@
 use std::any::TypeId;
 use std::collections::HashMap;
-use async_trait::async_trait;
 use bytes::Bytes;
 use playground_core_types::{Shared, shared};
 use crate::error::{EcsError, EcsResult};
 
 pub type ComponentId = TypeId;
 
-#[async_trait]
-pub trait Component: Send + Sync + 'static {
+// Component is now a concrete base class that all components work through
+pub struct Component {
+    data: Bytes,
+    component_id: ComponentId,
+    component_name: String,
+    size_hint: usize,
+}
+
+impl Component {
+    pub fn new<T: ComponentData>(component: T) -> Self {
+        let data = component.serialize();
+        Self {
+            data,
+            component_id: T::component_id(),
+            component_name: T::component_name().to_string(),
+            size_hint: std::mem::size_of::<T>(),
+        }
+    }
+    
+    pub fn from_bytes(data: Bytes, component_id: ComponentId, component_name: String, size_hint: usize) -> Self {
+        Self {
+            data,
+            component_id,
+            component_name,
+            size_hint,
+        }
+    }
+    
+    pub fn component_id(&self) -> ComponentId {
+        self.component_id
+    }
+    
+    pub fn component_name(&self) -> &str {
+        &self.component_name
+    }
+    
+    pub fn serialize(&self) -> Bytes {
+        self.data.clone()
+    }
+    
+    pub fn deserialize<T: ComponentData>(&self) -> Result<T, EcsError> {
+        T::deserialize(&self.data)
+    }
+    
+    pub fn size_hint(&self) -> usize {
+        self.size_hint
+    }
+}
+
+// Trait for actual component data types
+pub trait ComponentData: Send + Sync + 'static {
     fn component_id() -> ComponentId where Self: Sized {
         TypeId::of::<Self>()
     }
@@ -17,16 +65,12 @@ pub trait Component: Send + Sync + 'static {
         std::any::type_name::<Self>()
     }
     
-    async fn serialize(&self) -> EcsResult<Bytes>;
+    fn serialize(&self) -> Bytes;
     
-    async fn deserialize(bytes: &Bytes) -> EcsResult<Self> where Self: Sized;
-    
-    fn size_hint(&self) -> usize {
-        std::mem::size_of_val(self)
-    }
+    fn deserialize(bytes: &Bytes) -> Result<Self, EcsError> where Self: Sized;
 }
 
-pub type ComponentBox = Box<dyn Component>;
+pub type ComponentBox = Box<Component>;
 
 #[derive(Clone)]
 pub struct ComponentInfo {
@@ -35,18 +79,16 @@ pub struct ComponentInfo {
     pub size_hint: usize,
     pub version: u32,
     pub networked: bool,
-    pub migration_fn: Option<Shared<dyn Fn(&Bytes, u32) -> EcsResult<Bytes> + Send + Sync>>,
 }
 
 impl ComponentInfo {
-    pub fn new<T: Component>() -> Self {
+    pub fn new<T: ComponentData>() -> Self {
         Self {
             id: T::component_id(),
             name: T::component_name().to_string(),
             size_hint: std::mem::size_of::<T>(),
             version: 1,
             networked: false,
-            migration_fn: None,
         }
     }
     
@@ -57,14 +99,6 @@ impl ComponentInfo {
     
     pub fn networked(mut self) -> Self {
         self.networked = true;
-        self
-    }
-    
-    pub fn with_migration<F>(mut self, f: F) -> Self 
-    where
-        F: Fn(&Bytes, u32) -> EcsResult<Bytes> + Send + Sync + 'static
-    {
-        self.migration_fn = Some(shared(f));
         self
     }
 }
@@ -90,7 +124,7 @@ impl ComponentRegistry {
         }
     }
     
-    pub async fn register<T: Component>(&self) -> EcsResult<()> {
+    pub async fn register<T: ComponentData>(&self) -> EcsResult<()> {
         self.register_with_info(ComponentInfo::new::<T>()).await
     }
     
