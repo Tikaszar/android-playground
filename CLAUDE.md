@@ -50,7 +50,6 @@ This file contains critical memory for Claude Code when working with this reposi
 
 ## #current-violations
 **systems/logic** - Extensive `dyn` usage (Box<dyn System>, Box<dyn Any>) 🔴
-**systems/networking** - Handle/Shared type alias misuse 🟡
 
 ## #ecs-architecture-fix
 **CRITICAL**: UiSystem uses `Arc<World>` not `Shared<World>`
@@ -65,9 +64,7 @@ This file contains critical memory for Claude Code when working with this reposi
    - Remove all Box<dyn Any> usage
    - Implement concrete System base class pattern
    - Fix all Handle/Shared type usage
-2. **Fix systems/networking type aliases** 🟡
-   - Replace Arc<RwLock<>> with Shared<>
-   - Use proper Handle<> and Shared<> from core/types
+2. ~~Fix systems/networking type aliases~~ ✅ COMPLETED
 3. Implement Discord UI layout
    - Fix ECS entity spawning for UI elements
    - Generate proper render commands from UI tree
