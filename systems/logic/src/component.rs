@@ -1,31 +1,94 @@
-use crate::error::LogicResult;
+use crate::error::{LogicResult, LogicError};
 use bytes::{Bytes, BytesMut};
-use tokio::sync::RwLock;
+use playground_core_types::{Shared, shared, Handle};
 use serde::{Deserialize, Serialize};
 use std::any::TypeId;
 use std::collections::HashMap;
-use std::sync::Arc;
+use fnv::{FnvHashMap, FnvHashSet};
 
-/// Component trait that all game components must implement
-pub trait Component: Send + Sync + 'static {
-    fn type_name() -> &'static str where Self: Sized;
+pub type ComponentId = TypeId;
+
+// Component is now a concrete base class that all components work through
+pub struct Component {
+    data: Bytes,
+    component_id: ComponentId,
+    component_name: String,
+    size_hint: usize,
+}
+
+impl Component {
+    pub async fn new<T: ComponentData>(component: T) -> LogicResult<Self> {
+        let data = component.serialize().await?;
+        Ok(Self {
+            data,
+            component_id: T::component_id(),
+            component_name: T::component_name().to_string(),
+            size_hint: std::mem::size_of::<T>(),
+        })
+    }
+    
+    pub fn from_bytes(data: Bytes, component_id: ComponentId, component_name: String, size_hint: usize) -> Self {
+        Self {
+            data,
+            component_id,
+            component_name,
+            size_hint,
+        }
+    }
+    
+    pub fn component_id(&self) -> ComponentId {
+        self.component_id
+    }
+    
+    pub fn component_name(&self) -> &str {
+        &self.component_name
+    }
+    
+    pub fn serialize(&self) -> Bytes {
+        self.data.clone()
+    }
+    
+    pub async fn deserialize<T: ComponentData>(&self) -> LogicResult<T> {
+        T::deserialize(&self.data).await
+    }
+    
+    pub fn size_hint(&self) -> usize {
+        self.size_hint
+    }
+}
+
+// Trait for actual component data types
+#[async_trait::async_trait]
+pub trait ComponentData: Send + Sync + 'static {
+    fn component_id() -> ComponentId where Self: Sized {
+        TypeId::of::<Self>()
+    }
+    
+    fn component_name() -> &'static str where Self: Sized {
+        std::any::type_name::<Self>()
+    }
+    
+    async fn serialize(&self) -> LogicResult<Bytes>;
+    
+    async fn deserialize(bytes: &Bytes) -> LogicResult<Self> where Self: Sized;
 }
 
 /// Networked component trait for automatic replication
-pub trait NetworkedComponent: Component + Serialize + for<'de> Deserialize<'de> {
+#[async_trait::async_trait]
+pub trait NetworkedComponent: ComponentData + Serialize + for<'de> Deserialize<'de> {
     /// Serialize component to bytes for network transmission
-    fn serialize_networked(&self) -> LogicResult<Bytes> {
+    async fn serialize_networked(&self) -> LogicResult<Bytes> {
         let mut buf = BytesMut::new();
         let json = serde_json::to_vec(self)
-            .map_err(|e| crate::error::LogicError::SerializationError(e.to_string()))?;
+            .map_err(|e| LogicError::SerializationError(e.to_string()))?;
         buf.extend_from_slice(&json);
         Ok(buf.freeze())
     }
     
     /// Deserialize component from network bytes
-    fn deserialize_networked(bytes: &[u8]) -> LogicResult<Self> where Self: Sized {
+    async fn deserialize_networked(bytes: &[u8]) -> LogicResult<Self> where Self: Sized {
         serde_json::from_slice(bytes)
-            .map_err(|e| crate::error::LogicError::SerializationError(e.to_string()))
+            .map_err(|e| LogicError::SerializationError(e.to_string()))
     }
     
     /// Get replication priority (higher = more important)
@@ -46,7 +109,6 @@ pub struct ComponentInfo {
     pub type_name: String,
     pub size: usize,
     pub networked: bool,
-    pub migration_fn: Option<Arc<dyn Fn(&[u8]) -> LogicResult<Vec<u8>> + Send + Sync>>,
 }
 
 /// Component registration builder
@@ -55,28 +117,19 @@ pub struct ComponentRegistration {
 }
 
 impl ComponentRegistration {
-    pub fn new<T: Component>() -> Self {
+    pub fn new<T: ComponentData>() -> Self {
         Self {
             info: ComponentInfo {
                 type_id: TypeId::of::<T>(),
-                type_name: T::type_name().to_string(),
+                type_name: T::component_name().to_string(),
                 size: std::mem::size_of::<T>(),
                 networked: false,
-                migration_fn: None,
             },
         }
     }
     
     pub fn networked(mut self) -> Self {
         self.info.networked = true;
-        self
-    }
-    
-    pub fn migration<F>(mut self, f: F) -> Self 
-    where
-        F: Fn(&[u8]) -> LogicResult<Vec<u8>> + Send + Sync + 'static
-    {
-        self.info.migration_fn = Some(Arc::new(f));
         self
     }
     
@@ -87,15 +140,15 @@ impl ComponentRegistration {
 
 /// Component registry for runtime type management
 pub struct ComponentRegistry {
-    components: Arc<RwLock<HashMap<TypeId, ComponentInfo>>>,
-    by_name: Arc<RwLock<HashMap<String, TypeId>>>,
+    components: Shared<HashMap<TypeId, ComponentInfo>>,
+    by_name: Shared<HashMap<String, TypeId>>,
 }
 
 impl ComponentRegistry {
     pub fn new() -> Self {
         Self {
-            components: Arc::new(RwLock::new(HashMap::new())),
-            by_name: Arc::new(RwLock::new(HashMap::new())),
+            components: shared(HashMap::new()),
+            by_name: shared(HashMap::new()),
         }
     }
     
@@ -129,34 +182,19 @@ impl ComponentRegistry {
             .map(|info| info.networked)
             .unwrap_or(false)
     }
-    
-    pub async fn migrate(&self, type_id: TypeId, old_data: &[u8]) -> LogicResult<Vec<u8>> {
-        let components = self.components.read().await;
-        let info = components
-            .get(&type_id)
-            .ok_or_else(|| crate::error::LogicError::ComponentNotRegistered(format!("{:?}", type_id)))?;
-        
-        if let Some(migration_fn) = &info.migration_fn {
-            migration_fn(old_data)
-        } else {
-            Ok(old_data.to_vec())
-        }
-    }
 }
 
 /// Dirty tracking for networked components
 pub struct DirtyTracker {
-    dirty_entities: Arc<RwLock<fnv::FnvHashSet<crate::entity::Entity>>>,
-    dirty_components: Arc<RwLock<fnv::FnvHashMap<crate::entity::Entity, fnv::FnvHashSet<TypeId>>>>,
+    dirty_entities: Shared<FnvHashSet<crate::entity::Entity>>,
+    dirty_components: Shared<FnvHashMap<crate::entity::Entity, FnvHashSet<TypeId>>>,
 }
-
-use fnv::{FnvHashMap, FnvHashSet};
 
 impl DirtyTracker {
     pub fn new() -> Self {
         Self {
-            dirty_entities: Arc::new(RwLock::new(FnvHashSet::default())),
-            dirty_components: Arc::new(RwLock::new(FnvHashMap::default())),
+            dirty_entities: shared(FnvHashSet::default()),
+            dirty_components: shared(FnvHashMap::default()),
         }
     }
     

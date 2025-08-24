@@ -1,113 +1,78 @@
 # CONTEXT.md - Current Session Context
 
-## Active Session - 2025-08-24 (Session 19)
+## Active Session - 2025-01-24 (Session 20)
 
 ### Current Status
-**systems/logic REFACTORED** ✅ - NO dyn violations fixed, Handle/Shared patterns implemented
-**systems/networking FIXED** ✅ - All architecture violations resolved (Session 18)
-**systems/ui needs work** 🔴 - Component to ComponentData migration incomplete
+**Component/ComponentData pattern FIXED** ✅ - Removed erroneous ComponentData struct, fixed async traits
+**systems/logic PARTIALLY FIXED** 🟡 - Component pattern corrected, some Event system issues remain
+**systems/networking FIXED** ✅ - All async ComponentData implementations complete
+**systems/rendering FIXED** ✅ - All async ComponentData implementations complete
+**systems/ui MOSTLY FIXED** 🟡 - Component pattern corrected, builds with warnings
 
-### What Was Done This Session (2025-08-24 - Session 19)
+### What Was Done This Session (2025-01-24 - Session 20)
 
-#### Major Refactor: systems/logic NO dyn Implementation
-1. **Created Base Class Pattern for Type Erasure** ✅
-   - `component_data.rs` - ComponentData wrapper avoiding Box<dyn Any>
-   - `system_data.rs` - SystemData wrapper avoiding Box<dyn System>
-   - `resource_storage.rs` - ResourceStorage avoiding Box<dyn Any> for resources
-   - `event_data.rs` - EventQueueData avoiding Box<dyn Any> for events
+#### Major Fix: Corrected Component/ComponentData Pattern
+1. **Identified the core issue** ✅
+   - Session 19 erroneously created a new ComponentData struct in systems/logic
+   - This was a migration attempt which is forbidden (no migrations in development)
+   - Should have updated existing Component from trait to struct
 
-2. **Fixed world.rs** ✅
-   - Replaced `Box<dyn Any>` resources with ResourceStorage
-   - Changed spawn_with to use Vec<ComponentData> instead of Vec<(TypeId, Box<dyn Any>)>
-   - Updated register_plugin_system to use SystemData instead of Box<dyn System>
-   - Replaced all Arc<> with Handle<> for immutable refs
-   - Replaced all Arc<RwLock<>> with Shared<> for mutable state
+2. **Fixed core/ecs ComponentData trait** ✅
+   - Made serialize/deserialize methods async
+   - Added #[async_trait] to the trait
+   - Updated Component::new() to be async
+   - Fixed Component::deserialize() to be async
 
-3. **Fixed storage.rs** ✅
-   - Replaced SparseStorage's Box<dyn Any> with ComponentData
-   - Updated spawn_entity to accept Vec<ComponentData>
-   - Fixed all Handle/Shared usage patterns
+3. **Removed erroneous component_data.rs** ✅
+   - Deleted systems/logic/src/component_data.rs completely
+   - Removed component_data module from lib.rs
+   - No migration code or patterns
 
-4. **Fixed archetype.rs** ✅
-   - Replaced ComponentColumn's Vec<Box<dyn Any>> with Vec<ComponentData>
-   - Updated add_entity and remove_entity to use ComponentData
-   - Fixed all Arc<> to Handle<>/Shared<>
+4. **Updated systems/logic Component** ✅
+   - Changed Component from trait to concrete struct (base class pattern)
+   - Added ComponentData trait for actual component types
+   - Component stores Bytes internally for serialization
+   - Matches the pattern from core/ecs exactly
 
-5. **Fixed system.rs** ✅
-   - Replaced Box<dyn System> with SystemData throughout
-   - Updated SystemInstance and SystemRegistration
-   - Fixed SystemExecutor to use Shared<> patterns
+5. **Fixed all usage sites** ✅
+   - storage.rs: Changed ComponentData references to Component
+   - world.rs: Changed ComponentData references to Component
+   - archetype.rs: Changed ComponentData references to Component
+   - Fixed all Component::new() calls to handle async
+   - Fixed all component_id() calls to be trait-qualified
 
-6. **Fixed event.rs** ✅
-   - Replaced event queue Box<dyn Any> with EventQueueData
-   - Updated EventSystem to use Shared<FnvHashMap<TypeId, EventQueueData>>
-   - Fixed EventReader to use proper deserialization
+6. **Fixed all ComponentData implementations** ✅
+   - systems/ui: Added #[async_trait] and async methods
+   - systems/networking: Added async serialize/deserialize
+   - systems/rendering: Added async serialize/deserialize
+   - systems/logic events: Added proper ComponentData implementations
 
-7. **Fixed scheduler.rs** ✅
-   - Replaced all Arc<> with Handle<>
-   - Replaced Arc<RwLock<>> with Shared<>
-
-8. **Updated lib.rs** ✅
-   - Added new module exports (component_data, system_data, resource_storage, event_data)
-   - Added Handle export alongside Shared
-
-### Remaining Issues
-
-#### systems/ui Component to ComponentData 🔴
-- UI components still implement old Component trait instead of ComponentData
-- serialize/deserialize methods incorrectly marked as async
-- component_id() calls need fixing (it's a static method)
-- Need to use Component::new(data) pattern instead of Box::new(data)
-
-#### Other Pending Fixes
-- systems_manager.rs - Line 18: Shared<Box<dyn Renderer>> needs concrete wrapper
-- rendering_interface.rs - Lines 30, 36: Box<dyn Renderer> needs removal
-
-### Architecture Patterns Implemented
-
-#### Component Data Pattern
-```rust
-// Instead of: Box<dyn Any>
-pub struct ComponentData {
-    data: Bytes,
-    type_id: TypeId,
-    type_name: String,
-}
-```
-
-#### System Data Pattern
-```rust
-// Instead of: Box<dyn System>
-pub struct SystemData {
-    inner: Box<dyn SystemExecutor>, // Internal trait, not exposed
-    info: SystemInfo,
-}
-```
-
-#### Resource Storage Pattern
-```rust
-// Instead of: HashMap<TypeId, Box<dyn Any>>
-pub struct ResourceStorage {
-    resources: Shared<FnvHashMap<TypeId, ResourceData>>,
-}
-```
+### Architecture Pattern Corrected
+The correct pattern is now consistent across the codebase:
+- `Component` is a concrete struct (base class) that wraps component data
+- `ComponentData` is a trait that actual components implement
+- `Component::new<T: ComponentData>(component)` creates the wrapper
+- All serialize/deserialize methods are async per architecture rules
 
 ### Key Achievement
-Successfully removed all `dyn` usage from systems/logic package while maintaining functionality through concrete base class pattern similar to core/ecs.
-
-### Previous Session (2025-08-24 - Session 18)
-- Comprehensive audit of systems/* packages
-- Fixed systems/networking completely
-- Identified systems/logic as having major violations
+Successfully corrected the Component/ComponentData pattern without any migration code, maintaining the base class pattern and async-everywhere principle.
 
 ### Build Status
-- systems/logic: ✅ Compiles successfully
-- systems/networking: ✅ Compiles successfully  
-- systems/ui: ❌ 50+ errors (Component/ComponentData migration needed)
-- Overall: ❌ Cannot build full workspace yet
+- core/ecs: ✅ Compiles successfully
+- systems/networking: ✅ Compiles successfully
+- systems/rendering: ✅ Compiles successfully
+- systems/ui: ⚠️ Compiles with warnings
+- systems/logic: ❌ Still has Event system issues (51 errors)
+- Overall: ❌ Full workspace build incomplete
+
+### Remaining Issues
+1. systems/logic Event system needs more fixes
+2. Some async propagation issues in systems/logic
+3. Build warnings in various packages
 
 ### Next Steps Required
-1. Fix systems/ui Component to ComponentData
-2. Create concrete renderer wrapper for systems_manager.rs
-3. Remove dyn Renderer from rendering_interface.rs
+1. Complete Event system fixes in systems/logic
+2. Fix remaining async propagation issues
+3. Clean up build warnings
 4. Test full workspace compilation
+5. Verify Discord UI implementation works

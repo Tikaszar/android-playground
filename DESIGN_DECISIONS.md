@@ -50,7 +50,7 @@ This file documents key architectural decisions, why they were made, and how the
 - Clearer ownership and lifetime semantics
 - Forces better architectural decisions
 
-**Implementation** (Session 17):
+**Implementation** (Session 17, Corrected Session 20):
 - Component is a concrete struct (base class pattern)
 - ComponentData trait for actual component types
 - Component stores data as Bytes internally for type erasure
@@ -58,7 +58,7 @@ This file documents key architectural decisions, why they were made, and how the
 - Query system uses component IDs directly, no Box<dyn Query>
 - World::execute_query is generic: `execute_query<Q: Query>`
 
-**Pattern**:
+**Pattern** (Updated Session 20 - Async):
 ```rust
 // Base class for all components
 pub struct Component {
@@ -68,16 +68,22 @@ pub struct Component {
     size_hint: usize,
 }
 
-// Trait for actual component types
+// Trait for actual component types (async methods)
+#[async_trait]
 pub trait ComponentData: Send + Sync + 'static {
     fn component_id() -> ComponentId;
-    fn serialize(&self) -> Bytes;
-    fn deserialize(bytes: &Bytes) -> Result<Self, EcsError>;
+    async fn serialize(&self) -> Result<Bytes, Error>;
+    async fn deserialize(bytes: &Bytes) -> Result<Self, Error>;
 }
 
-// Usage
-let component = Component::new(MyComponentData { ... });
+// Usage (async)
+let component = Component::new(MyComponentData { ... }).await?;
 ```
+
+**Evolution**:
+- Session 17: Initial implementation with sync methods
+- Session 19: Erroneously created ComponentData struct (migration attempt)
+- Session 20: Corrected by removing struct, making trait methods async
 
 ### NO Turbofish Syntax
 **Decision**: Use `.with_component(ComponentId)` instead of `::<T>`

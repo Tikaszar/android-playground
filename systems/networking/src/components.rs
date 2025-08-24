@@ -1,9 +1,10 @@
 //! ECS Components for networking system internal state
 
-use playground_core_ecs::{ComponentData, EcsError};
+use playground_core_ecs::{ComponentData, EcsError, EcsResult};
 use serde::{Serialize, Deserialize};
 use std::collections::VecDeque;
 use bytes::Bytes;
+use async_trait::async_trait;
 
 /// Component tracking connection state
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -16,98 +17,109 @@ pub struct ConnectionComponent {
     pub last_activity: u64,
 }
 
+#[async_trait]
 impl ComponentData for ConnectionComponent {
-    fn serialize(&self) -> Bytes {
-        bincode::serialize(self)
+    async fn serialize(&self) -> EcsResult<Bytes> {
+        Ok(bincode::serialize(self)
             .map(|v| Bytes::from(v))
-            .unwrap_or_else(|_| Bytes::new())
+            .map_err(|e| EcsError::SerializationFailed(e.to_string()))?)
     }
     
-    fn deserialize(bytes: &Bytes) -> Result<Self, EcsError> {
+    async fn deserialize(bytes: &Bytes) -> EcsResult<Self> {
         bincode::deserialize(bytes)
             .map_err(|e| EcsError::SerializationFailed(e.to_string()))
     }
 }
 
-/// Component tracking channel registration
+/// Component tracking channel registration and packet routing
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ChannelComponent {
     pub channel_id: u16,
     pub channel_name: String,
-    pub is_system: bool, // true for channels 1-999, false for 1000+
+    pub handler_active: bool,
 }
 
+#[async_trait]
 impl ComponentData for ChannelComponent {
-    fn serialize(&self) -> Bytes {
-        bincode::serialize(self)
+    async fn serialize(&self) -> EcsResult<Bytes> {
+        Ok(bincode::serialize(self)
             .map(|v| Bytes::from(v))
-            .unwrap_or_else(|_| Bytes::new())
+            .map_err(|e| EcsError::SerializationFailed(e.to_string()))?)
     }
     
-    fn deserialize(bytes: &Bytes) -> Result<Self, EcsError> {
+    async fn deserialize(bytes: &Bytes) -> EcsResult<Self> {
         bincode::deserialize(bytes)
             .map_err(|e| EcsError::SerializationFailed(e.to_string()))
     }
 }
 
-/// Component for packet queuing per connection
-#[derive(Debug, Clone)]
+/// Component tracking packet queue for batching
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PacketQueueComponent {
-    pub outgoing: VecDeque<QueuedPacket>,
-    pub incoming: VecDeque<QueuedPacket>,
-    pub max_queue_size: usize,
+    pub channel_id: u16,
+    pub queued_packets: VecDeque<Vec<u8>>,
+    pub total_bytes: usize,
+    pub priority: u8,
 }
 
 impl PacketQueueComponent {
-    pub fn new() -> Self {
+    pub fn new(channel_id: u16, priority: u8) -> Self {
         Self {
-            outgoing: VecDeque::new(),
-            incoming: VecDeque::new(),
-            max_queue_size: 1000,
+            channel_id,
+            queued_packets: VecDeque::new(),
+            total_bytes: 0,
+            priority,
         }
     }
 }
 
+#[async_trait]
 impl ComponentData for PacketQueueComponent {
-    fn serialize(&self) -> Bytes {
-        // For now, we don't serialize the queues (they're transient)
-        Bytes::new()
+    async fn serialize(&self) -> EcsResult<Bytes> {
+        Ok(bincode::serialize(self)
+            .map(|v| Bytes::from(v))
+            .map_err(|e| EcsError::SerializationFailed(e.to_string()))?)
     }
     
-    fn deserialize(_bytes: &Bytes) -> Result<Self, EcsError> {
-        Ok(Self::new())
+    async fn deserialize(bytes: &Bytes) -> EcsResult<Self> {
+        bincode::deserialize(bytes)
+            .map_err(|e| EcsError::SerializationFailed(e.to_string()))
     }
 }
 
-/// Queued packet data
-#[derive(Debug, Clone)]
-pub struct QueuedPacket {
-    pub channel_id: u16,
-    pub packet_type: u16,
-    pub priority: u8,
-    pub data: Bytes,
-    pub timestamp: u64,
-}
-
-/// Component for network statistics tracking
+/// Component tracking networking statistics
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct NetworkStatsComponent {
     pub bytes_sent: u64,
     pub bytes_received: u64,
     pub packets_sent: u64,
     pub packets_received: u64,
-    pub average_latency_ms: u32,
-    pub last_update: u64,
+    pub errors: u64,
+    pub last_reset: u64,
 }
 
+impl NetworkStatsComponent {
+    pub fn new() -> Self {
+        Self {
+            bytes_sent: 0,
+            bytes_received: 0,
+            packets_sent: 0,
+            packets_received: 0,
+            errors: 0,
+            last_reset: 0,
+        }
+    }
+}
+
+#[async_trait]
 impl ComponentData for NetworkStatsComponent {
-    fn serialize(&self) -> Bytes {
-        bincode::serialize(self)
+    async fn serialize(&self) -> EcsResult<Bytes> {
+        Ok(bincode::serialize(self)
             .map(|v| Bytes::from(v))
-            .unwrap_or_else(|_| Bytes::new())
+            .map_err(|e| EcsError::SerializationFailed(e.to_string()))?)
     }
     
-    fn deserialize(bytes: &Bytes) -> Result<Self, EcsError> {
+    async fn deserialize(bytes: &Bytes) -> EcsResult<Self> {
         bincode::deserialize(bytes)
             .map_err(|e| EcsError::SerializationFailed(e.to_string()))
     }

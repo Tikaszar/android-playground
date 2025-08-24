@@ -277,7 +277,7 @@ impl World {
         let component_box = self.get_component_raw(entity, T::component_id()).await?;
         // Deserialize from bytes
         let bytes = component_box.serialize();
-        T::deserialize(&bytes).map_err(|e| e.into())
+        T::deserialize(&bytes).await.map_err(|e| e.into())
     }
     
     pub async fn update_component<T: ComponentData>(&self, entity: EntityId, updater: impl FnOnce(&mut T)) -> EcsResult<()> {
@@ -290,7 +290,8 @@ impl World {
         
         // Remove old and add new
         self.remove_component_raw(entity, T::component_id()).await?;
-        let component_box = Box::new(Component::new(updated));
+        let component = Component::new(updated).await?;
+        let component_box = Box::new(component);
         self.add_component_raw(entity, component_box, T::component_id()).await?;
         
         Ok(())

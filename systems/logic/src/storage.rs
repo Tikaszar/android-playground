@@ -1,11 +1,12 @@
 use crate::archetype::ArchetypeGraph;
-use crate::component_data::ComponentData;
+use crate::component::{Component, ComponentData, ComponentId};
 use crate::entity::Entity;
 use crate::error::LogicResult;
 use fnv::FnvHashMap;
 use playground_core_types::{Handle, handle, Shared, shared};
 use tokio::sync::RwLock;
 use std::any::TypeId;
+use std::sync::Arc;
 
 /// Hybrid storage combining archetype (for iteration) and sparse (for random access)
 pub struct HybridStorage {
@@ -29,7 +30,7 @@ struct EntityLocation {
 }
 
 struct SparseStorage {
-    components: FnvHashMap<Entity, ComponentData>,
+    components: FnvHashMap<Entity, Component>,
 }
 
 impl HybridStorage {
@@ -42,7 +43,7 @@ impl HybridStorage {
         }
     }
     
-    pub async fn spawn_entity(&self, entity: Entity, components: Vec<ComponentData>) -> LogicResult<()> {
+    pub async fn spawn_entity(&self, entity: Entity, components: Vec<Component>) -> LogicResult<()> {
         // Separate dense and sparse components
         let mut dense_types = Vec::new();
         let mut dense_components = Vec::new();
@@ -123,13 +124,13 @@ impl HybridStorage {
         Ok(())
     }
     
-    pub async fn add_component<T: crate::component::Component + serde::Serialize + 'static + Send + Sync>(
+    pub async fn add_component<T: ComponentData + serde::Serialize + 'static + Send + Sync>(
         &self,
         entity: Entity,
         component: T,
     ) -> LogicResult<()> {
         let type_id = TypeId::of::<T>();
-        let component_data = ComponentData::new(component)?;
+        let component_data = Component::new(component).await?;
         
         // Check if should use sparse
         if self.should_use_sparse(type_id) {

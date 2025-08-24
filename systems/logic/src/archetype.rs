@@ -1,4 +1,4 @@
-use crate::component_data::ComponentData;
+use crate::component::{Component, ComponentData, ComponentId};
 use crate::entity::Entity;
 use crate::error::LogicResult;
 use fnv::FnvHashMap;
@@ -57,7 +57,7 @@ pub struct ArchetypeStorage {
 
 /// Column storage for a single component type
 struct ComponentColumn {
-    data: Vec<ComponentData>,
+    data: Vec<Component>,
 }
 
 impl ArchetypeStorage {
@@ -75,7 +75,7 @@ impl ArchetypeStorage {
         }
     }
     
-    pub fn add_entity(&mut self, entity: Entity, components: Vec<ComponentData>) -> LogicResult<()> {
+    pub fn add_entity(&mut self, entity: Entity, components: Vec<Component>) -> LogicResult<()> {
         if self.entity_indices.contains_key(&entity) {
             return Err(crate::error::LogicError::EntityNotFound(entity.id));
         }
@@ -95,7 +95,7 @@ impl ArchetypeStorage {
         Ok(())
     }
     
-    pub fn remove_entity(&mut self, entity: Entity) -> LogicResult<Vec<ComponentData>> {
+    pub fn remove_entity(&mut self, entity: Entity) -> LogicResult<Vec<Component>> {
         let index = self.entity_indices
             .remove(&entity)
             .ok_or(crate::error::LogicError::EntityNotFound(entity.id))?;

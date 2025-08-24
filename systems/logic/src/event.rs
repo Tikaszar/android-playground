@@ -1,14 +1,17 @@
-use crate::component::Component;
+use crate::component::{Component, ComponentData};
 use crate::entity::Entity;
 use crate::event_data::{EventData, EventQueueData};
+use crate::error::{LogicResult, LogicError};
 use playground_core_types::{Handle, handle, Shared, shared};
 use tokio::sync::RwLock;
 use std::any::TypeId;
 use std::collections::VecDeque;
-use serde::Serialize;
+use serde::{Serialize, Deserialize};
+use bytes::Bytes;
+use async_trait::async_trait;
 
 /// Event trait - events are just components with special handling
-pub trait Event: Component {
+pub trait Event: ComponentData {
     /// Get event priority (higher = processed first)
     fn priority() -> u8 {
         128
@@ -151,14 +154,26 @@ impl EventReader {
 }
 
 /// Common event types
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct EntitySpawned {
     pub entity: Entity,
 }
 
-impl Component for EntitySpawned {
-    fn type_name() -> &'static str {
+#[async_trait]
+impl ComponentData for EntitySpawned {
+    fn component_name() -> &'static str where Self: Sized {
         "EntitySpawned"
+    }
+    
+    async fn serialize(&self) -> LogicResult<Bytes> {
+        Ok(bincode::serialize(self)
+            .map(|v| Bytes::from(v))
+            .map_err(|e| LogicError::SerializationError(e.to_string()))?)
+    }
+    
+    async fn deserialize(bytes: &Bytes) -> LogicResult<Self> where Self: Sized {
+        bincode::deserialize(bytes)
+            .map_err(|e| LogicError::DeserializationError(e.to_string()))
     }
 }
 
@@ -168,14 +183,26 @@ impl Event for EntitySpawned {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct EntityDespawned {
     pub entity: Entity,
 }
 
-impl Component for EntityDespawned {
-    fn type_name() -> &'static str {
+#[async_trait]
+impl ComponentData for EntityDespawned {
+    fn component_name() -> &'static str where Self: Sized {
         "EntityDespawned"
+    }
+    
+    async fn serialize(&self) -> LogicResult<Bytes> {
+        Ok(bincode::serialize(self)
+            .map(|v| Bytes::from(v))
+            .map_err(|e| LogicError::SerializationError(e.to_string()))?)
+    }
+    
+    async fn deserialize(bytes: &Bytes) -> LogicResult<Self> where Self: Sized {
+        bincode::deserialize(bytes)
+            .map_err(|e| LogicError::DeserializationError(e.to_string()))
     }
 }
 
@@ -185,15 +212,27 @@ impl Event for EntityDespawned {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ComponentAdded {
     pub entity: Entity,
     pub component_type: TypeId,
 }
 
-impl Component for ComponentAdded {
-    fn type_name() -> &'static str {
+#[async_trait]
+impl ComponentData for ComponentAdded {
+    fn component_name() -> &'static str where Self: Sized {
         "ComponentAdded"
+    }
+    
+    async fn serialize(&self) -> LogicResult<Bytes> {
+        Ok(bincode::serialize(self)
+            .map(|v| Bytes::from(v))
+            .map_err(|e| LogicError::SerializationError(e.to_string()))?)
+    }
+    
+    async fn deserialize(bytes: &Bytes) -> LogicResult<Self> where Self: Sized {
+        bincode::deserialize(bytes)
+            .map_err(|e| LogicError::DeserializationError(e.to_string()))
     }
 }
 
@@ -203,15 +242,27 @@ impl Event for ComponentAdded {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ComponentRemoved {
     pub entity: Entity,
     pub component_type: TypeId,
 }
 
-impl Component for ComponentRemoved {
-    fn type_name() -> &'static str {
+#[async_trait]
+impl ComponentData for ComponentRemoved {
+    fn component_name() -> &'static str where Self: Sized {
         "ComponentRemoved"
+    }
+    
+    async fn serialize(&self) -> LogicResult<Bytes> {
+        Ok(bincode::serialize(self)
+            .map(|v| Bytes::from(v))
+            .map_err(|e| LogicError::SerializationError(e.to_string()))?)
+    }
+    
+    async fn deserialize(bytes: &Bytes) -> LogicResult<Self> where Self: Sized {
+        bincode::deserialize(bytes)
+            .map_err(|e| LogicError::DeserializationError(e.to_string()))
     }
 }
 

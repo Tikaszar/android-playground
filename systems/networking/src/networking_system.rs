@@ -205,7 +205,7 @@ impl NetworkingSystem {
         
         // Spawn entity with the component
         let components = vec![vec![
-            Box::new(Component::new(connection))
+            Box::new(Component::new(connection).await.map_err(|e| NetworkError::EcsError(e.to_string()))?)
         ]];
         
         let entities = world.spawn_batch(components).await
@@ -274,11 +274,6 @@ impl NetworkingSystem {
                 total_stats.bytes_received += stats.bytes_received;
                 total_stats.packets_sent += stats.packets_sent;
                 total_stats.packets_received += stats.packets_received;
-                
-                if stats.average_latency_ms > 0 {
-                    total_latency += stats.average_latency_ms as u64;
-                    latency_count += 1;
-                }
             }
         }
         

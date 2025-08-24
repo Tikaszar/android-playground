@@ -15,14 +15,14 @@ pub struct Component {
 }
 
 impl Component {
-    pub fn new<T: ComponentData>(component: T) -> Self {
-        let data = component.serialize();
-        Self {
+    pub async fn new<T: ComponentData>(component: T) -> EcsResult<Self> {
+        let data = component.serialize().await?;
+        Ok(Self {
             data,
             component_id: T::component_id(),
             component_name: T::component_name().to_string(),
             size_hint: std::mem::size_of::<T>(),
-        }
+        })
     }
     
     pub fn from_bytes(data: Bytes, component_id: ComponentId, component_name: String, size_hint: usize) -> Self {
@@ -46,8 +46,8 @@ impl Component {
         self.data.clone()
     }
     
-    pub fn deserialize<T: ComponentData>(&self) -> Result<T, EcsError> {
-        T::deserialize(&self.data)
+    pub async fn deserialize<T: ComponentData>(&self) -> EcsResult<T> {
+        T::deserialize(&self.data).await
     }
     
     pub fn size_hint(&self) -> usize {
@@ -56,6 +56,7 @@ impl Component {
 }
 
 // Trait for actual component data types
+#[async_trait::async_trait]
 pub trait ComponentData: Send + Sync + 'static {
     fn component_id() -> ComponentId where Self: Sized {
         TypeId::of::<Self>()
@@ -65,9 +66,9 @@ pub trait ComponentData: Send + Sync + 'static {
         std::any::type_name::<Self>()
     }
     
-    fn serialize(&self) -> Bytes;
+    async fn serialize(&self) -> EcsResult<Bytes>;
     
-    fn deserialize(bytes: &Bytes) -> Result<Self, EcsError> where Self: Sized;
+    async fn deserialize(bytes: &Bytes) -> EcsResult<Self> where Self: Sized;
 }
 
 pub type ComponentBox = Box<Component>;

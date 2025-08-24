@@ -61,6 +61,7 @@ impl Default for UiStyleComponent {
 }
 
 #[async_trait]
+#[async_trait]
 impl ComponentData for UiStyleComponent {
     fn component_id() -> ComponentId {
         std::any::TypeId::of::<Self>()

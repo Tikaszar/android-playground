@@ -49,7 +49,7 @@ This file contains critical memory for Claude Code when working with this reposi
 - UiSystem internal ECS is private - plugins use UiInterface from systems/logic
 
 ## #current-violations
-**systems/ui** - Component to ComponentData incomplete 🔴
+**systems/logic Event system** - Incomplete async fixes 🔴
 **rendering_interface.rs** - Box<dyn Renderer> usage 🔴
 
 ## #ecs-architecture-fix
@@ -62,14 +62,17 @@ This file contains critical memory for Claude Code when working with this reposi
 ## #immediate-goals
 1. ~~Fix systems/logic dyn violations~~ ✅ COMPLETED (Session 19)
 2. ~~Fix systems/networking type aliases~~ ✅ COMPLETED (Session 18)
-3. **Fix systems/ui Component to ComponentData** 🔴 CRITICAL
-   - Change from Component trait to ComponentData
-   - Fix serialize/deserialize (not async)
-   - Use Component::new(data) pattern
-4. Implement Discord UI layout
+3. ~~Fix Component/ComponentData pattern~~ ✅ COMPLETED (Session 20)
+   - Component is now concrete struct (base class)
+   - ComponentData is trait for actual types
+   - All serialize/deserialize are async
+4. **Fix systems/logic Event system** 🔴 CRITICAL
+   - Complete async implementations
+   - Fix remaining compilation errors
+5. Implement Discord UI layout
    - Fix ECS entity spawning for UI elements
    - Generate proper render commands from UI tree
-5. Fix client tracking in Dashboard (remove disconnected)
+6. Fix client tracking in Dashboard (remove disconnected)
 
 ## #architecture-fixed
 ✅ Plugins ARE Systems - no separate Plugin trait

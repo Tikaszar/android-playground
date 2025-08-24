@@ -1,5 +1,5 @@
 use crate::component::{ComponentRegistry, DirtyTracker, ComponentRegistration};
-use crate::component_data::ComponentData;
+use crate::component::{Component, ComponentData, ComponentId};
 use crate::entity::{Entity, EntityManager};
 use crate::error::LogicResult;
 use crate::event::EventSystem;
@@ -63,7 +63,7 @@ impl World {
     /// Spawn entity with components
     pub async fn spawn_with<F>(&self, builder: F) -> LogicResult<Entity>
     where
-        F: FnOnce() -> Vec<ComponentData>,
+        F: FnOnce() -> Vec<Component>,
     {
         let entity = self.entities.create().await;
         let components = builder();
@@ -278,7 +278,7 @@ impl ECS {
 /// Builder for spawning entities
 pub struct EntitySpawner {
     world: Handle<World>,
-    components: Vec<ComponentData>,
+    components: Vec<Component>,
 }
 
 impl EntitySpawner {
@@ -290,7 +290,7 @@ impl EntitySpawner {
     }
     
     pub fn with<T: crate::component::Component + Serialize + 'static + Send + Sync>(mut self, component: T) -> LogicResult<Self> {
-        let data = ComponentData::new(component)?;
+        let data = Component::new(component).await?;
         self.components.push(data);
         Ok(self)
     }
@@ -317,11 +317,5 @@ macro_rules! spawn {
 }
 
 /// Macro for creating component bundles
-#[macro_export]
-macro_rules! bundle {
-    ($($component:expr),+) => {{
-        vec![
-            $(ComponentData::new($component).unwrap()),+
-        ]
-    }};
-}
+// Note: bundle macro removed - use async functions to create component bundles instead
+// Components must be created with Component::new() which is async

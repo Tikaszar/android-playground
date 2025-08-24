@@ -27,6 +27,7 @@ impl UiTextComponent {
 }
 
 #[async_trait]
+#[async_trait]
 impl ComponentData for UiTextComponent {
     fn component_id() -> ComponentId {
         std::any::TypeId::of::<Self>()

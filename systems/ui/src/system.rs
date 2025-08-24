@@ -172,36 +172,46 @@ impl UiSystem {
             .ok_or_else(|| UiError::CreationFailed("Failed to create element".into()))?;
         
         // Add components directly - World handles its own internal locking
+        let element_component = Component::new(UiElementComponent::new(element_type)).await
+            .map_err(|e| UiError::EcsError(e.to_string()))?;
         self.world.add_component_raw(
             entity,
-            Box::new(UiElementComponent::new(element_type)),
-            UiElementComponent::component_id()
+            Box::new(element_component),
+            <UiElementComponent as playground_core_ecs::ComponentData>::component_id()
         ).await.map_err(|e| UiError::EcsError(e.to_string()))?;
         
+        let layout_component = Component::new(UiLayoutComponent::default()).await
+            .map_err(|e| UiError::EcsError(e.to_string()))?;
         self.world.add_component_raw(
             entity,
-            Box::new(UiLayoutComponent::default()),
-            UiLayoutComponent::component_id()
+            Box::new(layout_component),
+            <UiLayoutComponent as playground_core_ecs::ComponentData>::component_id()
         ).await.map_err(|e| UiError::EcsError(e.to_string()))?;
         
+        let style_component = Component::new(UiStyleComponent::default()).await
+            .map_err(|e| UiError::EcsError(e.to_string()))?;
         self.world.add_component_raw(
             entity,
-            Box::new(UiStyleComponent::default()),
-            UiStyleComponent::component_id()
+            Box::new(style_component),
+            <UiStyleComponent as playground_core_ecs::ComponentData>::component_id()
         ).await.map_err(|e| UiError::EcsError(e.to_string()))?;
         
+        let input_component = Component::new(UiInputComponent::default()).await
+            .map_err(|e| UiError::EcsError(e.to_string()))?;
         self.world.add_component_raw(
             entity,
-            Box::new(UiInputComponent::default()),
-            UiInputComponent::component_id()
+            Box::new(input_component),
+            <UiInputComponent as playground_core_ecs::ComponentData>::component_id()
         ).await.map_err(|e| UiError::EcsError(e.to_string()))?;
         
         // Add text component for text elements
         if element_type == "text" || element_type == "input" {
+            let text_component = Component::new(UiTextComponent::new(String::new())).await
+                .map_err(|e| UiError::EcsError(e.to_string()))?;
             self.world.add_component_raw(
                 entity,
-                Box::new(UiTextComponent::new(String::new())),
-                UiTextComponent::component_id()
+                Box::new(text_component),
+                <UiTextComponent as playground_core_ecs::ComponentData>::component_id()
             ).await.map_err(|e| UiError::EcsError(e.to_string()))?;
         }
         
@@ -247,13 +257,15 @@ impl UiSystem {
         updated_component.text_content = Some(text);
         
         // Remove old component and add updated one
-        self.world.remove_component_raw(element, UiElementComponent::component_id()).await
+        self.world.remove_component_raw(element, <UiElementComponent as playground_core_ecs::ComponentData>::component_id()).await
             .map_err(|e| UiError::EcsError(e.to_string()))?;
         
+        let component = Component::new(updated_component).await
+            .map_err(|e| UiError::EcsError(e.to_string()))?;
         self.world.add_component_raw(
             element,
-            Box::new(updated_component),
-            UiElementComponent::component_id()
+            Box::new(component),
+            <UiElementComponent as playground_core_ecs::ComponentData>::component_id()
         ).await
             .map_err(|e| UiError::EcsError(e.to_string()))?;
         
@@ -356,7 +368,7 @@ impl UiSystem {
         self.log("Info", "[UiSystem] Updating style component...".to_string()).await;
         
         // World is Arc<World> now, we can call methods directly
-        let component_id = UiStyleComponent::component_id();
+        let component_id = <UiStyleComponent as playground_core_ecs::ComponentData>::component_id();
         
         // Check if component exists first
         let has_component = self.world.has_component(element, component_id).await;
@@ -371,9 +383,11 @@ impl UiSystem {
         
         // Add the new component
         self.log("Info", format!("[UiSystem] Adding new component for entity {:?}", element)).await;
+        let style_component = Component::new(ui_style).await
+            .map_err(|e| UiError::EcsError(e.to_string()))?;
         self.world.add_component_raw(
             element,
-            Box::new(ui_style),
+            Box::new(style_component),
             component_id
         ).await.map_err(|e| UiError::EcsError(e.to_string()))?;
         
@@ -414,13 +428,15 @@ impl UiSystem {
         
         // World handles its own locking - don't lock it here
         // Remove old layout component if it exists
-        let _ = self.world.remove_component_raw(element, UiLayoutComponent::component_id()).await;
+        let _ = self.world.remove_component_raw(element, <UiLayoutComponent as playground_core_ecs::ComponentData>::component_id()).await;
         
         // Add the new layout component
+        let component = Component::new(layout).await
+            .map_err(|e| UiError::EcsError(e.to_string()))?;
         self.world.add_component_raw(
             element,
-            Box::new(layout),
-            UiLayoutComponent::component_id()
+            Box::new(component),
+            <UiLayoutComponent as playground_core_ecs::ComponentData>::component_id()
         ).await.map_err(|e| UiError::EcsError(e.to_string()))?;
         
         // Mark as dirty
@@ -454,21 +470,23 @@ impl UiSystem {
         self.log("Info", "[UiSystem] Updating component with id...".to_string()).await;
         
         // Get the current element component
-        let elem_box = self.world.get_component_raw(entity, UiElementComponent::component_id()).await
+        let elem_box = self.world.get_component_raw(entity, <UiElementComponent as playground_core_ecs::ComponentData>::component_id()).await
             .map_err(|e| UiError::EcsError(e.to_string()))?;
         
         // Deserialize, update, and re-serialize
-        let bytes = elem_box.serialize().await.map_err(|e| UiError::EcsError(e.to_string()))?;
-        let mut elem = UiElementComponent::deserialize(&bytes).await
+        let bytes = elem_box.serialize();
+        let mut elem = <UiElementComponent as playground_core_ecs::ComponentData>::deserialize(&bytes).await
             .map_err(|e| UiError::EcsError(e.to_string()))?;
         elem.id = id.clone();
         
         // Remove old and add new
-        let _ = self.world.remove_component_raw(entity, UiElementComponent::component_id()).await;
+        let _ = self.world.remove_component_raw(entity, <UiElementComponent as playground_core_ecs::ComponentData>::component_id()).await;
+        let component = Component::new(elem).await
+            .map_err(|e| UiError::EcsError(e.to_string()))?;
         self.world.add_component_raw(
             entity,
-            Box::new(elem),
-            UiElementComponent::component_id()
+            Box::new(component),
+            <UiElementComponent as playground_core_ecs::ComponentData>::component_id()
         ).await.map_err(|e| UiError::EcsError(e.to_string()))?;
         
         self.log("Info", format!("[UiSystem] Component updated with id={}", id)).await;
@@ -494,27 +512,27 @@ impl UiSystem {
         
         // Also register storage in the world for each component - World handles its own locking
         self.world.register_component_storage(
-            UiElementComponent::component_id(),
+            <UiElementComponent as playground_core_ecs::ComponentData>::component_id(),
             playground_core_ecs::StorageType::Dense
         ).await.map_err(|e| UiError::EcsError(e.to_string()))?;
         
         self.world.register_component_storage(
-            UiLayoutComponent::component_id(),
+            <UiLayoutComponent as playground_core_ecs::ComponentData>::component_id(),
             playground_core_ecs::StorageType::Dense
         ).await.map_err(|e| UiError::EcsError(e.to_string()))?;
         
         self.world.register_component_storage(
-            UiStyleComponent::component_id(),
+            <UiStyleComponent as playground_core_ecs::ComponentData>::component_id(),
             playground_core_ecs::StorageType::Dense
         ).await.map_err(|e| UiError::EcsError(e.to_string()))?;
         
         self.world.register_component_storage(
-            UiInputComponent::component_id(),
+            <UiInputComponent as playground_core_ecs::ComponentData>::component_id(),
             playground_core_ecs::StorageType::Dense
         ).await.map_err(|e| UiError::EcsError(e.to_string()))?;
         
         self.world.register_component_storage(
-            UiTextComponent::component_id(),
+            <UiTextComponent as playground_core_ecs::ComponentData>::component_id(),
             playground_core_ecs::StorageType::Sparse
         ).await.map_err(|e| UiError::EcsError(e.to_string()))?;
         
@@ -532,10 +550,12 @@ impl UiSystem {
         // Now add components individually (avoiding trait object issues)
         let mut root_element = UiElementComponent::new("root");
         root_element.visible = true;
+        let component = Component::new(root_element).await
+            .map_err(|e| UiError::EcsError(e.to_string()))?;
         self.world.add_component_raw(
             entity, 
-            Box::new(root_element),
-            UiElementComponent::component_id()
+            Box::new(component),
+            <UiElementComponent as playground_core_ecs::ComponentData>::component_id()
         ).await.map_err(|e| UiError::EcsError(e.to_string()))?;
         
         let mut root_layout = UiLayoutComponent::default();
@@ -546,24 +566,30 @@ impl UiSystem {
             height: self.screen_size[1],
         };
         root_layout.layout_type = LayoutType::Absolute;
+        let component = Component::new(root_layout).await
+            .map_err(|e| UiError::EcsError(e.to_string()))?;
         self.world.add_component_raw(
             entity,
-            Box::new(root_layout),
-            UiLayoutComponent::component_id()
+            Box::new(component),
+            <UiLayoutComponent as playground_core_ecs::ComponentData>::component_id()
         ).await.map_err(|e| UiError::EcsError(e.to_string()))?;
         
         let mut root_style = UiStyleComponent::default();
         root_style.visible = true;
+        let style_component = Component::new(root_style).await
+            .map_err(|e| UiError::EcsError(e.to_string()))?;
         self.world.add_component_raw(
             entity,
-            Box::new(root_style),
-            UiStyleComponent::component_id()
+            Box::new(style_component),
+            <UiStyleComponent as playground_core_ecs::ComponentData>::component_id()
         ).await.map_err(|e| UiError::EcsError(e.to_string()))?;
         
+        let input_component = Component::new(UiInputComponent::default()).await
+            .map_err(|e| UiError::EcsError(e.to_string()))?;
         self.world.add_component_raw(
             entity,
-            Box::new(UiInputComponent::default()),
-            UiInputComponent::component_id()
+            Box::new(input_component),
+            <UiInputComponent as playground_core_ecs::ComponentData>::component_id()
         ).await.map_err(|e| UiError::EcsError(e.to_string()))?;
         
         Ok(entity)
@@ -637,7 +663,7 @@ impl UiSystem {
         
         // Log that we're sending render commands (if we have dashboard via networking)
         if let Some(ref networking) = self.networking_system {
-            if let Some(dashboard) = networking.read().await.get_dashboard().await {
+            if let Some(dashboard) = networking.get_dashboard().await {
                 dashboard.log(
                     playground_core_server::dashboard::LogLevel::Debug,
                     format!("UI: Publishing RenderBatch to MessageBus on channel {} (bincode, {} bytes)", 
@@ -664,7 +690,7 @@ impl UiSystem {
     pub async fn render(&mut self) -> UiResult<()> {
         // Log render call
         if let Some(ref networking) = self.networking_system {
-            if let Some(dashboard) = networking.read().await.get_dashboard().await {
+            if let Some(dashboard) = networking.get_dashboard().await {
                 dashboard.log(
                     playground_core_server::dashboard::LogLevel::Debug,
                     format!("UI: render() called, frame {}", self.frame_id),
@@ -704,7 +730,7 @@ impl UiSystem {
         if let Some(root) = self.root_entity {
             // Log if we have a root
             if let Some(ref networking) = self.networking_system {
-                if let Some(dashboard) = networking.read().await.get_dashboard().await {
+                if let Some(dashboard) = networking.get_dashboard().await {
                     dashboard.log(
                         playground_core_server::dashboard::LogLevel::Debug,
                         format!("UI: Rendering root entity {:?}", root),
@@ -716,7 +742,7 @@ impl UiSystem {
         } else {
             // Log that we have no root
             if let Some(ref networking) = self.networking_system {
-                if let Some(dashboard) = networking.read().await.get_dashboard().await {
+                if let Some(dashboard) = networking.get_dashboard().await {
                     dashboard.log(
                         playground_core_server::dashboard::LogLevel::Warning,
                         "UI: No root entity to render!".to_string(),

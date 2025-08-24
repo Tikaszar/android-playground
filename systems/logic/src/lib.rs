@@ -8,7 +8,6 @@
 
 pub mod archetype;
 pub mod component;
-pub mod component_data;
 pub mod entity;
 pub mod error;
 pub mod event;
@@ -27,7 +26,6 @@ pub mod messaging;
 
 pub use archetype::*;
 pub use component::*;
-pub use component_data::*;
 pub use entity::*;
 pub use error::*;
 pub use event::*;
