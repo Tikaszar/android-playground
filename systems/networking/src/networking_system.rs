@@ -4,20 +4,19 @@ use crate::{
     ConnectionComponent, NetworkStatsComponent,
     NetworkStats,
 };
-use playground_core_ecs::{World, EntityId, Component};
-use playground_core_types::{ChannelId, Priority};
+use playground_core_ecs::{World, EntityId, Component, ComponentData};
+use playground_core_types::{ChannelId, Priority, Shared, shared, Handle, handle};
 use std::sync::Arc;
-use tokio::sync::RwLock;
 
 /// Main networking system that Plugins interact with
 /// Now uses MessageBus for internal communication instead of WebSocket
 pub struct NetworkingSystem {
     // Internal ECS world for managing network state
-    world: Arc<RwLock<World>>,
+    world: Handle<World>,
     // Channel manager for dynamic registration
-    channel_manager: Arc<RwLock<ChannelManager>>,
+    channel_manager: Shared<ChannelManager>,
     // Packet queue for batching (kept for compatibility)
-    packet_queue: Arc<RwLock<PacketQueue>>,
+    packet_queue: Shared<PacketQueue>,
     // Dashboard reference (only available after server starts)
     dashboard: Option<Arc<playground_core_server::Dashboard>>,
     // MessageBus for internal system communication
@@ -27,12 +26,12 @@ pub struct NetworkingSystem {
 impl NetworkingSystem {
     /// Create a new networking system
     pub async fn new() -> NetworkResult<Self> {
-        let world = Arc::new(RwLock::new(World::new()));
+        let world = handle(World::new());
         
         Ok(Self {
             world,
-            channel_manager: Arc::new(RwLock::new(ChannelManager::new())),
-            packet_queue: Arc::new(RwLock::new(PacketQueue::new())),
+            channel_manager: shared(ChannelManager::new()),
+            packet_queue: shared(PacketQueue::new()),
             dashboard: None,
             message_bus: None,
         })
@@ -185,7 +184,7 @@ impl NetworkingSystem {
     
     /// Create a peer-to-peer connection entity
     pub async fn create_connection(&self, peer_id: String) -> NetworkResult<EntityId> {
-        let world = self.world.write().await;
+        let world = &self.world;
         
         // Register the component type if not already registered
         world.register_component::<ConnectionComponent>().await
@@ -205,11 +204,11 @@ impl NetworkingSystem {
         };
         
         // Spawn entity with the component
-        let components: Vec<Box<dyn playground_core_ecs::Component>> = vec![
-            Box::new(connection),
-        ];
+        let components = vec![vec![
+            Box::new(Component::new(connection))
+        ]];
         
-        let entities = world.spawn_batch(vec![components]).await
+        let entities = world.spawn_batch(components).await
             .map_err(|e| NetworkError::EcsError(e.to_string()))?;
         
         Ok(entities[0])
@@ -217,11 +216,11 @@ impl NetworkingSystem {
     
     /// Query connection components
     pub async fn query_connections(&self) -> NetworkResult<Vec<ConnectionComponent>> {
-        let world = self.world.read().await;
+        let world = &self.world;
         
         // Build and execute query  
         let query = world.query().with_component(ConnectionComponent::component_id()).build();
-        let entity_ids = world.execute_query(query.as_ref()).await
+        let entity_ids = world.execute_query(&query).await
             .map_err(|e| NetworkError::EcsError(e.to_string()))?;
         
         // Extract connection components
@@ -249,11 +248,11 @@ impl NetworkingSystem {
     
     /// Get network statistics
     pub async fn get_stats(&self) -> NetworkResult<NetworkStats> {
-        let world = self.world.read().await;
+        let world = &self.world;
         
         // Query all NetworkStatsComponents
         let stats_query = world.query().with_component(NetworkStatsComponent::component_id()).build();
-        let entity_ids = world.execute_query(stats_query.as_ref()).await
+        let entity_ids = world.execute_query(&stats_query).await
             .map_err(|e| NetworkError::EcsError(e.to_string()))?;
         
         // Aggregate stats
@@ -285,7 +284,7 @@ impl NetworkingSystem {
         
         // Count active connections
         let conn_query = world.query().with_component(ConnectionComponent::component_id()).build();
-        let connections = world.execute_query(conn_query.as_ref()).await
+        let connections = world.execute_query(&conn_query).await
             .map_err(|e| NetworkError::EcsError(e.to_string()))?;
         
         let mut active_count = 0;

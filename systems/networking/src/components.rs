@@ -1,10 +1,9 @@
 //! ECS Components for networking system internal state
 
-use playground_core_ecs::Component;
+use playground_core_ecs::{ComponentData, EcsError};
 use serde::{Serialize, Deserialize};
 use std::collections::VecDeque;
 use bytes::Bytes;
-use async_trait::async_trait;
 
 /// Component tracking connection state
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -17,17 +16,16 @@ pub struct ConnectionComponent {
     pub last_activity: u64,
 }
 
-#[async_trait]
-impl Component for ConnectionComponent {
-    async fn serialize(&self) -> playground_core_ecs::Result<Bytes> {
+impl ComponentData for ConnectionComponent {
+    fn serialize(&self) -> Bytes {
         bincode::serialize(self)
             .map(|v| Bytes::from(v))
-            .map_err(|e| playground_core_ecs::EcsError::SerializationFailed(e.to_string()))
+            .unwrap_or_else(|_| Bytes::new())
     }
     
-    async fn deserialize(bytes: &Bytes) -> playground_core_ecs::Result<Self> {
+    fn deserialize(bytes: &Bytes) -> Result<Self, EcsError> {
         bincode::deserialize(bytes)
-            .map_err(|e| playground_core_ecs::EcsError::SerializationFailed(e.to_string()))
+            .map_err(|e| EcsError::SerializationFailed(e.to_string()))
     }
 }
 
@@ -39,17 +37,16 @@ pub struct ChannelComponent {
     pub is_system: bool, // true for channels 1-999, false for 1000+
 }
 
-#[async_trait]
-impl Component for ChannelComponent {
-    async fn serialize(&self) -> playground_core_ecs::Result<Bytes> {
+impl ComponentData for ChannelComponent {
+    fn serialize(&self) -> Bytes {
         bincode::serialize(self)
             .map(|v| Bytes::from(v))
-            .map_err(|e| playground_core_ecs::EcsError::SerializationFailed(e.to_string()))
+            .unwrap_or_else(|_| Bytes::new())
     }
     
-    async fn deserialize(bytes: &Bytes) -> playground_core_ecs::Result<Self> {
+    fn deserialize(bytes: &Bytes) -> Result<Self, EcsError> {
         bincode::deserialize(bytes)
-            .map_err(|e| playground_core_ecs::EcsError::SerializationFailed(e.to_string()))
+            .map_err(|e| EcsError::SerializationFailed(e.to_string()))
     }
 }
 
@@ -71,14 +68,13 @@ impl PacketQueueComponent {
     }
 }
 
-#[async_trait]
-impl Component for PacketQueueComponent {
-    async fn serialize(&self) -> playground_core_ecs::Result<Bytes> {
+impl ComponentData for PacketQueueComponent {
+    fn serialize(&self) -> Bytes {
         // For now, we don't serialize the queues (they're transient)
-        Ok(Bytes::new())
+        Bytes::new()
     }
     
-    async fn deserialize(_bytes: &Bytes) -> playground_core_ecs::Result<Self> {
+    fn deserialize(_bytes: &Bytes) -> Result<Self, EcsError> {
         Ok(Self::new())
     }
 }
@@ -104,16 +100,15 @@ pub struct NetworkStatsComponent {
     pub last_update: u64,
 }
 
-#[async_trait]
-impl Component for NetworkStatsComponent {
-    async fn serialize(&self) -> playground_core_ecs::Result<Bytes> {
+impl ComponentData for NetworkStatsComponent {
+    fn serialize(&self) -> Bytes {
         bincode::serialize(self)
             .map(|v| Bytes::from(v))
-            .map_err(|e| playground_core_ecs::EcsError::SerializationFailed(e.to_string()))
+            .unwrap_or_else(|_| Bytes::new())
     }
     
-    async fn deserialize(bytes: &Bytes) -> playground_core_ecs::Result<Self> {
+    fn deserialize(bytes: &Bytes) -> Result<Self, EcsError> {
         bincode::deserialize(bytes)
-            .map_err(|e| playground_core_ecs::EcsError::SerializationFailed(e.to_string()))
+            .map_err(|e| EcsError::SerializationFailed(e.to_string()))
     }
 }

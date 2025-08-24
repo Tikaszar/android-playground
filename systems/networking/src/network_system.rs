@@ -2,24 +2,22 @@
 
 use crate::{NetworkError, NetworkResult};
 use playground_core_ecs::World;
-use playground_core_types::{ChannelId, Priority, Packet};
-use std::sync::Arc;
-use tokio::sync::RwLock;
+use playground_core_types::{ChannelId, Priority, Packet, Handle, handle};
 use bytes::{BytesMut, BufMut};
 
 /// Internal network system that processes ECS queries
 pub struct NetworkSystem {
-    world: Arc<RwLock<World>>,
+    world: Handle<World>,
 }
 
 impl NetworkSystem {
-    pub fn new(world: Arc<RwLock<World>>) -> Self {
+    pub fn new(world: Handle<World>) -> Self {
         Self { world }
     }
     
     /// Process network events using ECS queries
     pub async fn process_network_events(&self) -> NetworkResult<()> {
-        let world = self.world.read().await;
+        let world = &self.world;
         
         // Query all connection entities
         // Note: core/ecs uses a different query API than expected
@@ -95,7 +93,7 @@ impl NetworkSystem {
     
     /// Update network statistics components
     pub async fn update_stats(&self) -> NetworkResult<()> {
-        let world = self.world.write().await;
+        let world = &self.world;
         
         // Query all network stats components
         // Note: core/ecs uses a different query API than expected
