@@ -2,7 +2,35 @@
 
 This file tracks the detailed history of development sessions, including achievements, bug fixes, and implementation progress.
 
-## Session: 2025-08-24 - NO dyn Refactor Complete (Session 17)
+## Session: 2025-08-24 - Architecture Audit of systems/* (Session 18)
+
+### What Was Accomplished
+1. **Comprehensive Code Audit**
+   - Read and analyzed all major files in systems/* packages
+   - Discovered previous "NO dyn" refactor only covered core/* packages
+   - Found extensive violations in systems/logic and systems/networking
+   
+2. **Critical Findings**
+   - **systems/logic has major dyn usage:**
+     - world.rs: Box<dyn Any>, Box<dyn System> throughout
+     - system.rs: Box<dyn System> for all system management
+     - Needs complete refactor similar to core/ecs
+   - **systems/networking has type alias issues:**
+     - Using Arc<RwLock<>> directly instead of Shared<> type alias
+     - Easy fix but shows incomplete refactor
+   - **systems/ui and systems/webgl are fully compliant**
+     - Correctly use Handle<> and Shared<> from core/types
+     - systems/ui correctly uses Arc<World> per architecture rules
+
+3. **Documentation Updates**
+   - Updated CONTEXT.md to reflect true state
+   - Updated CLAUDE.md with current violations
+   - Corrected false claim of "Zero trait objects in entire codebase"
+
+### Key Learning
+The NO dyn refactor from Session 17 was incomplete - it only covered core/* packages and missed systems/* entirely. This shows the importance of thorough verification across the entire codebase.
+
+## Session: 2025-08-24 - NO dyn Refactor Complete FOR CORE ONLY (Session 17)
 
 ### What Was Accomplished
 1. **Completed NO dyn Refactor**

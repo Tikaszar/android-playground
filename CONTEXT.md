@@ -1,40 +1,50 @@
 # CONTEXT.md - Current Session Context
 
-## Active Session - 2025-08-24 (Session 17)
+## Active Session - 2025-08-24 (Session 18)
 
 ### Current Status
-**NO dyn Refactor Complete** ✅ - Successfully removed ALL `dyn` usage from entire codebase
+**Found Critical Architecture Violations in systems/* packages** 🔴
+- systems/logic has extensive `dyn` usage that needs refactoring
+- systems/networking has Handle/Shared misuse
+- Previous claim of "Zero trait objects in entire codebase" was FALSE
 
-### What Was Done This Session (2025-08-24 - Session 17)
-- **Completed NO dyn Refactor** ✅
-  - Fixed remaining compilation errors from Session 16
-  - Updated all imports to use `Component` and `ComponentData` correctly
-  - Fixed serialize/deserialize signatures in ComponentData trait
+### What Was Done This Session (2025-08-24 - Session 18)
+- **Comprehensive Audit of systems/* packages** ✅
+  - Read and analyzed all major system files
+  - Found extensive `dyn` usage in systems/logic
+  - Found Handle/Shared type alias issues in systems/networking
+  - Confirmed systems/ui and systems/webgl are compliant
   
-- **Fixed core/ecs Package** ✅
-  - Added missing `Component` import in storage.rs
-  - Fixed AndQuery implementation to use component_ids properly
-  - Removed OrQuery and CachedQuery (can't use dyn)
-  - Updated QueryBuilder to return concrete AndQuery
-  - Made World::execute_query generic instead of using dyn
-  - Removed migration functionality from ComponentRegistry
+- **Critical Issues Found** 🔴
+  1. **systems/logic/src/world.rs:**
+     - Line 23, 64, 217, 281, 325: `Box<dyn std::any::Any + Send + Sync>`
+     - Uses Arc directly instead of Handle/Shared types
   
-- **Fixed core/server Package** ✅
-  - Updated dashboard.rs to use `Shared<>` type alias
-  - Fixed missing Arc import
-  - Consistent use of shared() helper function
+  2. **systems/logic/src/system.rs:**
+     - Line 53, 70, 111, 162, 165: `Box<dyn System>`
+     - Line 81: Creating dyn trait objects
   
-- **Fixed systems/rendering Package** ✅
-  - Changed all Component trait impls to ComponentData
-  - Updated serialize/deserialize to match new signatures
-  - Fixed component boxing using `Component::new()` wrapper
-  - Fixed registry creation to use `handle()` not `shared()`
+  3. **systems/networking:**
+     - network_system.rs Line 12: `Arc<RwLock<World>>` should use `Shared<World>`
+     - networking_system.rs Lines 16, 18, 20: Should use Shared type aliases
+     - Line 208: `Box<dyn playground_core_ecs::Component>`
   
-- **Architecture Compliance** ✅
-  - NO dyn - Zero trait objects in entire codebase
+- **Compliant Packages** ✅
+  - systems/ui correctly uses Handle/Shared from playground_core_types
+  - systems/webgl correctly uses Shared type alias
+  - systems/rendering uses Arc<World> correctly (per architecture rules)
+
+### Previous Session (2025-08-24 - Session 17)
+- **Completed NO dyn Refactor FOR CORE PACKAGES ONLY** ⚠️
+  - Fixed core/ecs Package ✅
+  - Fixed core/server Package ✅
+  - Did NOT fix systems/* packages
+  
+- **Architecture Compliance** ⚠️ PARTIAL
+  - NO dyn - Only achieved in core/* packages, NOT in systems/*
   - NO unsafe - Maintained throughout
-  - Handle<T> for external refs, Shared<T> for internal state
-  - Component base class pattern working correctly
+  - Handle<T> for external refs, Shared<T> for internal state - Violated in systems/*
+  - Component base class pattern working in core/ecs only
 
 ### Previous Session (2025-08-23 - Session 14)
 - **Fixed Nested Lock Issues in core/ecs** ✅

@@ -49,7 +49,8 @@ This file contains critical memory for Claude Code when working with this reposi
 - UiSystem internal ECS is private - plugins use UiInterface from systems/logic
 
 ## #current-violations
-None! All architecture violations fixed ✅
+**systems/logic** - Extensive `dyn` usage (Box<dyn System>, Box<dyn Any>) 🔴
+**systems/networking** - Handle/Shared type alias misuse 🟡
 
 ## #ecs-architecture-fix
 **CRITICAL**: UiSystem uses `Arc<World>` not `Shared<World>`
@@ -59,17 +60,18 @@ None! All architecture violations fixed ✅
 - World's methods handle all internal locking
 
 ## #immediate-goals
-1. ~~Fix UI rendering~~ - COMPLETED! ✅
-   - WebGL Clear command working (grey background)
-   - WebGL DrawQuad working (red rectangle)
-   - Server-controlled renderer initialization
-   - Resource caching for shaders/textures
-   - Clean shutdown protocol
-2. Implement Discord UI layout (next priority)
+1. **Fix systems/logic dyn violations** 🔴 CRITICAL
+   - Remove all Box<dyn System> usage
+   - Remove all Box<dyn Any> usage
+   - Implement concrete System base class pattern
+   - Fix all Handle/Shared type usage
+2. **Fix systems/networking type aliases** 🟡
+   - Replace Arc<RwLock<>> with Shared<>
+   - Use proper Handle<> and Shared<> from core/types
+3. Implement Discord UI layout
    - Fix ECS entity spawning for UI elements
    - Generate proper render commands from UI tree
-3. Fix client tracking in Dashboard (remove disconnected)
-4. Design and implement idle-mmo-rpg game mechanics
+4. Fix client tracking in Dashboard (remove disconnected)
 
 ## #architecture-fixed
 ✅ Plugins ARE Systems - no separate Plugin trait
