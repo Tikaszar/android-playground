@@ -1,40 +1,42 @@
 use crate::component::{ComponentRegistry, DirtyTracker, ComponentRegistration};
+use crate::component_data::ComponentData;
 use crate::entity::{Entity, EntityManager};
 use crate::error::LogicResult;
 use crate::event::EventSystem;
 use crate::query::QueryBuilder;
+use crate::resource_storage::ResourceStorage;
 use crate::scheduler::Scheduler;
 use crate::storage::HybridStorage;
 use crate::system::{SystemRegistration, Stage};
+use crate::system_data::SystemData;
+use playground_core_types::{Handle, handle, Shared, shared};
 use tokio::sync::RwLock;
 use tokio::sync::RwLock as AsyncRwLock;
 use std::any::TypeId;
-use std::sync::Arc;
+use serde::Serialize;
 
 /// The main ECS world that contains all entities, components, and systems
 #[derive(Clone)]
 pub struct World {
-    entities: Arc<EntityManager>,
-    storage: Arc<HybridStorage>,
-    components: Arc<ComponentRegistry>,
-    events: Arc<EventSystem>,
-    scheduler: Arc<Scheduler>,
-    dirty_tracker: Arc<DirtyTracker>,
-    resources: Arc<RwLock<fnv::FnvHashMap<TypeId, Box<dyn std::any::Any + Send + Sync>>>>,
+    entities: Handle<EntityManager>,
+    storage: Handle<HybridStorage>,
+    components: Handle<ComponentRegistry>,
+    events: Handle<EventSystem>,
+    scheduler: Handle<Scheduler>,
+    dirty_tracker: Handle<DirtyTracker>,
+    resources: Handle<ResourceStorage>,
 }
-
-use fnv::FnvHashMap;
 
 impl World {
     pub fn new() -> Self {
         Self {
-            entities: Arc::new(EntityManager::new()),
-            storage: Arc::new(HybridStorage::new()),
-            components: Arc::new(ComponentRegistry::new()),
-            events: Arc::new(EventSystem::new()),
-            scheduler: Arc::new(Scheduler::new()),
-            dirty_tracker: Arc::new(DirtyTracker::new()),
-            resources: Arc::new(RwLock::new(FnvHashMap::default())),
+            entities: handle(EntityManager::new()),
+            storage: handle(HybridStorage::new()),
+            components: handle(ComponentRegistry::new()),
+            events: handle(EventSystem::new()),
+            scheduler: handle(Scheduler::new()),
+            dirty_tracker: handle(DirtyTracker::new()),
+            resources: handle(ResourceStorage::new()),
         }
     }
     
@@ -61,7 +63,7 @@ impl World {
     /// Spawn entity with components
     pub async fn spawn_with<F>(&self, builder: F) -> LogicResult<Entity>
     where
-        F: FnOnce() -> Vec<(TypeId, Box<dyn std::any::Any + Send + Sync>)>,
+        F: FnOnce() -> Vec<ComponentData>,
     {
         let entity = self.entities.create().await;
         let components = builder();
@@ -156,15 +158,13 @@ impl World {
     }
     
     /// Insert a global resource
-    pub async fn insert_resource<R: 'static + Send + Sync>(&self, resource: R) {
-        self.resources
-            .write().await
-            .insert(TypeId::of::<R>(), Box::new(resource));
+    pub async fn insert_resource<R: 'static + Send + Sync + Serialize>(&self, resource: R) -> LogicResult<()> {
+        self.resources.insert(resource).await
     }
     
     /// Check if a global resource exists
     pub async fn has_resource<R: 'static>(&self) -> bool {
-        self.resources.read().await.contains_key(&TypeId::of::<R>())
+        self.resources.contains::<R>().await
     }
     
     /// Run one frame of the world
@@ -214,7 +214,7 @@ impl World {
     }
     
     /// Register a System with the World (for plugins)
-    pub async fn register_plugin_system(&mut self, system: Box<dyn crate::system::System>) -> LogicResult<()> {
+    pub async fn register_plugin_system(&mut self, system: SystemData) -> LogicResult<()> {
         // Register with the scheduler
         self.scheduler.executor().register(system).await
     }
@@ -228,30 +228,30 @@ impl World {
 
 /// The main ECS facade for plugins and apps
 pub struct ECS {
-    world: Arc<World>,
-    systems: Option<Arc<crate::systems_manager::SystemsManager>>,
+    world: Handle<World>,
+    systems: Option<Handle<crate::systems_manager::SystemsManager>>,
 }
 
 impl ECS {
     pub fn new() -> Self {
         Self {
-            world: Arc::new(World::new()),
+            world: handle(World::new()),
             systems: None,
         }
     }
     
     /// Initialize all engine systems
     /// This must be called before using any system functionality
-    pub async fn initialize_systems(&mut self) -> crate::error::LogicResult<Arc<crate::systems_manager::SystemsManager>> {
-        let world_lock = Arc::new(AsyncRwLock::new(self.world.as_ref().clone()));
+    pub async fn initialize_systems(&mut self) -> crate::error::LogicResult<Handle<crate::systems_manager::SystemsManager>> {
+        let world_lock = shared(self.world.as_ref().clone());
         let systems = crate::systems_manager::SystemsManager::new(world_lock).await?;
-        let systems = Arc::new(systems);
+        let systems = handle(systems);
         self.systems = Some(systems.clone());
         Ok(systems)
     }
     
     /// Get the systems manager
-    pub fn systems(&self) -> Option<&Arc<crate::systems_manager::SystemsManager>> {
+    pub fn systems(&self) -> Option<&Handle<crate::systems_manager::SystemsManager>> {
         self.systems.as_ref()
     }
     
@@ -277,21 +277,22 @@ impl ECS {
 
 /// Builder for spawning entities
 pub struct EntitySpawner {
-    world: Arc<World>,
-    components: Vec<(TypeId, Box<dyn std::any::Any + Send + Sync>)>,
+    world: Handle<World>,
+    components: Vec<ComponentData>,
 }
 
 impl EntitySpawner {
-    fn new(world: Arc<World>) -> Self {
+    fn new(world: Handle<World>) -> Self {
         Self {
             world,
             components: Vec::new(),
         }
     }
     
-    pub fn with<T: 'static + Send + Sync>(mut self, component: T) -> Self {
-        self.components.push((TypeId::of::<T>(), Box::new(component)));
-        self
+    pub fn with<T: crate::component::Component + Serialize + 'static + Send + Sync>(mut self, component: T) -> LogicResult<Self> {
+        let data = ComponentData::new(component)?;
+        self.components.push(data);
+        Ok(self)
     }
     
     pub async fn spawn(self) -> LogicResult<Entity> {
@@ -320,7 +321,7 @@ macro_rules! spawn {
 macro_rules! bundle {
     ($($component:expr),+) => {{
         vec![
-            $((std::any::TypeId::of_val(&$component), Box::new($component) as Box<dyn std::any::Any + Send + Sync>)),+
+            $(ComponentData::new($component).unwrap()),+
         ]
     }};
 }

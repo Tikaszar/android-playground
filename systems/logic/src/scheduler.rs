@@ -1,15 +1,15 @@
 use crate::error::LogicResult;
 use crate::system::{Stage, SystemExecutor};
 use crate::world::World;
+use playground_core_types::{Handle, handle, Shared, shared};
 use tokio::sync::RwLock;
-use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 /// System scheduler with parallel execution support
 pub struct Scheduler {
-    executor: Arc<SystemExecutor>,
-    metrics: Arc<RwLock<SchedulerMetrics>>,
-    paused: Arc<RwLock<bool>>,
+    executor: Handle<SystemExecutor>,
+    metrics: Shared<SchedulerMetrics>,
+    paused: Shared<bool>,
     time_budget: Duration,
 }
 
@@ -27,9 +27,9 @@ pub struct SchedulerMetrics {
 impl Scheduler {
     pub fn new() -> Self {
         Self {
-            executor: Arc::new(SystemExecutor::new()),
-            metrics: Arc::new(RwLock::new(SchedulerMetrics::default())),
-            paused: Arc::new(RwLock::new(false)),
+            executor: handle(SystemExecutor::new()),
+            metrics: shared(SchedulerMetrics::default()),
+            paused: shared(false),
             time_budget: Duration::from_millis(16), // 60 FPS target
         }
     }

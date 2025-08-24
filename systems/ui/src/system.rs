@@ -479,18 +479,18 @@ impl UiSystem {
         // Registry has internal locking, no need for external lock
         
         // Register components in the registry
-        registry.register::<UiElementComponent>().await
+        self.registry.register::<UiElementComponent>().await
             .map_err(|e| UiError::EcsError(e.to_string()))?;
-        registry.register::<UiLayoutComponent>().await
+        self.registry.register::<UiLayoutComponent>().await
             .map_err(|e| UiError::EcsError(e.to_string()))?;
-        registry.register::<UiStyleComponent>().await
+        self.registry.register::<UiStyleComponent>().await
             .map_err(|e| UiError::EcsError(e.to_string()))?;
-        registry.register::<UiInputComponent>().await
+        self.registry.register::<UiInputComponent>().await
             .map_err(|e| UiError::EcsError(e.to_string()))?;
-        registry.register::<UiTextComponent>().await
+        self.registry.register::<UiTextComponent>().await
             .map_err(|e| UiError::EcsError(e.to_string()))?;
         
-        drop(registry);
+        // Registry dropped automatically
         
         // Also register storage in the world for each component - World handles its own locking
         self.world.register_component_storage(

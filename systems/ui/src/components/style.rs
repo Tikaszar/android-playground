@@ -1,4 +1,4 @@
-use playground_core_ecs::{Component, ComponentId, EcsError, EcsResult};
+use playground_core_ecs::{ComponentData, ComponentId, EcsError, EcsResult};
 use serde::{Serialize, Deserialize};
 use nalgebra::Vector4;
 use std::collections::HashMap;
@@ -61,7 +61,7 @@ impl Default for UiStyleComponent {
 }
 
 #[async_trait]
-impl Component for UiStyleComponent {
+impl ComponentData for UiStyleComponent {
     fn component_id() -> ComponentId {
         std::any::TypeId::of::<Self>()
     }

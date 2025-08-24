@@ -1,15 +1,16 @@
+use crate::component_data::ComponentData;
 use crate::entity::Entity;
 use crate::error::LogicResult;
 use fnv::FnvHashMap;
+use playground_core_types::{Handle, handle, Shared, shared};
 use tokio::sync::RwLock;
 use std::any::TypeId;
-use std::sync::Arc;
 
 /// Archetype represents a unique combination of component types
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Archetype {
     pub id: u64,
-    pub component_types: Arc<Vec<TypeId>>,
+    pub component_types: Handle<Vec<TypeId>>,
 }
 
 impl Archetype {
@@ -27,7 +28,7 @@ impl Archetype {
         
         Self {
             id,
-            component_types: Arc::new(component_types),
+            component_types: handle(component_types),
         }
     }
     
@@ -56,7 +57,7 @@ pub struct ArchetypeStorage {
 
 /// Column storage for a single component type
 struct ComponentColumn {
-    data: Vec<Box<dyn std::any::Any + Send + Sync>>,
+    data: Vec<ComponentData>,
 }
 
 impl ArchetypeStorage {
@@ -74,7 +75,7 @@ impl ArchetypeStorage {
         }
     }
     
-    pub fn add_entity(&mut self, entity: Entity, components: Vec<Box<dyn std::any::Any + Send + Sync>>) -> LogicResult<()> {
+    pub fn add_entity(&mut self, entity: Entity, components: Vec<ComponentData>) -> LogicResult<()> {
         if self.entity_indices.contains_key(&entity) {
             return Err(crate::error::LogicError::EntityNotFound(entity.id));
         }
@@ -84,7 +85,8 @@ impl ArchetypeStorage {
         self.entity_indices.insert(entity, index);
         
         // Add components to columns
-        for (component, &type_id) in components.into_iter().zip(self.archetype.component_types().iter()) {
+        for component in components {
+            let type_id = component.type_id();
             if let Some(column) = self.component_columns.get_mut(&type_id) {
                 column.data.push(component);
             }
@@ -93,7 +95,7 @@ impl ArchetypeStorage {
         Ok(())
     }
     
-    pub fn remove_entity(&mut self, entity: Entity) -> LogicResult<Vec<Box<dyn std::any::Any + Send + Sync>>> {
+    pub fn remove_entity(&mut self, entity: Entity) -> LogicResult<Vec<ComponentData>> {
         let index = self.entity_indices
             .remove(&entity)
             .ok_or(crate::error::LogicError::EntityNotFound(entity.id))?;
@@ -232,7 +234,7 @@ impl ArchetypeGraph {
         Ok(to_id)
     }
     
-    pub async fn all_archetypes(&self) -> Vec<Arc<RwLock<ArchetypeStorage>>> {
+    pub async fn all_archetypes(&self) -> Vec<Shared<ArchetypeStorage>> {
         self.archetypes.read().await.values().cloned().collect()
     }
 }

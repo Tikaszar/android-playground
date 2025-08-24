@@ -1,21 +1,22 @@
 use crate::archetype::ArchetypeGraph;
+use crate::component_data::ComponentData;
 use crate::entity::Entity;
 use crate::error::LogicResult;
 use fnv::FnvHashMap;
+use playground_core_types::{Handle, handle, Shared, shared};
 use tokio::sync::RwLock;
 use std::any::TypeId;
-use std::sync::Arc;
 
 /// Hybrid storage combining archetype (for iteration) and sparse (for random access)
 pub struct HybridStorage {
     /// Archetype storage for efficient iteration
-    archetype_graph: Arc<ArchetypeGraph>,
+    archetype_graph: Handle<ArchetypeGraph>,
     
     /// Entity location index for fast lookup
-    entity_locations: Arc<RwLock<FnvHashMap<Entity, EntityLocation>>>,
+    entity_locations: Shared<FnvHashMap<Entity, EntityLocation>>,
     
     /// Sparse storage for singleton/rare components
-    sparse_components: Arc<RwLock<FnvHashMap<TypeId, SparseStorage>>>,
+    sparse_components: Shared<FnvHashMap<TypeId, SparseStorage>>,
     
     /// Threshold for moving components to sparse storage
     sparse_threshold: usize,
@@ -28,28 +29,29 @@ struct EntityLocation {
 }
 
 struct SparseStorage {
-    components: FnvHashMap<Entity, Box<dyn std::any::Any + Send + Sync>>,
+    components: FnvHashMap<Entity, ComponentData>,
 }
 
 impl HybridStorage {
     pub fn new() -> Self {
         Self {
-            archetype_graph: Arc::new(ArchetypeGraph::new()),
-            entity_locations: Arc::new(RwLock::new(FnvHashMap::default())),
-            sparse_components: Arc::new(RwLock::new(FnvHashMap::default())),
+            archetype_graph: handle(ArchetypeGraph::new()),
+            entity_locations: shared(FnvHashMap::default()),
+            sparse_components: shared(FnvHashMap::default()),
             sparse_threshold: 100, // Components on fewer than 100 entities go to sparse
         }
     }
     
-    pub async fn spawn_entity(&self, entity: Entity, components: Vec<(TypeId, Box<dyn std::any::Any + Send + Sync>)>) -> LogicResult<()> {
+    pub async fn spawn_entity(&self, entity: Entity, components: Vec<ComponentData>) -> LogicResult<()> {
         // Separate dense and sparse components
         let mut dense_types = Vec::new();
         let mut dense_components = Vec::new();
         let mut sparse_components_list = Vec::new();
         
-        for (type_id, component) in components {
+        for component in components {
+            let type_id = component.type_id();
             if self.should_use_sparse(type_id) {
-                sparse_components_list.push((type_id, component));
+                sparse_components_list.push(component);
             } else {
                 dense_types.push(type_id);
                 dense_components.push(component);
@@ -71,7 +73,8 @@ impl HybridStorage {
         // Add sparse components
         if !sparse_components_list.is_empty() {
             let mut sparse = self.sparse_components.write().await;
-            for (type_id, component) in sparse_components_list {
+            for component in sparse_components_list {
+                let type_id = component.type_id();
                 sparse
                     .entry(type_id)
                     .or_insert_with(|| SparseStorage {
@@ -120,12 +123,13 @@ impl HybridStorage {
         Ok(())
     }
     
-    pub async fn add_component<T: 'static + Send + Sync>(
+    pub async fn add_component<T: crate::component::Component + serde::Serialize + 'static + Send + Sync>(
         &self,
         entity: Entity,
         component: T,
     ) -> LogicResult<()> {
         let type_id = TypeId::of::<T>();
+        let component_data = ComponentData::new(component)?;
         
         // Check if should use sparse
         if self.should_use_sparse(type_id) {
@@ -136,7 +140,7 @@ impl HybridStorage {
                     components: FnvHashMap::default(),
                 })
                 .components
-                .insert(entity, Box::new(component));
+                .insert(entity, component_data);
             return Ok(());
         }
         
@@ -154,7 +158,7 @@ impl HybridStorage {
             location.archetype_id,
             type_id,
             true,
-            Some(Box::new(component)),
+            Some(component_data),
         ).await?;
         
         self.entity_locations.write().await.insert(entity, EntityLocation {

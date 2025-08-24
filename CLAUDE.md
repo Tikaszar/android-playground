@@ -49,7 +49,8 @@ This file contains critical memory for Claude Code when working with this reposi
 - UiSystem internal ECS is private - plugins use UiInterface from systems/logic
 
 ## #current-violations
-**systems/logic** - Extensive `dyn` usage (Box<dyn System>, Box<dyn Any>) 🔴
+**systems/ui** - Component to ComponentData incomplete 🔴
+**rendering_interface.rs** - Box<dyn Renderer> usage 🔴
 
 ## #ecs-architecture-fix
 **CRITICAL**: UiSystem uses `Arc<World>` not `Shared<World>`
@@ -59,16 +60,16 @@ This file contains critical memory for Claude Code when working with this reposi
 - World's methods handle all internal locking
 
 ## #immediate-goals
-1. **Fix systems/logic dyn violations** 🔴 CRITICAL
-   - Remove all Box<dyn System> usage
-   - Remove all Box<dyn Any> usage
-   - Implement concrete System base class pattern
-   - Fix all Handle/Shared type usage
-2. ~~Fix systems/networking type aliases~~ ✅ COMPLETED
-3. Implement Discord UI layout
+1. ~~Fix systems/logic dyn violations~~ ✅ COMPLETED (Session 19)
+2. ~~Fix systems/networking type aliases~~ ✅ COMPLETED (Session 18)
+3. **Fix systems/ui Component to ComponentData** 🔴 CRITICAL
+   - Change from Component trait to ComponentData
+   - Fix serialize/deserialize (not async)
+   - Use Component::new(data) pattern
+4. Implement Discord UI layout
    - Fix ECS entity spawning for UI elements
    - Generate proper render commands from UI tree
-4. Fix client tracking in Dashboard (remove disconnected)
+5. Fix client tracking in Dashboard (remove disconnected)
 
 ## #architecture-fixed
 ✅ Plugins ARE Systems - no separate Plugin trait
@@ -179,6 +180,7 @@ http://localhost:8080/mcp
 - Mobile-first, battery-efficient design
 - Server-side authority (browser is pure view)
 - Conversational IDE is primary interface
-- Only the User csn execute cargo run. Always include usage instructions
+- Only the User can execute cargo run. Always include usage instructions
 - ask the User to cargo run, never cargo run as an AI Agent
 - No DYN or ENUMs in place of DYN
+- **NEVER add migration notes or migration plans - wait until project is complete**

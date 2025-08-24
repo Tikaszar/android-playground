@@ -8,13 +8,17 @@
 
 pub mod archetype;
 pub mod component;
+pub mod component_data;
 pub mod entity;
 pub mod error;
 pub mod event;
+pub mod event_data;
 pub mod query;
+pub mod resource_storage;
 pub mod scheduler;
 pub mod storage;
 pub mod system;
+pub mod system_data;
 pub mod world;
 pub mod systems_manager;
 pub mod ui_interface;
@@ -23,21 +27,25 @@ pub mod messaging;
 
 pub use archetype::*;
 pub use component::*;
+pub use component_data::*;
 pub use entity::*;
 pub use error::*;
 pub use event::*;
+pub use event_data::*;
 pub use query::*;
+pub use resource_storage::*;
 pub use scheduler::*;
 pub use storage::*;
 pub use system::*;
+pub use system_data::*;
 pub use world::*;
 pub use systems_manager::SystemsManager;
 pub use ui_interface::UiInterface;
 pub use rendering_interface::{RenderingInterface, RendererWrapper};
 pub use messaging::{GameMessageBus, GameMessageHandler, channels};
 
-// Re-export Shared type for plugins and apps
-pub use playground_core_types::{Shared, shared};
+// Re-export Handle and Shared types for plugins and apps
+pub use playground_core_types::{Handle, handle, Shared, shared};
 
 // Re-export core rendering types that plugins need
 pub use playground_core_rendering::{RenderCommand, RenderCommandBatch, Viewport};

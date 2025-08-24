@@ -1,4 +1,4 @@
-use playground_core_ecs::{Component, ComponentId, EcsError, EcsResult};
+use playground_core_ecs::{ComponentData, ComponentId, EcsError, EcsResult};
 use serde::{Serialize, Deserialize};
 use async_trait::async_trait;
 use bytes::Bytes;
@@ -31,7 +31,7 @@ impl Default for UiInputComponent {
 }
 
 #[async_trait]
-impl Component for UiInputComponent {
+impl ComponentData for UiInputComponent {
     fn component_id() -> ComponentId {
         std::any::TypeId::of::<Self>()
     }

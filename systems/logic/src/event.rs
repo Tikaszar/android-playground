@@ -1,9 +1,11 @@
 use crate::component::Component;
 use crate::entity::Entity;
+use crate::event_data::{EventData, EventQueueData};
+use playground_core_types::{Handle, handle, Shared, shared};
 use tokio::sync::RwLock;
 use std::any::TypeId;
 use std::collections::VecDeque;
-use std::sync::Arc;
+use serde::Serialize;
 
 /// Event trait - events are just components with special handling
 pub trait Event: Component {
@@ -18,43 +20,12 @@ pub trait Event: Component {
     }
 }
 
-/// Event queue for a specific event type
-struct EventQueue<E: Event + Clone> {
-    events: VecDeque<(Entity, E)>,
-    persistent: Vec<(Entity, E)>,
-}
-
-impl<E: Event + Clone> EventQueue<E> {
-    fn new() -> Self {
-        Self {
-            events: VecDeque::new(),
-            persistent: Vec::new(),
-        }
-    }
-    
-    fn push(&mut self, entity: Entity, event: E) {
-        if E::persistent() {
-            self.persistent.push((entity, event));
-        } else {
-            self.events.push_back((entity, event));
-        }
-    }
-    
-    fn drain(&mut self) -> Vec<(Entity, E)> {
-        let mut result: Vec<_> = self.events.drain(..).collect();
-        result.extend(self.persistent.iter().map(|(e, evt)| (*e, evt.clone())));
-        result
-    }
-    
-    fn clear_persistent(&mut self) {
-        self.persistent.clear();
-    }
-}
+// EventQueue functionality is now in EventQueueData in event_data.rs
 
 /// Event system manages all events in the ECS
 pub struct EventSystem {
-    queues: Arc<RwLock<fnv::FnvHashMap<TypeId, Box<dyn std::any::Any + Send + Sync>>>>,
-    readers: Arc<RwLock<fnv::FnvHashMap<TypeId, Vec<EventReader>>>>,
+    queues: Shared<fnv::FnvHashMap<TypeId, EventQueueData>>,
+    readers: Shared<fnv::FnvHashMap<TypeId, Vec<EventReader>>>,
 }
 
 use fnv::FnvHashMap;
@@ -62,42 +33,45 @@ use fnv::FnvHashMap;
 impl EventSystem {
     pub fn new() -> Self {
         Self {
-            queues: Arc::new(RwLock::new(FnvHashMap::default())),
-            readers: Arc::new(RwLock::new(FnvHashMap::default())),
+            queues: shared(FnvHashMap::default()),
+            readers: shared(FnvHashMap::default()),
         }
     }
     
     /// Send an event to the system
-    pub async fn send<E: Event + Clone + 'static>(&self, entity: Entity, event: E) {
+    pub async fn send<E: Event + Clone + Serialize + 'static>(&self, entity: Entity, event: E) -> crate::error::LogicResult<()> {
+        let type_id = TypeId::of::<E>();
+        let event_data = EventData::new(entity, event, E::priority(), E::persistent())?;
+        
         let mut queues = self.queues.write().await;
         let queue = queues
-            .entry(TypeId::of::<E>())
-            .or_insert_with(|| Box::new(EventQueue::<E>::new()));
+            .entry(type_id)
+            .or_insert_with(|| EventQueueData::new(type_id));
         
-        if let Some(typed_queue) = queue.downcast_mut::<EventQueue<E>>() {
-            typed_queue.push(entity, event);
-        }
+        queue.push(event_data);
+        Ok(())
     }
     
     /// Send multiple events in a batch
-    pub async fn send_batch<E: Event + Clone + 'static>(&self, events: Vec<(Entity, E)>) {
+    pub async fn send_batch<E: Event + Clone + Serialize + 'static>(&self, events: Vec<(Entity, E)>) -> crate::error::LogicResult<()> {
+        let type_id = TypeId::of::<E>();
         let mut queues = self.queues.write().await;
         let queue = queues
-            .entry(TypeId::of::<E>())
-            .or_insert_with(|| Box::new(EventQueue::<E>::new()));
+            .entry(type_id)
+            .or_insert_with(|| EventQueueData::new(type_id));
         
-        if let Some(typed_queue) = queue.downcast_mut::<EventQueue<E>>() {
-            for (entity, event) in events {
-                typed_queue.push(entity, event);
-            }
+        for (entity, event) in events {
+            let event_data = EventData::new(entity, event, E::priority(), E::persistent())?;
+            queue.push(event_data);
         }
+        Ok(())
     }
     
     /// Create an event reader for a specific event type
     pub async fn reader<E: Event + 'static>(&self) -> EventReader {
         let reader = EventReader {
             event_type: TypeId::of::<E>(),
-            last_read: Arc::new(RwLock::new(0)),
+            last_read: shared(0),
         };
         
         self.readers
@@ -131,8 +105,8 @@ impl EventSystem {
     pub async fn clear_frame_events(&self) {
         let mut queues = self.queues.write().await;
         for queue in queues.values_mut() {
-            // Clear non-persistent events
-            // Real implementation would handle this per type
+            // Clear non-persistent events by draining the queue
+            queue.drain();
         }
     }
 }
@@ -141,19 +115,24 @@ impl EventSystem {
 #[derive(Clone)]
 pub struct EventReader {
     event_type: TypeId,
-    last_read: Arc<RwLock<usize>>,
+    last_read: Shared<usize>,
 }
 
 impl EventReader {
     /// Read all new events since last read
-    pub async fn read<E: Event + Clone + 'static>(&self, event_system: &EventSystem) -> Vec<(Entity, E)> {
+    pub async fn read<E: Event + Clone + for<'de> serde::Deserialize<'de> + 'static>(&self, event_system: &EventSystem) -> Vec<(Entity, E)> {
         let queues = event_system.queues.read().await;
         
         if let Some(queue) = queues.get(&self.event_type) {
-            if let Some(typed_queue) = queue.downcast_ref::<EventQueue<E>>() {
-                // In real implementation, would track what's been read
-                return typed_queue.events.iter().cloned().collect();
+            // Get all events and deserialize them
+            let events = queue.drain();
+            let mut result = Vec::new();
+            for event_data in events {
+                if let Ok(event) = event_data.deserialize::<E>() {
+                    result.push((event_data.entity(), event));
+                }
             }
+            return result;
         }
         
         Vec::new()
@@ -164,8 +143,7 @@ impl EventReader {
         let queues = event_system.queues.read().await;
         
         if let Some(queue) = queues.get(&self.event_type) {
-            // Check if queue has events
-            return true; // Simplified
+            return !queue.is_empty();
         }
         
         false
