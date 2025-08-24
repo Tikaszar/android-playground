@@ -1,11 +1,11 @@
 use std::sync::Arc;
 use std::time::{Duration, Instant, SystemTime};
-use tokio::sync::RwLock;
 use std::collections::{HashMap, VecDeque};
 use std::io::{self, Write};
 use tokio::fs::OpenOptions;
 use tokio::io::AsyncWriteExt;
 use chrono;
+use playground_core_types::{Shared, shared};
 
 #[derive(Clone, Debug)]
 pub struct ClientInfo {
@@ -92,32 +92,32 @@ impl LogLevel {
 }
 
 pub struct Dashboard {
-    clients: Arc<RwLock<HashMap<usize, ClientInfo>>>,
-    temp_clients: Arc<RwLock<HashMap<usize, ClientInfo>>>,  // Unverified connections
+    clients: Shared<HashMap<usize, ClientInfo>>,
+    temp_clients: Shared<HashMap<usize, ClientInfo>>,  // Unverified connections
     server_start: Instant,
-    total_connections: Arc<RwLock<u64>>,
-    total_messages: Arc<RwLock<u64>>,
-    total_bytes: Arc<RwLock<u64>>,
-    mcp_sessions: Arc<RwLock<HashMap<String, Instant>>>,
-    last_update: Arc<RwLock<Instant>>,
-    recent_logs: Arc<RwLock<VecDeque<LogEntry>>>,
-    log_file: Arc<RwLock<Option<tokio::fs::File>>>,
+    total_connections: Shared<u64>,
+    total_messages: Shared<u64>,
+    total_bytes: Shared<u64>,
+    mcp_sessions: Shared<HashMap<String, Instant>>,
+    last_update: Shared<Instant>,
+    recent_logs: Shared<VecDeque<LogEntry>>,
+    log_file: Shared<Option<tokio::fs::File>>,
     max_log_entries: usize,
 }
 
 impl Dashboard {
     pub fn new() -> Self {
         Self {
-            clients: Arc::new(RwLock::new(HashMap::new())),
-            temp_clients: Arc::new(RwLock::new(HashMap::new())),
+            clients: shared(HashMap::new()),
+            temp_clients: shared(HashMap::new()),
             server_start: Instant::now(),
-            total_connections: Arc::new(RwLock::new(0)),
-            total_messages: Arc::new(RwLock::new(0)),
-            total_bytes: Arc::new(RwLock::new(0)),
-            mcp_sessions: Arc::new(RwLock::new(HashMap::new())),
-            last_update: Arc::new(RwLock::new(Instant::now())),
-            recent_logs: Arc::new(RwLock::new(VecDeque::with_capacity(100))),
-            log_file: Arc::new(RwLock::new(None)),
+            total_connections: shared(0),
+            total_messages: shared(0),
+            total_bytes: shared(0),
+            mcp_sessions: shared(HashMap::new()),
+            last_update: shared(Instant::now()),
+            recent_logs: shared(VecDeque::with_capacity(100)),
+            log_file: shared(None),
             max_log_entries: 10, // Show last 10 logs in dashboard
         }
     }

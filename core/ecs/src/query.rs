@@ -147,28 +147,50 @@ impl AndQuery {
 #[async_trait]
 impl Query for AndQuery {
     async fn execute(&self, storages: &Shared<HashMap<ComponentId, Handle<ComponentStorage>>>) -> EcsResult<Vec<EntityId>> {
-        if self.queries.is_empty() {
+        if self.component_ids.is_empty() {
             return Ok(Vec::new());
         }
         
-        let mut result = self.queries[0].execute(storages).await?;
+        // Start with entities from the first "with" component
+        let mut result = Vec::new();
+        let mut found_first = false;
         
-        for query in &self.queries[1..] {
-            let mut filtered = Vec::new();
-            for entity in result {
-                if query.matches(entity, storages).await {
-                    filtered.push(entity);
+        for (i, &component_id) in self.component_ids.iter().enumerate() {
+            if self.include[i] && !found_first {
+                // First "with" component - get all its entities
+                if let Some(storage) = storages.read().await.get(&component_id) {
+                    result = storage.entities().await;
+                    found_first = true;
                 }
             }
-            result = filtered;
         }
+        
+        // If no "with" components, can't execute
+        if !found_first {
+            return Err(EcsError::QueryError("AndQuery needs at least one 'with' component".into()));
+        }
+        
+        // Filter by remaining components
+        let mut filtered = Vec::new();
+        for entity in result {
+            if self.matches(entity, storages).await {
+                filtered.push(entity);
+            }
+        }
+        result = filtered;
         
         Ok(result)
     }
     
     async fn matches(&self, entity: EntityId, storages: &Shared<HashMap<ComponentId, Handle<ComponentStorage>>>) -> bool {
-        for query in &self.queries {
-            if !query.matches(entity, storages).await {
+        for (i, &component_id) in self.component_ids.iter().enumerate() {
+            let has_component = if let Some(storage) = storages.read().await.get(&component_id) {
+                storage.contains(entity).await
+            } else {
+                false
+            };
+            
+            if self.include[i] != has_component {
                 return false;
             }
         }
@@ -176,79 +198,43 @@ impl Query for AndQuery {
     }
 }
 
-pub struct OrQuery {
-    queries: Vec<Box<dyn Query>>,
-}
-
-impl OrQuery {
-    pub fn new(queries: Vec<Box<dyn Query>>) -> Self {
-        Self { queries }
-    }
-}
-
-#[async_trait]
-impl Query for OrQuery {
-    async fn execute(&self, storages: &Shared<HashMap<ComponentId, Handle<ComponentStorage>>>) -> EcsResult<Vec<EntityId>> {
-        let mut result = Vec::new();
-        let mut seen = std::collections::HashSet::new();
-        
-        for query in &self.queries {
-            let entities = query.execute(storages).await?;
-            for entity in entities {
-                if seen.insert(entity) {
-                    result.push(entity);
-                }
-            }
-        }
-        
-        Ok(result)
-    }
-    
-    async fn matches(&self, entity: EntityId, storages: &Shared<HashMap<ComponentId, Handle<ComponentStorage>>>) -> bool {
-        for query in &self.queries {
-            if query.matches(entity, storages).await {
-                return true;
-            }
-        }
-        false
-    }
-}
+// OrQuery removed - can't use dyn, use AndQuery with inverted logic instead
 
 pub struct QueryBuilder {
-    queries: Vec<Box<dyn Query>>,
-    exclude: Vec<Box<dyn Query>>,
+    component_ids: Vec<ComponentId>,
+    include: Vec<bool>, // true for with, false for without
 }
 
 impl QueryBuilder {
     pub fn new() -> Self {
         Self {
-            queries: Vec::new(),
-            exclude: Vec::new(),
+            component_ids: Vec::new(),
+            include: Vec::new(),
         }
     }
     
     pub fn with_component(mut self, component_id: ComponentId) -> Self {
-        // We'll need to create a generic query for any component ID
-        self.queries.push(Box::new(ComponentIdQuery::new(component_id)));
+        self.component_ids.push(component_id);
+        self.include.push(true);
         self
     }
     
     pub fn without_component(mut self, component_id: ComponentId) -> Self {
-        self.exclude.push(Box::new(ComponentIdQuery::new_exclude(component_id)));
+        self.component_ids.push(component_id);
+        self.include.push(false);
         self
     }
     
-    pub fn build(self) -> Box<dyn Query> {
-        let mut all_queries = self.queries;
-        all_queries.extend(self.exclude);
-        
-        if all_queries.is_empty() {
-            Box::new(EmptyQuery)
-        } else if all_queries.len() == 1 {
-            all_queries.into_iter().next().unwrap()
-        } else {
-            Box::new(AndQuery::new(all_queries))
+    pub fn build(self) -> AndQuery {
+        let mut query = AndQuery::new();
+        for (i, component_id) in self.component_ids.into_iter().enumerate() {
+            if self.include[i] {
+                query = query.with(component_id);
+            } else {
+                query = query.without(component_id);
+            }
         }
+        query
     }
 }
 
@@ -265,37 +251,4 @@ impl Query for EmptyQuery {
     }
 }
 
-pub struct CachedQuery {
-    inner: Box<dyn Query>,
-    cache: Shared<Option<Vec<EntityId>>>,
-}
-
-impl CachedQuery {
-    pub fn new(inner: Box<dyn Query>) -> Self {
-        Self {
-            inner,
-            cache: shared(None),
-        }
-    }
-    
-    pub async fn invalidate(&self) {
-        *self.cache.write().await = None;
-    }
-}
-
-#[async_trait]
-impl Query for CachedQuery {
-    async fn execute(&self, storages: &Shared<HashMap<ComponentId, Handle<ComponentStorage>>>) -> EcsResult<Vec<EntityId>> {
-        if let Some(cached) = self.cache.read().await.as_ref() {
-            return Ok(cached.clone());
-        }
-        
-        let result = self.inner.execute(storages).await?;
-        *self.cache.write().await = Some(result.clone());
-        Ok(result)
-    }
-    
-    async fn matches(&self, entity: EntityId, storages: &Shared<HashMap<ComponentId, Handle<ComponentStorage>>>) -> bool {
-        self.inner.matches(entity, storages).await
-    }
-}
+// CachedQuery removed - can't use dyn, caching should be done at a higher level

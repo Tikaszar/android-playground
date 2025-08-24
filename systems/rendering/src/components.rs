@@ -5,7 +5,7 @@
 
 use async_trait::async_trait;
 use bytes::{Bytes, BytesMut, BufMut};
-use playground_core_ecs::{Component, ComponentId, EcsResult, EcsError};
+use playground_core_ecs::{ComponentData, ComponentId, EcsResult, EcsError};
 use std::collections::HashSet;
 use std::path::PathBuf;
 
@@ -29,12 +29,12 @@ pub struct TextureResourceComponent {
 }
 
 #[async_trait]
-impl Component for TextureResourceComponent {
+impl ComponentData for TextureResourceComponent {
     fn component_id() -> ComponentId {
         std::any::TypeId::of::<Self>()
     }
     
-    async fn serialize(&self) -> EcsResult<Bytes> {
+    fn serialize(&self) -> Bytes {
         let mut buf = BytesMut::new();
         
         // Serialize handle
@@ -61,10 +61,10 @@ impl Component for TextureResourceComponent {
             buf.put_u8(0);
         }
         
-        Ok(buf.freeze())
+        buf.freeze()
     }
     
-    async fn deserialize(_bytes: &Bytes) -> EcsResult<Self> where Self: Sized {
+    fn deserialize(bytes: &Bytes) -> Result<Self, EcsError> where Self: Sized {
         // Implement when needed for hot-reload
         Err(EcsError::SerializationFailed("TextureResourceComponent deserialization not implemented".into()))
     }
@@ -90,12 +90,12 @@ pub enum BufferType {
 }
 
 #[async_trait]
-impl Component for BufferResourceComponent {
+impl ComponentData for BufferResourceComponent {
     fn component_id() -> ComponentId {
         std::any::TypeId::of::<Self>()
     }
     
-    async fn serialize(&self) -> EcsResult<Bytes> {
+    fn serialize(&self) -> Bytes {
         let mut buf = BytesMut::new();
         
         // Serialize buffer type (simplified - just the discriminant)
@@ -122,10 +122,10 @@ impl Component for BufferResourceComponent {
             buf.put_u8(0);
         }
         
-        Ok(buf.freeze())
+        buf.freeze()
     }
     
-    async fn deserialize(_bytes: &Bytes) -> EcsResult<Self> where Self: Sized {
+    fn deserialize(bytes: &Bytes) -> Result<Self, EcsError> where Self: Sized {
         Err(EcsError::SerializationFailed("BufferResourceComponent deserialization not implemented".into()))
     }
 }
@@ -144,12 +144,12 @@ pub struct ShaderResourceComponent {
 }
 
 #[async_trait]
-impl Component for ShaderResourceComponent {
+impl ComponentData for ShaderResourceComponent {
     fn component_id() -> ComponentId {
         std::any::TypeId::of::<Self>()
     }
     
-    async fn serialize(&self) -> EcsResult<Bytes> {
+    fn serialize(&self) -> Bytes {
         let mut buf = BytesMut::new();
         
         // Serialize handle
@@ -169,10 +169,10 @@ impl Component for ShaderResourceComponent {
         // Serialize error count (not the errors themselves for now)
         buf.put_u32_le(self.compilation_errors.len() as u32);
         
-        Ok(buf.freeze())
+        buf.freeze()
     }
     
-    async fn deserialize(_bytes: &Bytes) -> EcsResult<Self> where Self: Sized {
+    fn deserialize(bytes: &Bytes) -> Result<Self, EcsError> where Self: Sized {
         Err(EcsError::SerializationFailed("ShaderResourceComponent deserialization not implemented".into()))
     }
 }
@@ -191,12 +191,12 @@ pub struct PipelineResourceComponent {
 }
 
 #[async_trait]
-impl Component for PipelineResourceComponent {
+impl ComponentData for PipelineResourceComponent {
     fn component_id() -> ComponentId {
         std::any::TypeId::of::<Self>()
     }
     
-    async fn serialize(&self) -> EcsResult<Bytes> {
+    fn serialize(&self) -> Bytes {
         let mut buf = BytesMut::new();
         
         // Serialize handles
@@ -213,10 +213,10 @@ impl Component for PipelineResourceComponent {
         buf.put_u32_le(self.rasterizer_state);
         buf.put_u8(if self.active { 1 } else { 0 });
         
-        Ok(buf.freeze())
+        buf.freeze()
     }
     
-    async fn deserialize(_bytes: &Bytes) -> EcsResult<Self> where Self: Sized {
+    fn deserialize(bytes: &Bytes) -> Result<Self, EcsError> where Self: Sized {
         Err(EcsError::SerializationFailed("PipelineResourceComponent deserialization not implemented".into()))
     }
 }
@@ -235,12 +235,12 @@ pub struct RenderTargetComponent {
 }
 
 #[async_trait]
-impl Component for RenderTargetComponent {
+impl ComponentData for RenderTargetComponent {
     fn component_id() -> ComponentId {
         std::any::TypeId::of::<Self>()
     }
     
-    async fn serialize(&self) -> EcsResult<Bytes> {
+    fn serialize(&self) -> Bytes {
         let mut buf = BytesMut::new();
         
         buf.put_u64_le(self.handle.id());
@@ -252,10 +252,10 @@ impl Component for RenderTargetComponent {
         buf.put_u8(if self.has_stencil { 1 } else { 0 });
         buf.put_u64_le(self.memory_usage as u64);
         
-        Ok(buf.freeze())
+        buf.freeze()
     }
     
-    async fn deserialize(_bytes: &Bytes) -> EcsResult<Self> where Self: Sized {
+    fn deserialize(bytes: &Bytes) -> Result<Self, EcsError> where Self: Sized {
         Err(EcsError::SerializationFailed("RenderTargetComponent deserialization not implemented".into()))
     }
 }
@@ -289,12 +289,12 @@ pub enum ResourceId {
 }
 
 #[async_trait]
-impl Component for RenderPassComponent {
+impl ComponentData for RenderPassComponent {
     fn component_id() -> ComponentId {
         std::any::TypeId::of::<Self>()
     }
     
-    async fn serialize(&self) -> EcsResult<Bytes> {
+    fn serialize(&self) -> Bytes {
         let mut buf = BytesMut::new();
         
         // Serialize pass ID
@@ -323,10 +323,10 @@ impl Component for RenderPassComponent {
         buf.put_u32_le(self.execution_order);
         buf.put_u8(if self.enabled { 1 } else { 0 });
         
-        Ok(buf.freeze())
+        buf.freeze()
     }
     
-    async fn deserialize(_bytes: &Bytes) -> EcsResult<Self> where Self: Sized {
+    fn deserialize(bytes: &Bytes) -> Result<Self, EcsError> where Self: Sized {
         Err(EcsError::SerializationFailed("RenderPassComponent deserialization not implemented".into()))
     }
 }
@@ -346,12 +346,12 @@ pub struct FrameStateComponent {
 }
 
 #[async_trait]
-impl Component for FrameStateComponent {
+impl ComponentData for FrameStateComponent {
     fn component_id() -> ComponentId {
         std::any::TypeId::of::<Self>()
     }
     
-    async fn serialize(&self) -> EcsResult<Bytes> {
+    fn serialize(&self) -> Bytes {
         let mut buf = BytesMut::new();
         
         buf.put_u64_le(self.frame_number);
@@ -364,10 +364,10 @@ impl Component for FrameStateComponent {
         buf.put_u64_le(self.texture_memory_used as u64);
         buf.put_u64_le(self.buffer_memory_used as u64);
         
-        Ok(buf.freeze())
+        buf.freeze()
     }
     
-    async fn deserialize(_bytes: &Bytes) -> EcsResult<Self> where Self: Sized {
+    fn deserialize(bytes: &Bytes) -> Result<Self, EcsError> where Self: Sized {
         Err(EcsError::SerializationFailed("FrameStateComponent deserialization not implemented".into()))
     }
 }
@@ -385,12 +385,12 @@ pub struct CapabilitiesComponent {
 }
 
 #[async_trait]
-impl Component for CapabilitiesComponent {
+impl ComponentData for CapabilitiesComponent {
     fn component_id() -> ComponentId {
         std::any::TypeId::of::<Self>()
     }
     
-    async fn serialize(&self) -> EcsResult<Bytes> {
+    fn serialize(&self) -> Bytes {
         let mut buf = BytesMut::new();
         
         buf.put_u32_le(self.max_texture_size);
@@ -414,10 +414,10 @@ impl Component for CapabilitiesComponent {
         buf.put_u32_le(self.vendor.len() as u32);
         buf.put_slice(self.vendor.as_bytes());
         
-        Ok(buf.freeze())
+        buf.freeze()
     }
     
-    async fn deserialize(_bytes: &Bytes) -> EcsResult<Self> where Self: Sized {
+    fn deserialize(bytes: &Bytes) -> Result<Self, EcsError> where Self: Sized {
         Err(EcsError::SerializationFailed("CapabilitiesComponent deserialization not implemented".into()))
     }
 }
@@ -432,12 +432,12 @@ pub struct StreamingPriorityComponent {
 }
 
 #[async_trait]
-impl Component for StreamingPriorityComponent {
+impl ComponentData for StreamingPriorityComponent {
     fn component_id() -> ComponentId {
         std::any::TypeId::of::<Self>()
     }
     
-    async fn serialize(&self) -> EcsResult<Bytes> {
+    fn serialize(&self) -> Bytes {
         let mut buf = BytesMut::new();
         
         buf.put_u64_le(self.texture_handle.id());
@@ -446,10 +446,10 @@ impl Component for StreamingPriorityComponent {
         buf.put_u32_le(self.requested_lod);
         buf.put_u8(if self.loading { 1 } else { 0 });
         
-        Ok(buf.freeze())
+        buf.freeze()
     }
     
-    async fn deserialize(_bytes: &Bytes) -> EcsResult<Self> where Self: Sized {
+    fn deserialize(bytes: &Bytes) -> Result<Self, EcsError> where Self: Sized {
         Err(EcsError::SerializationFailed("StreamingPriorityComponent deserialization not implemented".into()))
     }
 }

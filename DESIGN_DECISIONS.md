@@ -50,11 +50,34 @@ This file documents key architectural decisions, why they were made, and how the
 - Clearer ownership and lifetime semantics
 - Forces better architectural decisions
 
-**Implementation**:
-- Component is a concrete struct, not a trait
-- ComponentStorage is a concrete type with internal dispatch
-- Query system uses component IDs directly
-- Base class pattern: Component stores serialized data
+**Implementation** (Session 17):
+- Component is a concrete struct (base class pattern)
+- ComponentData trait for actual component types
+- Component stores data as Bytes internally for type erasure
+- ComponentStorage is a concrete struct with internal storage_type field
+- Query system uses component IDs directly, no Box<dyn Query>
+- World::execute_query is generic: `execute_query<Q: Query>`
+
+**Pattern**:
+```rust
+// Base class for all components
+pub struct Component {
+    data: Bytes,
+    component_id: ComponentId,
+    component_name: String,
+    size_hint: usize,
+}
+
+// Trait for actual component types
+pub trait ComponentData: Send + Sync + 'static {
+    fn component_id() -> ComponentId;
+    fn serialize(&self) -> Bytes;
+    fn deserialize(bytes: &Bytes) -> Result<Self, EcsError>;
+}
+
+// Usage
+let component = Component::new(MyComponentData { ... });
+```
 
 ### NO Turbofish Syntax
 **Decision**: Use `.with_component(ComponentId)` instead of `::<T>`

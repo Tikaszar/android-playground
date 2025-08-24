@@ -198,31 +198,7 @@ impl ComponentRegistry {
             .unwrap_or(false)
     }
     
-    pub async fn migrate_component(
-        &self, 
-        id: ComponentId, 
-        data: &Bytes, 
-        from_version: u32
-    ) -> EcsResult<Bytes> {
-        let info = self.get_info(id).await
-            .ok_or_else(|| EcsError::ComponentNotRegistered(format!("{:?}", id)))?;
-        
-        if from_version == info.version {
-            return Ok(data.clone());
-        }
-        
-        if let Some(migration_fn) = &info.migration_fn {
-            let guard = migration_fn.read().await;
-            guard(data, from_version)
-        } else if cfg!(debug_assertions) {
-            Ok(Bytes::new())
-        } else {
-            Err(EcsError::MigrationError(format!(
-                "No migration from v{} to v{} for component {}",
-                from_version, info.version, info.name
-            )))
-        }
-    }
+    // Migration removed - not needed for NO dyn architecture
 }
 
 impl Default for ComponentRegistry {

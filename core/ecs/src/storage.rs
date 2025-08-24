@@ -2,7 +2,7 @@ use async_trait::async_trait;
 use std::collections::HashMap;
 use playground_core_types::{Handle, handle, Shared, shared};
 use crate::entity::EntityId;
-use crate::component::{ComponentBox, ComponentId};
+use crate::component::{Component, ComponentBox, ComponentId};
 use crate::error::{EcsError, EcsResult};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -315,8 +315,7 @@ impl Storage for DenseStorage {
                 let components = self.components.read().await;
                 if index < components.len() {
                     let component = components[index].read().await;
-                    let bytes = component.serialize().await
-                        .unwrap_or_else(|_| bytes::Bytes::new());
+                    let bytes = component.serialize();
                     Some(bytes)
                 } else {
                     None
@@ -324,7 +323,7 @@ impl Storage for DenseStorage {
             };
             
             if let Some(bytes) = component_clone {
-                Ok(Box::new(RawComponent { data: bytes }) as ComponentBox)
+                Ok(Box::new(Component::from_bytes(bytes, self.component_id, String::new(), 0)))
             } else {
                 Err(EcsError::ComponentNotFound {
                     entity,

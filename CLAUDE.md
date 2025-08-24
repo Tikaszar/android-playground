@@ -182,3 +182,4 @@ http://localhost:8080/mcp
 - Conversational IDE is primary interface
 - Only the User csn execute cargo run. Always include usage instructions
 - ask the User to cargo run, never cargo run as an AI Agent
+- No DYN or ENUMs in place of DYN

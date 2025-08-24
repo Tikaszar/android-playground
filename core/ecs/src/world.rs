@@ -314,7 +314,7 @@ impl World {
         QueryBuilder::new()
     }
     
-    pub async fn execute_query(&self, query: &dyn Query) -> EcsResult<Vec<EntityId>> {
+    pub async fn execute_query<Q: Query>(&self, query: &Q) -> EcsResult<Vec<EntityId>> {
         query.execute(&self.storages).await
     }
     

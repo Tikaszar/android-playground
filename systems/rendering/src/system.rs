@@ -44,8 +44,8 @@ pub struct RenderingSystem<R: BaseRenderer<Error = RendererError>> {
 impl<R: BaseRenderer<Error = RendererError>> RenderingSystem<R> {
     /// Create a new rendering system with ECS integration
     pub async fn new() -> Result<Self, RendererError> {
-        use playground_core_types::shared;
-        let registry = shared(ComponentRegistry::new());
+        use playground_core_types::handle;
+        let registry = handle(ComponentRegistry::new());
         let world = Arc::new(World::with_registry(registry));
         
         // Register all rendering components
@@ -122,7 +122,7 @@ impl<R: BaseRenderer<Error = RendererError>> RenderingSystem<R> {
             };
             
             let entities = self.world.spawn_batch(vec![
-                vec![Box::new(frame_component) as playground_core_ecs::ComponentBox],
+                vec![Box::new(playground_core_ecs::Component::new(frame_component))],
             ]).await.map_err(|e| RendererError::InitializationFailed(e.to_string()))?;
             
             self.frame_entity = entities.first().copied();
@@ -140,7 +140,7 @@ impl<R: BaseRenderer<Error = RendererError>> RenderingSystem<R> {
             };
             
             let entities = self.world.spawn_batch(vec![
-                vec![Box::new(caps_component) as playground_core_ecs::ComponentBox],
+                vec![Box::new(playground_core_ecs::Component::new(caps_component))],
             ]).await.map_err(|e| RendererError::InitializationFailed(e.to_string()))?;
             
             self.capabilities_entity = entities.first().copied();
@@ -215,7 +215,7 @@ impl<R: BaseRenderer<Error = RendererError>> RenderingSystem<R> {
         };
         
         let entities = self.world.spawn_batch(vec![
-            vec![Box::new(component) as playground_core_ecs::ComponentBox],
+            vec![Box::new(playground_core_ecs::Component::new(component))],
         ]).await.map_err(|e| RendererError::ResourceCreationFailed(e.to_string()))?;
         
         if let Some(entity) = entities.first() {
@@ -248,7 +248,7 @@ impl<R: BaseRenderer<Error = RendererError>> RenderingSystem<R> {
         };
         
         let entities = self.world.spawn_batch(vec![
-            vec![Box::new(component) as playground_core_ecs::ComponentBox],
+            vec![Box::new(playground_core_ecs::Component::new(component))],
         ]).await.map_err(|e| RendererError::ResourceCreationFailed(e.to_string()))?;
         
         if let Some(entity) = entities.first() {
@@ -283,7 +283,7 @@ impl<R: BaseRenderer<Error = RendererError>> RenderingSystem<R> {
         };
         
         let entities = self.world.spawn_batch(vec![
-            vec![Box::new(component) as playground_core_ecs::ComponentBox],
+            vec![Box::new(playground_core_ecs::Component::new(component))],
         ]).await.map_err(|e| RendererError::ResourceCreationFailed(e.to_string()))?;
         
         if let Some(entity) = entities.first() {
@@ -322,7 +322,7 @@ impl<R: BaseRenderer<Error = RendererError>> RenderingSystem<R> {
                     .map_err(|e| RendererError::ResourceCreationFailed(format!("Failed to remove component: {}", e)))?;
                 self.world.add_component_raw(
                     entity,
-                    Box::new(new_component) as playground_core_ecs::ComponentBox,
+                    Box::new(playground_core_ecs::Component::new(new_component)),
                     component_id
                 ).await.map_err(|e| RendererError::ResourceCreationFailed(format!("Failed to add component: {}", e)))?
             }
