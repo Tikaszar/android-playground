@@ -183,4 +183,4 @@ http://localhost:8080/mcp
 - Only the User can execute cargo run. Always include usage instructions
 - ask the User to cargo run, never cargo run as an AI Agent
 - No DYN or ENUMs in place of DYN
-- **NEVER add migration notes or migration plans - wait until project is complete**
+- **NEVER add migration ANYTHING - no migration code, notes, plans, or functions EVER**
