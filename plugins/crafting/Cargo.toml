@@ -16,7 +16,6 @@ playground-systems-logic = { path = "../../systems/logic" }
 playground-systems-networking = { path = "../../systems/networking" }
 
 # Plugin trait (required for all plugins)
-playground-core-plugin = { path = "../../core/plugin" }
 playground-core-types = { path = "../../core/types" }
 
 # Standard dependencies

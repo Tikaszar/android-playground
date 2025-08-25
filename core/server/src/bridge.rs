@@ -1,7 +1,7 @@
 use playground_core_types::{Handle, handle};
 use bytes::Bytes;
 use async_trait::async_trait;
-use playground_core_ecs::{MessageBus, MessageHandler, Broadcaster, ChannelId};
+use playground_core_ecs::{MessageBus, MessageHandler, MessageHandlerData, BroadcasterData, ChannelId, EcsResult};
 use crate::websocket::WebSocketState;
 use crate::packet::Packet;
 use futures_util::SinkExt;
@@ -28,10 +28,13 @@ impl MessageBridge {
         let ws_state = self.websocket_state.clone();
         
         // Create a handler that forwards to WebSocket
-        let handler = handle(WebSocketForwarder {
+        let forwarder = WebSocketForwarder {
             channel: internal_channel,
             websocket_state: ws_state,
-        });
+        };
+        
+        let handler = MessageHandler::new(forwarder).await
+            .expect("Failed to create handler");
         
         // Subscribe to the internal channel
         self.ecs_bus.subscribe(internal_channel, handler).await
@@ -57,8 +60,12 @@ struct WebSocketForwarder {
 }
 
 #[async_trait]
-impl MessageHandler for WebSocketForwarder {
-    async fn handle(&self, _channel: ChannelId, message: Bytes) -> playground_core_ecs::EcsResult<()> {
+impl MessageHandlerData for WebSocketForwarder {
+    fn handler_id(&self) -> String {
+        format!("websocket_forwarder_{}", self.channel)
+    }
+    
+    async fn handle(&self, _channel: ChannelId, message: Bytes) -> EcsResult<()> {
         // Create a packet from the message
         let packet = Packet::new(
             self.channel,
@@ -94,6 +101,17 @@ impl MessageHandler for WebSocketForwarder {
         
         Ok(())
     }
+    
+    async fn serialize(&self) -> EcsResult<Bytes> {
+        // Can't really serialize a WebSocket connection
+        Ok(Bytes::from(format!("websocket_forwarder_{}", self.channel)))
+    }
+    
+    async fn deserialize(_bytes: &Bytes) -> EcsResult<Self> where Self: Sized {
+        Err(playground_core_ecs::EcsError::MessageError(
+            "WebSocketForwarder cannot be deserialized".to_string()
+        ))
+    }
 }
 
 /// WebSocket to ECS broadcaster
@@ -109,8 +127,12 @@ impl WebSocketBroadcaster {
 }
 
 #[async_trait]
-impl Broadcaster for WebSocketBroadcaster {
-    async fn broadcast(&self, channel: ChannelId, message: Bytes) -> playground_core_ecs::EcsResult<()> {
+impl BroadcasterData for WebSocketBroadcaster {
+    fn broadcaster_id(&self) -> String {
+        "websocket_broadcaster".to_string()
+    }
+    
+    async fn broadcast(&self, channel: ChannelId, message: Bytes) -> EcsResult<()> {
         // Create a packet
         let packet = Packet::new(
             channel,
@@ -135,7 +157,7 @@ impl Broadcaster for WebSocketBroadcaster {
         Ok(())
     }
     
-    async fn send_to(&self, _target: playground_core_ecs::EntityId, _message: Bytes) -> playground_core_ecs::EcsResult<()> {
+    async fn send_to(&self, _target: playground_core_ecs::EntityId, _message: Bytes) -> EcsResult<()> {
         // Not implemented for WebSocket broadcast
         // Could be used for sending to specific clients in the future
         Ok(())

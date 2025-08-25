@@ -95,7 +95,7 @@ impl Default for UiLayoutComponent {
 #[async_trait]
 impl ComponentData for UiLayoutComponent {
     fn component_id() -> ComponentId {
-        std::any::TypeId::of::<Self>()
+        "UiLayoutComponent".to_string()
     }
     
     fn component_name() -> &'static str {

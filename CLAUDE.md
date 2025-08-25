@@ -49,7 +49,7 @@ This file contains critical memory for Claude Code when working with this reposi
 - UiSystem internal ECS is private - plugins use UiInterface from systems/logic
 
 ## #current-violations
-**NetworkingSystem/UiSystem interface** - Handle vs Shared mismatch 🟡
+**NetworkingSystem/UiSystem interface** - Handle vs Shared mismatch 🟡 (last remaining)
 
 ## #ecs-architecture-fix
 **CRITICAL**: UiSystem uses `Arc<World>` not `Shared<World>`

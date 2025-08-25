@@ -1,13 +1,39 @@
 # CONTEXT.md - Current Session Context
 
-## Active Session - 2025-08-25 (Session 25 - VS Code)
+## Active Session - 2025-08-25 (Session 26 - VS Code)
 
 ### Current Status
-**systems/ui Handle/Shared compliance** ✅ - COMPLETED
-**Plugin architecture violations identified** ✅ - core/plugin shouldn't exist
-**Build status** 🟡 - Compliance improved but core/plugin needs removal
+**core/plugin removed** ✅ - COMPLETED
+**Plugin architecture fixed** ✅ - Plugins now use systems/logic::System
+**Build status** ✅ - FULLY COMPILING with only warnings
 
-### What Was Done This Session (2025-08-25 - Session 25)
+### What Was Done This Session (2025-08-25 - Session 26)
+
+#### Removed core/plugin Package ✅
+1. **Deleted core/plugin directory entirely**
+   - Package violated architecture: Core shouldn't know about Plugins
+   - Used unsafe code and dyn trait objects (major violations)
+   - Dynamic plugin loading not needed - static compilation preferred
+
+2. **Fixed all dependencies**
+   - Removed playground-core-plugin from core/server/Cargo.toml
+   - Removed from all plugin Cargo.toml files via batch sed
+   - Updated core/server/src/bridge.rs to use MessageHandlerData trait
+
+3. **Fixed systems/ui ComponentId issues**
+   - Changed from TypeId to String for ComponentId
+   - Fixed all UI components to use string names
+   - Added .clone() where needed for non-Copy String type
+
+4. **Fixed playground-apps-editor**
+   - Now properly creates SystemData from UiFrameworkPlugin
+   - Plugins implement systems/logic::System trait
+   - No separate Plugin trait needed
+
+### Architecture Achievement
+**Complete removal of core/plugin package** - Plugins are now just Systems that implement systems/logic::System trait. No dynamic loading, no unsafe code, no trait objects. Clean architecture maintained: Apps → Plugins → Systems → Core.
+
+### Previous Session (2025-08-25 - Session 25)
 
 #### Fixed systems/ui Handle/Shared Compliance
 

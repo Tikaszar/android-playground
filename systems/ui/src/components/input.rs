@@ -34,7 +34,7 @@ impl Default for UiInputComponent {
 #[async_trait]
 impl ComponentData for UiInputComponent {
     fn component_id() -> ComponentId {
-        std::any::TypeId::of::<Self>()
+        "UiInputComponent".to_string()
     }
     
     fn component_name() -> &'static str {

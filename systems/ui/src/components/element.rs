@@ -33,7 +33,7 @@ impl UiElementComponent {
 #[async_trait]
 impl ComponentData for UiElementComponent {
     fn component_id() -> ComponentId {
-        std::any::TypeId::of::<Self>()
+        "UiElementComponent".to_string()
     }
     
     fn component_name() -> &'static str {

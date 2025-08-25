@@ -370,13 +370,13 @@ impl UiSystem {
         let component_id = <UiStyleComponent as playground_core_ecs::ComponentData>::component_id();
         
         // Check if component exists first
-        let has_component = self.world.has_component(element, component_id).await;
+        let has_component = self.world.has_component(element, component_id.clone()).await;
         self.log("Info", format!("[UiSystem] Entity has style component: {}", has_component)).await;
         
         if has_component {
             // Remove the old component
             self.log("Info", format!("[UiSystem] Removing existing component for entity {:?}", element)).await;
-            let _ = self.world.remove_component_raw(element, component_id).await;
+            let _ = self.world.remove_component_raw(element, component_id.clone()).await;
             self.log("Info", "[UiSystem] Existing component removed".to_string()).await;
         }
         

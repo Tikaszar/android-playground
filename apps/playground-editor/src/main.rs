@@ -47,7 +47,9 @@ async fn main() -> Result<()> {
     eprintln!("[MAIN] After ui_plugin.initialize()");
     
     // Register the plugin as a System in the World
-    world.write().await.register_plugin_system(Box::new(ui_plugin)).await?;
+    use playground_systems_logic::SystemData;
+    let system_data = SystemData::new(ui_plugin);
+    world.write().await.register_plugin_system(system_data).await?;
     
     // Note: render loop already started in systems.initialize_all()
     
