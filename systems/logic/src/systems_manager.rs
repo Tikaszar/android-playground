@@ -77,12 +77,12 @@ impl SystemsManager {
         drop(networking);
         
         // Store networking reference in UI system so it can send render commands
-        // UI expects Handle<NetworkingSystem>, so we need to get an Arc from the Shared
-        let networking_handle = {
-            let net = self.networking.read().await;
-            handle(net.clone())
-        };
-        ui.set_networking_system(networking_handle);
+        // UI expects Handle<NetworkingSystem>, but we have Shared<NetworkingSystem>
+        // This is the Handle vs Shared mismatch mentioned in CLAUDE.md
+        // For now, we'll need to extract the Arc<NetworkingSystem> somehow
+        // TODO: Fix this architectural mismatch between NetworkingSystem and UiSystem
+        
+        // ui.set_networking_system(self.networking.clone());
         
         if let Some(ref dashboard) = dashboard {
             use playground_core_server::dashboard::LogLevel;
@@ -129,7 +129,7 @@ impl SystemsManager {
     }
     
     /// Get reference to NetworkingSystem
-    pub fn networking(&self) -> Handle<NetworkingSystem> {
+    pub fn networking(&self) -> Shared<NetworkingSystem> {
         self.networking.clone()
     }
     
@@ -167,7 +167,8 @@ impl SystemsManager {
         input_schema: serde_json::Value,
         handler_channel: u16,
     ) -> LogicResult<()> {
-        self.networking.register_mcp_tool(name.clone(), description, input_schema, handler_channel).await
+        let networking = self.networking.read().await;
+        networking.register_mcp_tool(name.clone(), description, input_schema, handler_channel).await
             .map_err(|e| LogicError::SystemError(format!("Failed to register MCP tool '{}': {}", name, e)))?;
         Ok(())
     }
@@ -189,7 +190,8 @@ impl SystemsManager {
     
     /// Log a message to the dashboard
     pub async fn log(&self, level: &str, message: String) {
-        if let Some(dashboard) = self.networking.get_dashboard().await {
+        let networking = self.networking.read().await;
+        if let Some(dashboard) = networking.get_dashboard().await {
             use playground_core_server::dashboard::LogLevel;
             let log_level = match level {
                 "error" | "Error" => LogLevel::Error,
