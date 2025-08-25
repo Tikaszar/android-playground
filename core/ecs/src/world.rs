@@ -107,7 +107,7 @@ impl World {
         
         let component_id = T::component_id();
         if !self.storages.read().await.contains_key(&component_id) {
-            let storage = handle(ComponentStorage::new_sparse(component_id));
+            let storage = handle(ComponentStorage::new_sparse(component_id.clone()));
             self.storages.write().await.insert(component_id, storage);
         }
         
@@ -120,8 +120,8 @@ impl World {
         let component_id = T::component_id();
         if !self.storages.read().await.contains_key(&component_id) {
             let storage = handle(match storage_type {
-                StorageType::Dense => ComponentStorage::new_dense(component_id),
-                StorageType::Sparse | StorageType::Pooled => ComponentStorage::new_sparse(component_id),
+                StorageType::Dense => ComponentStorage::new_dense(component_id.clone()),
+                StorageType::Sparse | StorageType::Pooled => ComponentStorage::new_sparse(component_id.clone()),
             });
             self.storages.write().await.insert(component_id, storage);
         }
@@ -143,7 +143,7 @@ impl World {
                 let component_id = component.component_id();
                 let type_name = component.component_name();
                 
-                component_ids.push(component_id);
+                component_ids.push(component_id.clone());
                 
                 // Clone storage reference to avoid holding lock across await
                 let storage = {
@@ -204,9 +204,9 @@ impl World {
         let mut storages = self.storages.write().await;
         if !storages.contains_key(&component_id) {
             let storage = handle(match storage_type {
-                StorageType::Dense => ComponentStorage::new_dense(component_id),
-                StorageType::Sparse => ComponentStorage::new_sparse(component_id),
-                StorageType::Pooled => ComponentStorage::new_sparse(component_id), // Use sparse for now
+                StorageType::Dense => ComponentStorage::new_dense(component_id.clone()),
+                StorageType::Sparse => ComponentStorage::new_sparse(component_id.clone()),
+                StorageType::Pooled => ComponentStorage::new_sparse(component_id.clone()), // Use sparse for now
             });
             storages.insert(component_id, storage);
         }
@@ -227,7 +227,7 @@ impl World {
             let mut entities = self.entities.write().await;
             if let Some(components) = entities.get_mut(&entity) {
                 if !components.contains(&component_id) {
-                    components.push(component_id);
+                    components.push(component_id.clone());
                 }
             }
             
@@ -250,7 +250,7 @@ impl World {
             // Update entity's component list
             let mut entities = self.entities.write().await;
             if let Some(components) = entities.get_mut(&entity) {
-                components.retain(|&id| id != component_id);
+                components.retain(|id| *id != component_id);
             }
             
             Ok(component_box)
@@ -329,16 +329,16 @@ impl World {
         // Clone storage references to avoid holding lock across await
         let storages_list: Vec<(ComponentId, Handle<ComponentStorage>)> = {
             let storages = self.storages.read().await;
-            storages.iter().map(|(id, storage)| (*id, storage.clone())).collect()
+            storages.iter().map(|(id, storage)| (id.clone(), storage.clone())).collect()
         };
         
         for (component_id, storage) in storages_list {
             for entity in storage.get_dirty().await {
                 let exists = result.iter_mut().find(|(e, _)| *e == entity);
                 if let Some((_, components)) = exists {
-                    components.push(component_id);
+                    components.push(component_id.clone());
                 } else {
-                    result.push((entity, vec![component_id]));
+                    result.push((entity, vec![component_id.clone()]));
                 }
             }
         }
@@ -406,10 +406,11 @@ impl World {
     }
     
     /// Subscribe to a channel with a handler
+    /// Note: MessageHandler should be refactored to avoid dyn trait object
     pub async fn subscribe(
         &self,
         channel: ChannelId,
-        handler: std::sync::Arc<dyn crate::messaging::MessageHandler>,
+        handler: crate::messaging::MessageHandler,
     ) -> EcsResult<()> {
         self.message_bus.subscribe(channel, handler).await
     }
@@ -438,7 +439,11 @@ mod tests {
     }
     
     #[async_trait]
-    impl Component for Position {
+    impl ComponentData for Position {
+        fn component_name() -> &'static str where Self: Sized {
+            "Position"
+        }
+        
         async fn serialize(&self) -> EcsResult<Bytes> {
             let mut buf = BytesMut::new();
             buf.extend_from_slice(&self.x.to_le_bytes());
@@ -463,8 +468,8 @@ mod tests {
         world.register_component::<Position>().await.unwrap();
         
         let entities = world.spawn_batch(vec![
-            vec![Box::new(Position { x: 0.0, y: 0.0 }) as ComponentBox],
-            vec![Box::new(Position { x: 1.0, y: 1.0 }) as ComponentBox],
+            vec![Box::new(Component::new(Position { x: 0.0, y: 0.0 }).await.unwrap())],
+            vec![Box::new(Component::new(Position { x: 1.0, y: 1.0 }).await.unwrap())],
         ]).await.unwrap();
         
         assert_eq!(entities.len(), 2);

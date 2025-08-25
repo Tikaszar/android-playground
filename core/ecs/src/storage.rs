@@ -1,6 +1,6 @@
 use async_trait::async_trait;
 use std::collections::HashMap;
-use playground_core_types::{Handle, handle, Shared, shared};
+use playground_core_types::{Shared, shared};
 use crate::entity::EntityId;
 use crate::component::{Component, ComponentBox, ComponentId};
 use crate::error::{EcsError, EcsResult};
@@ -134,7 +134,7 @@ impl Storage for SparseStorage {
         
         let component = shared_comp.read().await;
         let bytes = component.serialize();
-        Ok(Box::new(Component::from_bytes(bytes, self.component_id, String::new(), 0)))
+        Ok(Box::new(Component::from_bytes(bytes, self.component_id.clone(), String::new(), 0)))
     }
     
     async fn get_raw_mut(&self, entity: EntityId) -> EcsResult<Shared<ComponentBox>> {
@@ -323,7 +323,7 @@ impl Storage for DenseStorage {
             };
             
             if let Some(bytes) = component_clone {
-                Ok(Box::new(Component::from_bytes(bytes, self.component_id, String::new(), 0)))
+                Ok(Box::new(Component::from_bytes(bytes, self.component_id.clone(), String::new(), 0)))
             } else {
                 Err(EcsError::ComponentNotFound {
                     entity,
@@ -450,7 +450,7 @@ impl Storage for ComponentStorage {
                 let entities = self.entities.as_ref().unwrap();
                 let entity_to_index = self.entity_to_index.as_ref().unwrap();
                 
-                if let Some(index) = entity_to_index.read().await.get(&entity).copied() {
+                if let Some(_index) = entity_to_index.read().await.get(&entity).copied() {
                     let mut components = self.components.write().await;
                     components.insert(entity, shared(component));
                     self.dirty.write().await.insert(entity, ());
@@ -513,7 +513,7 @@ impl Storage for ComponentStorage {
         
         let component = shared_comp.read().await;
         let bytes = component.serialize();
-        Ok(Box::new(Component::from_bytes(bytes, self.component_id, String::new(), 0)))
+        Ok(Box::new(Component::from_bytes(bytes, self.component_id.clone(), String::new(), 0)))
     }
     
     async fn get_raw_mut(&self, entity: EntityId) -> EcsResult<Shared<ComponentBox>> {

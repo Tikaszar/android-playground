@@ -1,10 +1,10 @@
-use std::any::TypeId;
 use std::collections::HashMap;
 use bytes::Bytes;
 use playground_core_types::{Shared, shared};
 use crate::error::{EcsError, EcsResult};
 
-pub type ComponentId = TypeId;
+// ComponentId is now a string-based identifier to avoid TypeId
+pub type ComponentId = String;
 
 // Component is now a concrete base class that all components work through
 pub struct Component {
@@ -21,7 +21,7 @@ impl Component {
             data,
             component_id: T::component_id(),
             component_name: T::component_name().to_string(),
-            size_hint: std::mem::size_of::<T>(),
+            size_hint: 0, // Size hint removed to avoid turbofish
         })
     }
     
@@ -35,7 +35,7 @@ impl Component {
     }
     
     pub fn component_id(&self) -> ComponentId {
-        self.component_id
+        self.component_id.clone()
     }
     
     pub fn component_name(&self) -> &str {
@@ -59,11 +59,13 @@ impl Component {
 #[async_trait::async_trait]
 pub trait ComponentData: Send + Sync + 'static {
     fn component_id() -> ComponentId where Self: Sized {
-        TypeId::of::<Self>()
+        Self::component_name().to_string()
     }
     
     fn component_name() -> &'static str where Self: Sized {
-        std::any::type_name::<Self>()
+        // Components must provide their own name
+        // This should be overridden by each component type
+        "UnknownComponent"
     }
     
     async fn serialize(&self) -> EcsResult<Bytes>;
@@ -87,7 +89,7 @@ impl ComponentInfo {
         Self {
             id: T::component_id(),
             name: T::component_name().to_string(),
-            size_hint: std::mem::size_of::<T>(),
+            size_hint: 0, // Size hint removed to avoid turbofish
             version: 1,
             networked: false,
         }
@@ -130,14 +132,14 @@ impl ComponentRegistry {
     }
     
     pub async fn register_with_info(&self, info: ComponentInfo) -> EcsResult<()> {
-        let id = info.id;
+        let id = info.id.clone();
         let name = info.name.clone();
         
         if self.components.read().await.contains_key(&id) {
             return Ok(());
         }
         
-        self.components.write().await.insert(id, info.clone());
+        self.components.write().await.insert(id.clone(), info);
         self.name_to_id.write().await.insert(name, id);
         
         Ok(())
@@ -211,13 +213,18 @@ impl Default for ComponentRegistry {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use bytes::BytesMut;
     
     struct TestComponent {
         value: i32,
     }
     
-    #[async_trait]
-    impl Component for TestComponent {
+    #[async_trait::async_trait]
+    impl ComponentData for TestComponent {
+        fn component_name() -> &'static str where Self: Sized {
+            "TestComponent"
+        }
+        
         async fn serialize(&self) -> EcsResult<Bytes> {
             let mut buf = BytesMut::new();
             buf.extend_from_slice(&self.value.to_le_bytes());
@@ -238,9 +245,10 @@ mod tests {
         let registry = ComponentRegistry::new();
         registry.register::<TestComponent>().await.unwrap();
         
-        let info = registry.get_info(TestComponent::component_id()).await;
+        let component_id = "TestComponent".to_string();
+        let info = registry.get_info(component_id).await;
         assert!(info.is_some());
-        assert_eq!(info.unwrap().name, std::any::type_name::<TestComponent>());
+        assert_eq!(info.unwrap().name, "TestComponent");
     }
     
     #[tokio::test]
@@ -248,11 +256,11 @@ mod tests {
         let registry = ComponentRegistry::with_pool_limit(1000);
         
         assert!(registry.allocate_pool_space(500).await.is_ok());
-        assert_eq!(registry.current_pool_usage(), 500);
+        assert_eq!(registry.current_pool_usage().await, 500);
         
         assert!(registry.allocate_pool_space(600).await.is_err());
         
         registry.free_pool_space(200).await;
-        assert_eq!(registry.current_pool_usage(), 300);
+        assert_eq!(registry.current_pool_usage().await, 300);
     }
 }

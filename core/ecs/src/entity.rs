@@ -1,4 +1,4 @@
-use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
+use std::sync::atomic::{AtomicU32, Ordering};
 use std::fmt;
 use serde::{Serialize, Deserialize};
 use tokio::sync::Mutex;
@@ -83,7 +83,6 @@ impl Entity {
 
 pub struct EntityAllocator {
     next_index: AtomicU32,
-    generation_counter: AtomicU64,
     free_list: Mutex<Vec<(u32, Generation)>>,
 }
 
@@ -91,7 +90,6 @@ impl EntityAllocator {
     pub fn new() -> Self {
         Self {
             next_index: AtomicU32::new(0),
-            generation_counter: AtomicU64::new(0),
             free_list: Mutex::new(Vec::new()),
         }
     }

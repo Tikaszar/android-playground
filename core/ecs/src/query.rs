@@ -1,7 +1,7 @@
 use std::marker::PhantomData;
 use std::collections::HashMap;
 use async_trait::async_trait;
-use playground_core_types::{Handle, Shared, shared};
+use playground_core_types::{Handle, Shared};
 use crate::entity::EntityId;
 use crate::component::{ComponentData, ComponentId};
 use crate::storage::{ComponentStorage, Storage};
@@ -155,10 +155,10 @@ impl Query for AndQuery {
         let mut result = Vec::new();
         let mut found_first = false;
         
-        for (i, &component_id) in self.component_ids.iter().enumerate() {
+        for (i, component_id) in self.component_ids.iter().enumerate() {
             if self.include[i] && !found_first {
                 // First "with" component - get all its entities
-                if let Some(storage) = storages.read().await.get(&component_id) {
+                if let Some(storage) = storages.read().await.get(component_id) {
                     result = storage.entities().await;
                     found_first = true;
                 }
@@ -183,8 +183,8 @@ impl Query for AndQuery {
     }
     
     async fn matches(&self, entity: EntityId, storages: &Shared<HashMap<ComponentId, Handle<ComponentStorage>>>) -> bool {
-        for (i, &component_id) in self.component_ids.iter().enumerate() {
-            let has_component = if let Some(storage) = storages.read().await.get(&component_id) {
+        for (i, component_id) in self.component_ids.iter().enumerate() {
+            let has_component = if let Some(storage) = storages.read().await.get(component_id) {
                 storage.contains(entity).await
             } else {
                 false

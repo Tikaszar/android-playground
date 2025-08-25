@@ -12,7 +12,10 @@ pub use storage::*;
 pub use world::*;
 pub use query::*;
 pub use error::*;
-pub use messaging::{MessageBus, MessageHandler, Broadcaster, ChannelId};
+pub use messaging::{
+    MessageBus, MessageHandler, MessageHandlerData, 
+    BroadcasterWrapper, BroadcasterData, BroadcastCommand, ChannelId
+};
 
 // Convenience alias
 pub type Result<T> = EcsResult<T>;

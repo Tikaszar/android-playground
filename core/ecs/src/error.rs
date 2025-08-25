@@ -50,6 +50,9 @@ pub enum EcsError {
     #[error("System error: {0}")]
     SystemError(String),
     
+    #[error("Message error: {0}")]
+    MessageError(String),
+    
     #[error("Lock poisoned: {0}")]
     LockPoisoned(String),
     
