@@ -50,6 +50,7 @@ This file contains critical memory for Claude Code when working with this reposi
 
 ## #current-violations
 **NetworkingSystem/UiSystem interface** - Handle vs Shared mismatch 🟡
+**core/ecs messaging.rs** - ✅ FIXED (Session 23)
 
 ## #ecs-architecture-fix
 **CRITICAL**: UiSystem uses `Arc<World>` not `Shared<World>`
@@ -67,12 +68,15 @@ This file contains critical memory for Claude Code when working with this reposi
 4. ~~Fix systems/logic NO turbofish~~ ✅ COMPLETED (Session 22)
    - ALL TypeId usage removed, replaced with string-based IDs
    - No more turbofish syntax anywhere
-5. **Fix NetworkingSystem/UiSystem interface mismatch** 🔴
+5. ~~Fix core/ecs NO dyn violations~~ ✅ COMPLETED (Session 23)
+   - messaging.rs completely refactored
+   - All other files already compliant
+6. **Fix NetworkingSystem/UiSystem interface mismatch** 🔴
    - Resolve Handle vs Shared type mismatch
-5. Implement Discord UI layout
+7. Implement Discord UI layout
    - Fix ECS entity spawning for UI elements
    - Generate proper render commands from UI tree
-6. Fix client tracking in Dashboard (remove disconnected)
+8. Fix client tracking in Dashboard (remove disconnected)
 
 ## #architecture-fixed
 ✅ Plugins ARE Systems - no separate Plugin trait

@@ -2,6 +2,86 @@
 
 This file tracks the detailed history of development sessions, including achievements, bug fixes, and implementation progress.
 
+## Session: 2025-08-25 - core/ecs Architectural Compliance Review (Session 23)
+
+### What Was Accomplished
+1. **Complete core/ecs Package Review and Fixes** ✅
+   - Reviewed all 5 core files for architectural compliance
+   - Fixed critical NO dyn violations in messaging.rs
+   - Verified compliance in entity.rs, query.rs, storage.rs, world.rs
+
+2. **Fixed entity.rs** ✅
+   - Removed non-existent `generation_counter` field causing compilation error
+   - File now fully compliant with all rules
+
+3. **Completely Refactored messaging.rs** ✅
+   - **Major NO dyn refactor:**
+     - Replaced all `Arc<dyn MessageHandler>` with concrete `MessageHandler` wrapper
+     - Replaced all `Arc<dyn Broadcaster>` with concrete `BroadcasterWrapper`
+     - Created `MessageHandlerData` and `BroadcasterData` traits for implementations
+     - Uses mpsc channels for runtime behavior instead of trait objects
+   - **Architectural compliance:**
+     - Properly uses `Shared<T>` type alias from playground_core_types
+     - Added `MessageError` variant to EcsError enum
+     - Follows Component/ComponentData pattern established in codebase
+
+4. **Verified query.rs Compliance** ✅
+   - Already fully compliant - model implementation
+   - NO dyn pattern perfectly implemented with component IDs
+   - Comments document removal of OrQuery and CachedQuery
+
+5. **Verified storage.rs Compliance** ✅
+   - Already fully compliant - excellent implementation
+   - Abstract class pattern with concrete ComponentStorage
+   - Arc::try_unwrap pattern for safe component removal
+   - Proper Shared<T> usage throughout
+
+6. **Verified world.rs Compliance** ✅
+   - Already fully compliant - outstanding implementation
+   - Perfect Handle/Shared pattern usage
+   - Excellent lock management with clone-before-await pattern
+   - Incremental GC and memory monitoring
+
+### Key Architecture Achievement
+**Complete NO dyn compliance across entire core/ecs package** - All trait objects eliminated while maintaining full functionality through concrete wrapper patterns and channel-based communication.
+
+### Build Status
+- core/ecs: ✅ Builds successfully with only minor warnings
+- Pattern consistency: ✅ Component/ComponentData pattern applied uniformly
+
+## Session: 2025-08-25 - systems/logic NO turbofish Compliance (Session 22)
+
+### What Was Accomplished
+1. **Comprehensive systems/logic Compliance Fix** ✅
+   - Fixed all remaining NO dyn and NO turbofish violations
+   - Replaced all TypeId usage with string-based IDs
+   - Applied concrete wrapper pattern consistently
+
+2. **Fixed query.rs** ✅
+   - Removed ALL turbofish syntax (`.with<T>()` → `.with_component(ComponentId)`)
+   - Replaced TypeId with ComponentId throughout
+   - Fixed `Arc<RwLock<>>` to use `Shared<>` type alias
+
+3. **Fixed rendering_interface.rs** ✅
+   - Removed `Box<dyn Renderer>` trait object
+   - Created concrete RendererData wrapper
+   - Uses channel-based approach
+
+4. **Fixed resource_storage.rs** ✅
+   - Replaced TypeId with string-based ResourceId
+   - Removed all turbofish syntax
+   - Implemented dual API pattern
+
+5. **Fixed system.rs and system_data.rs** ✅
+   - Removed all `Box<dyn System>` usage
+   - Created concrete SystemData wrapper
+   - String-based SystemId instead of TypeId
+
+### Architecture Pattern Success
+- NO TypeId anywhere - all replaced with string IDs
+- NO dyn anywhere - all trait objects replaced
+- NO turbofish - all generic type parameters removed
+
 ## Session: 2025-08-25 - systems/logic NO dyn Refactor (Session 21)
 
 ### What Was Accomplished

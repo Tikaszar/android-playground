@@ -1,13 +1,50 @@
 # CONTEXT.md - Current Session Context
 
-## Active Session - 2025-08-25 (Session 22)
+## Active Session - 2025-08-25 (Session 23)
 
 ### Current Status
-**systems/logic NO dyn refactor** ✅ - COMPLETED
-**NO turbofish compliance** ✅ - All TypeId usage removed
-**Architectural compliance** ✅ - All major violations fixed
+**core/ecs NO dyn refactor** ✅ - COMPLETED
+**Full architectural compliance** ✅ - All packages reviewed and fixed
+**Build status** ✅ - core/ecs compiles successfully
 
-### What Was Done This Session (2025-08-25 - Session 22)
+### What Was Done This Session (2025-08-25 - Session 23)
+
+#### Complete core/ecs Architectural Compliance Review
+
+1. **Reviewed and fixed entity.rs** ✅
+   - Fixed compilation error (removed non-existent `generation_counter` field)
+   - Fully compliant with all architectural rules
+
+2. **Completely refactored messaging.rs** ✅
+   - Removed ALL `Arc<dyn MessageHandler>` usage
+   - Created concrete `MessageHandler` wrapper struct
+   - Removed ALL `Arc<dyn Broadcaster>` usage  
+   - Created concrete `BroadcasterWrapper` struct
+   - Added `MessageHandlerData` and `BroadcasterData` traits
+   - Uses channel-based approach for runtime handlers
+   - Added `MessageError` variant to EcsError
+   - Properly uses `Shared<T>` type alias throughout
+
+3. **Reviewed query.rs** ✅
+   - Already fully compliant - model implementation
+   - NO dyn pattern perfectly implemented
+   - Uses component IDs directly instead of nested queries
+   - Comments explain OrQuery and CachedQuery removal
+
+4. **Reviewed storage.rs** ✅
+   - Already fully compliant - excellent implementation
+   - Abstract class pattern with concrete ComponentStorage
+   - Proper Shared<T> usage throughout
+   - Arc::try_unwrap pattern for safe component removal
+
+5. **Reviewed world.rs** ✅
+   - Already fully compliant - outstanding implementation
+   - Perfect Handle/Shared pattern usage
+   - Excellent lock management (clone-before-await pattern)
+   - Incremental garbage collection
+   - Memory monitoring with pressure warnings
+
+### Previous Session (2025-08-25 - Session 22)
 
 #### Comprehensive systems/logic Compliance Fix
 

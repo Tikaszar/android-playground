@@ -188,13 +188,13 @@ This is an experimental project between AI agents and developers. Each session b
 
 ## 🎮 Roadmap
 
-### Current Focus (2025-08-23)
-- ✅ WebGL2 renderer fully working - Clear and DrawQuad commands render!
-- ✅ Server-controlled renderer initialization implemented
-- ✅ Resource caching with LRU eviction (100MB limit)
-- ✅ Clean shutdown protocol with proper resource disposal
-- 🟡 Fixing ECS deadlock issues - partial progress
-- 🔴 Discord UI creation blocked by component removal hang
+### Current Focus (2025-08-25)
+- ✅ NO dyn compliance achieved across entire codebase
+- ✅ core/ecs messaging.rs completely refactored (Session 23)
+- ✅ systems/logic fully compliant (Sessions 21-22)
+- ✅ All TypeId usage eliminated, replaced with string-based IDs
+- 🟡 NetworkingSystem/UiSystem interface mismatch (Handle vs Shared)
+- 🔴 Discord UI implementation pending
 - ⏳ Text rendering implementation (DrawText command)
 
 ### Next Up

@@ -50,14 +50,15 @@ This file documents key architectural decisions, why they were made, and how the
 - Clearer ownership and lifetime semantics
 - Forces better architectural decisions
 
-**Implementation** (Session 17, Corrected Session 20, Extended Session 21):
+**Implementation** (Session 17, Corrected Session 20, Extended Session 21-23):
 - Component is a concrete struct (base class pattern)
 - ComponentData trait for actual component types
 - Component stores data as Bytes internally for type erasure
-- MessageHandlerData follows same pattern for message handlers
+- MessageHandlerData follows same pattern for message handlers (Session 23)
 - EventData wraps event data similarly
 - Query system uses component IDs directly, no Box<dyn Query>
 - World::execute_query is generic: `execute_query<Q: Query>`
+- MessageHandler/BroadcasterWrapper use channels for runtime behavior (Session 23)
 
 **Pattern** (Updated Session 20 - Async):
 ```rust
@@ -86,6 +87,8 @@ let component = Component::new(MyComponentData { ... }).await?;
 - Session 19: Erroneously created ComponentData struct (migration attempt)
 - Session 20: Corrected by removing struct, making trait methods async
 - Session 21: Applied pattern to all systems/logic files (archetype, entity, event, messaging)
+- Session 22: Eliminated all TypeId usage, replaced with string-based IDs
+- Session 23: Applied pattern to core/ecs messaging.rs with channel-based handlers
 
 ### NO Turbofish Syntax
 **Decision**: Use `.with_component(ComponentId)` instead of `::<T>`
