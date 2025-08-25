@@ -1,5 +1,4 @@
-use std::sync::Arc;
-use tokio::sync::RwLock;
+use playground_core_types::{Handle, handle};
 use bytes::Bytes;
 use async_trait::async_trait;
 use playground_core_ecs::{MessageBus, MessageHandler, Broadcaster, ChannelId};
@@ -10,13 +9,13 @@ use axum::extract::ws::Message;
 
 /// Bridge between internal ECS messaging and WebSocket clients
 pub struct MessageBridge {
-    ecs_bus: Arc<MessageBus>,
-    websocket_state: Arc<WebSocketState>,
+    ecs_bus: Handle<MessageBus>,
+    websocket_state: Handle<WebSocketState>,
 }
 
 impl MessageBridge {
     /// Create a new message bridge
-    pub fn new(ecs_bus: Arc<MessageBus>, websocket_state: Arc<WebSocketState>) -> Self {
+    pub fn new(ecs_bus: Handle<MessageBus>, websocket_state: Handle<WebSocketState>) -> Self {
         Self {
             ecs_bus,
             websocket_state,
@@ -29,7 +28,7 @@ impl MessageBridge {
         let ws_state = self.websocket_state.clone();
         
         // Create a handler that forwards to WebSocket
-        let handler = Arc::new(WebSocketForwarder {
+        let handler = handle(WebSocketForwarder {
             channel: internal_channel,
             websocket_state: ws_state,
         });
@@ -54,7 +53,7 @@ impl MessageBridge {
 /// Handler that forwards messages to WebSocket clients
 struct WebSocketForwarder {
     channel: ChannelId,
-    websocket_state: Arc<WebSocketState>,
+    websocket_state: Handle<WebSocketState>,
 }
 
 #[async_trait]
@@ -100,11 +99,11 @@ impl MessageHandler for WebSocketForwarder {
 /// WebSocket to ECS broadcaster
 /// This allows the server to act as a Broadcaster for the ECS MessageBus
 pub struct WebSocketBroadcaster {
-    websocket_state: Arc<WebSocketState>,
+    websocket_state: Handle<WebSocketState>,
 }
 
 impl WebSocketBroadcaster {
-    pub fn new(websocket_state: Arc<WebSocketState>) -> Self {
+    pub fn new(websocket_state: Handle<WebSocketState>) -> Self {
         Self { websocket_state }
     }
 }

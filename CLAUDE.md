@@ -50,7 +50,6 @@ This file contains critical memory for Claude Code when working with this reposi
 
 ## #current-violations
 **NetworkingSystem/UiSystem interface** - Handle vs Shared mismatch 🟡
-**core/ecs messaging.rs** - ✅ FIXED (Session 23)
 
 ## #ecs-architecture-fix
 **CRITICAL**: UiSystem uses `Arc<World>` not `Shared<World>`
@@ -71,12 +70,15 @@ This file contains critical memory for Claude Code when working with this reposi
 5. ~~Fix core/ecs NO dyn violations~~ ✅ COMPLETED (Session 23)
    - messaging.rs completely refactored
    - All other files already compliant
-6. **Fix NetworkingSystem/UiSystem interface mismatch** 🔴
+6. ~~Fix core/server Handle/Shared compliance~~ ✅ COMPLETED (Session 24)
+   - All Arc usage replaced with Handle/Shared type aliases
+   - Documentation updated with proper patterns
+7. **Fix NetworkingSystem/UiSystem interface mismatch** 🔴
    - Resolve Handle vs Shared type mismatch
-7. Implement Discord UI layout
+8. Implement Discord UI layout
    - Fix ECS entity spawning for UI elements
    - Generate proper render commands from UI tree
-8. Fix client tracking in Dashboard (remove disconnected)
+9. Fix client tracking in Dashboard (remove disconnected)
 
 ## #architecture-fixed
 ✅ Plugins ARE Systems - no separate Plugin trait

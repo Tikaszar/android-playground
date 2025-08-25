@@ -23,7 +23,7 @@ The `ChannelManager` provides dynamic channel registration and discovery:
 - Channel ID allocation (1-999 for Systems, 1000+ for Plugins)
 - Named channel registration for discovery
 - Channel metadata storage
-- Thread-safe operations with Arc<RwLock<>>
+- Thread-safe operations with Shared<T> type alias
 
 **Code Example:**
 ```rust
@@ -210,11 +210,11 @@ The main WebSocket connection handler:
 **Code Example:**
 ```rust
 use playground_core_server::{websocket_handler, WebSocketState};
+use playground_core_types::{Handle, handle};
 use axum::{Router, routing::get};
-use std::sync::Arc;
 
 // Create shared state
-let state = Arc::new(WebSocketState::new());
+let state = handle(WebSocketState::new());
 
 // Create router with WebSocket endpoint
 let app = Router::new()
@@ -369,8 +369,8 @@ let app = Router::new()
 
 ```rust
 use playground_core_server::{WebSocketState, websocket_handler};
+use playground_core_types::{Handle, handle};
 use axum::{Router, routing::get};
-use std::sync::Arc;
 use tower_http::services::ServeDir;
 
 #[tokio::main]
@@ -379,7 +379,7 @@ async fn main() {
     tracing_subscriber::fmt::init();
     
     // Create shared state
-    let state = Arc::new(WebSocketState::new());
+    let state = handle(WebSocketState::new());
     
     // Pre-register system channels
     {

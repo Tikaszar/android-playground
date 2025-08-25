@@ -1,7 +1,6 @@
 use crate::packet::Packet;
+use playground_core_types::{Shared, shared};
 use std::collections::BinaryHeap;
-use std::sync::Arc;
-use tokio::sync::RwLock;
 use tokio::time::{Duration, Instant};
 use bytes::{Bytes, BytesMut, BufMut};
 
@@ -34,7 +33,7 @@ impl Ord for QueuedPacket {
 }
 
 pub struct FrameBatcher {
-    queues: Arc<RwLock<Vec<BinaryHeap<QueuedPacket>>>>,
+    queues: Shared<Vec<BinaryHeap<QueuedPacket>>>,
     frame_rate: u32,
     max_batch_size: usize,
 }
@@ -47,7 +46,7 @@ impl FrameBatcher {
         }
         
         Self {
-            queues: Arc::new(RwLock::new(queues)),
+            queues: shared(queues),
             frame_rate,
             max_batch_size: 1024 * 64, // 64KB default
         }

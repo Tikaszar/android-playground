@@ -1,13 +1,39 @@
 # CONTEXT.md - Current Session Context
 
-## Active Session - 2025-08-25 (Session 23)
+## Active Session - 2025-08-25 (Session 24)
 
 ### Current Status
-**core/ecs NO dyn refactor** ✅ - COMPLETED
-**Full architectural compliance** ✅ - All packages reviewed and fixed
-**Build status** ✅ - core/ecs compiles successfully
+**core/server architectural compliance** ✅ - COMPLETED
+**Handle/Shared pattern enforcement** ✅ - All core/server files fixed
+**Build status** ✅ - Full architectural compliance achieved
 
-### What Was Done This Session (2025-08-25 - Session 23)
+### What Was Done This Session (2025-08-25 - Session 24)
+
+#### Complete core/server Architectural Compliance Review
+
+1. **Fixed batcher.rs** ✅
+   - Replaced `Arc<RwLock<>>` with `Shared<>` type alias
+   - Now uses `shared()` helper function
+
+2. **Fixed bridge.rs** ✅
+   - Replaced all `Arc<>` with `Handle<>` for external references
+   - Updated MessageBridge, WebSocketForwarder, WebSocketBroadcaster
+   - Properly uses `handle()` helper function
+
+3. **Fixed dashboard.rs** ✅
+   - Changed `start_render_loop(self: Arc<Self>)` to use `Handle<Self>`
+   - Dashboard has internal Shared fields, so must use Handle pattern
+
+4. **Fixed mcp/streamable_http.rs** ✅
+   - Replaced all `Arc<WebSocketState>` with `Handle<WebSocketState>`
+   - Replaced all `Arc<SessionManager>` with `Handle<SessionManager>`
+   - Removed raw Arc import entirely
+
+5. **Updated core/server README.md** ✅
+   - Fixed all code examples to use Handle/Shared pattern
+   - Updated documentation to reflect proper type aliases
+
+### Previous Session (2025-08-25 - Session 23)
 
 #### Complete core/ecs Architectural Compliance Review
 

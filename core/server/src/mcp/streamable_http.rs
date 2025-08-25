@@ -5,7 +5,8 @@ use axum::{
 };
 use futures_util::stream::StreamExt;
 use serde_json::{json, Value};
-use std::{convert::Infallible, sync::Arc, time::Duration};
+use std::{convert::Infallible, time::Duration};
+use playground_core_types::Handle;
 use tokio::sync::mpsc;
 use tokio_stream::wrappers::UnboundedReceiverStream;
 use tracing::{error, info, warn};
@@ -22,8 +23,8 @@ use super::{
 pub async fn handle_streamable_http(
     method: Method,
     headers: HeaderMap,
-    ws_state: Arc<WebSocketState>,
-    session_manager: Arc<SessionManager>,
+    ws_state: Handle<WebSocketState>,
+    session_manager: Handle<SessionManager>,
     body: Option<String>,
 ) -> Response {
     // Validate Origin header per spec
@@ -48,8 +49,8 @@ pub async fn handle_streamable_http(
 /// Handle GET request - establish SSE stream
 async fn handle_get(
     headers: HeaderMap,
-    ws_state: Arc<WebSocketState>,
-    session_manager: Arc<SessionManager>,
+    ws_state: Handle<WebSocketState>,
+    session_manager: Handle<SessionManager>,
 ) -> Response {
     info!("=== MCP GET Request ===");
     
@@ -125,8 +126,8 @@ async fn handle_get(
 /// Handle POST request - process JSON-RPC
 async fn handle_post(
     headers: HeaderMap,
-    ws_state: Arc<WebSocketState>,
-    session_manager: Arc<SessionManager>,
+    ws_state: Handle<WebSocketState>,
+    session_manager: Handle<SessionManager>,
     body: String,
 ) -> Response {
     info!("=== MCP POST Request ===");
@@ -477,7 +478,7 @@ async fn handle_post(
 }
 
 /// Get list of available tools (both built-in and dynamically registered)
-async fn get_available_tools(ws_state: Arc<WebSocketState>) -> Vec<Value> {
+async fn get_available_tools(ws_state: Handle<WebSocketState>) -> Vec<Value> {
     let mut tools = vec![
         // Test/diagnostic tools
         json!({

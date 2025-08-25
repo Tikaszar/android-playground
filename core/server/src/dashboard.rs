@@ -1,11 +1,10 @@
-use std::sync::Arc;
 use std::time::{Duration, Instant, SystemTime};
 use std::collections::{HashMap, VecDeque};
 use std::io::{self, Write};
 use tokio::fs::OpenOptions;
 use tokio::io::AsyncWriteExt;
 use chrono;
-use playground_core_types::{Shared, shared};
+use playground_core_types::{Handle, Shared, shared};
 
 #[derive(Clone, Debug)]
 pub struct ClientInfo {
@@ -500,7 +499,7 @@ impl Dashboard {
         let _ = io::stdout().flush();
     }
     
-    pub async fn start_render_loop(self: Arc<Self>) {
+    pub async fn start_render_loop(self: Handle<Self>) {
         // Render immediately first
         self.render().await;
         

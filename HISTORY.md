@@ -2,6 +2,47 @@
 
 This file tracks the detailed history of development sessions, including achievements, bug fixes, and implementation progress.
 
+## Session: 2025-08-25 - core/server Architectural Compliance (Session 24)
+
+### What Was Accomplished
+1. **Complete core/server Package Compliance Review** ✅
+   - Reviewed 4 key files for Handle/Shared pattern compliance
+   - Fixed all raw Arc/RwLock usage violations
+   - Updated documentation and examples
+
+2. **Fixed batcher.rs** ✅
+   - Replaced `Arc<RwLock<Vec<BinaryHeap<QueuedPacket>>>>` with `Shared<>`
+   - Now properly imports and uses type aliases
+   - Uses `shared()` helper function
+
+3. **Fixed bridge.rs** ✅
+   - Replaced all `Arc<MessageBus>` with `Handle<MessageBus>`
+   - Replaced all `Arc<WebSocketState>` with `Handle<WebSocketState>`
+   - Updated WebSocketForwarder and WebSocketBroadcaster structs
+   - Uses `handle()` helper for creating instances
+
+4. **Fixed dashboard.rs** ✅
+   - Critical fix: `start_render_loop(self: Arc<Self>)` → `Handle<Self>`
+   - Dashboard has internal Shared fields, requires Handle wrapper
+   - Prevents nested locking patterns
+
+5. **Fixed mcp/streamable_http.rs** ✅
+   - All function signatures updated to use `Handle<>`
+   - Removed `std::sync::Arc` import entirely
+   - Consistent Handle pattern throughout MCP implementation
+
+6. **Updated Documentation** ✅
+   - Fixed all code examples in core/server/README.md
+   - Updated to show proper Handle/Shared usage
+   - Clarified architectural patterns
+
+### Key Architecture Achievement
+**Complete Handle/Shared compliance across core/server** - All external references use Handle<T>, all internal state uses Shared<T>, maintaining clean concurrency patterns without nested locks.
+
+### Build Status
+- core/server: ✅ Fully compliant with architectural rules
+- Pattern consistency: ✅ Handle/Shared pattern applied uniformly
+
 ## Session: 2025-08-25 - core/ecs Architectural Compliance Review (Session 23)
 
 ### What Was Accomplished
