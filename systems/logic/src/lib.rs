@@ -40,7 +40,7 @@ pub use world::*;
 pub use systems_manager::SystemsManager;
 pub use ui_interface::UiInterface;
 pub use rendering_interface::{RenderingInterface, RendererWrapper};
-pub use messaging::{GameMessageBus, GameMessageHandler, channels};
+pub use messaging::{GameMessageBus, MessageHandlerData, channels};
 
 // Re-export Handle and Shared types for plugins and apps
 pub use playground_core_types::{Handle, handle, Shared, shared};

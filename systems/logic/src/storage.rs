@@ -4,9 +4,6 @@ use crate::entity::Entity;
 use crate::error::LogicResult;
 use fnv::FnvHashMap;
 use playground_core_types::{Handle, handle, Shared, shared};
-use tokio::sync::RwLock;
-use std::any::TypeId;
-use std::sync::Arc;
 
 /// Hybrid storage combining archetype (for iteration) and sparse (for random access)
 pub struct HybridStorage {
@@ -17,7 +14,7 @@ pub struct HybridStorage {
     entity_locations: Shared<FnvHashMap<Entity, EntityLocation>>,
     
     /// Sparse storage for singleton/rare components
-    sparse_components: Shared<FnvHashMap<TypeId, SparseStorage>>,
+    sparse_components: Shared<FnvHashMap<ComponentId, SparseStorage>>,
     
     /// Threshold for moving components to sparse storage
     sparse_threshold: usize,
@@ -124,24 +121,22 @@ impl HybridStorage {
         Ok(())
     }
     
-    pub async fn add_component<T: ComponentData + serde::Serialize + 'static + Send + Sync>(
+    pub async fn add_component_with_id(
         &self,
         entity: Entity,
-        component: T,
+        component_id: ComponentId,
+        component: Component,
     ) -> LogicResult<()> {
-        let type_id = TypeId::of::<T>();
-        let component_data = Component::new(component).await?;
-        
         // Check if should use sparse
-        if self.should_use_sparse(type_id) {
+        if self.should_use_sparse(component_id) {
             self.sparse_components
                 .write().await
-                .entry(type_id)
+                .entry(component_id)
                 .or_insert_with(|| SparseStorage {
                     components: FnvHashMap::default(),
                 })
                 .components
-                .insert(entity, component_data);
+                .insert(entity, component);
             return Ok(());
         }
         
@@ -157,9 +152,9 @@ impl HybridStorage {
         let new_archetype_id = self.archetype_graph.move_entity(
             entity,
             location.archetype_id,
-            type_id,
+            component_id,
             true,
-            Some(component_data),
+            Some(component),
         ).await?;
         
         self.entity_locations.write().await.insert(entity, EntityLocation {
@@ -170,11 +165,19 @@ impl HybridStorage {
         Ok(())
     }
     
-    pub async fn remove_component<T: 'static>(&self, entity: Entity) -> LogicResult<()> {
-        let type_id = TypeId::of::<T>();
-        
+    pub async fn add_component<T: ComponentData + serde::Serialize + 'static + Send + Sync>(
+        &self,
+        entity: Entity,
+        component: T,
+    ) -> LogicResult<()> {
+        let component_id = T::component_id();
+        let component_data = Component::new(component).await?;
+        self.add_component_with_id(entity, component_id, component_data).await
+    }
+    
+    pub async fn remove_component_by_id(&self, entity: Entity, component_id: ComponentId) -> LogicResult<()> {
         // Check sparse storage first
-        if let Some(storage) = self.sparse_components.write().await.get_mut(&type_id) {
+        if let Some(storage) = self.sparse_components.write().await.get_mut(&component_id) {
             if storage.components.remove(&entity).is_some() {
                 return Ok(());
             }
@@ -192,7 +195,7 @@ impl HybridStorage {
         let new_archetype_id = self.archetype_graph.move_entity(
             entity,
             location.archetype_id,
-            type_id,
+            component_id,
             false,
             None,
         ).await?;
@@ -205,16 +208,19 @@ impl HybridStorage {
         Ok(())
     }
     
-    pub async fn has_component<T: 'static>(&self, entity: Entity) -> bool {
+    pub async fn remove_component<T: ComponentData + 'static>(&self, entity: Entity) -> LogicResult<()> {
+        let component_id = T::component_id();
+        self.remove_component_by_id(entity, component_id).await
+    }
+    
+    pub async fn has_component_by_id(&self, entity: Entity, component_id: ComponentId) -> bool {
         let locations = self.entity_locations.read().await;
         let Some(location) = locations.get(&entity) else {
             return false;
         };
         
-        let type_id = TypeId::of::<T>();
-        
         // Check sparse storage
-        if let Some(storage) = self.sparse_components.read().await.get(&type_id) {
+        if let Some(storage) = self.sparse_components.read().await.get(&component_id) {
             if storage.components.contains_key(&entity) {
                 return true;
             }
@@ -223,7 +229,7 @@ impl HybridStorage {
         // Check archetype storage
         if location.archetype_id != 0 {
             if let Some(archetype) = self.archetype_graph.get_archetype(location.archetype_id).await {
-                if archetype.read().await.archetype.has_component(type_id) {
+                if archetype.read().await.archetype.has_component(component_id) {
                     return true;
                 }
             }
@@ -232,9 +238,15 @@ impl HybridStorage {
         false
     }
     
-    fn should_use_sparse(&self, _type_id: TypeId) -> bool {
-        // TODO: Track component usage statistics
-        false // For now, use archetype for everything
+    pub async fn has_component<T: ComponentData + 'static>(&self, entity: Entity) -> bool {
+        let component_id = T::component_id();
+        self.has_component_by_id(entity, component_id).await
+    }
+    
+    fn should_use_sparse(&self, _component_id: ComponentId) -> bool {
+        // For now, use archetype for everything
+        // Could track usage statistics in the future to make this smarter
+        false
     }
     
     pub async fn iter_archetype_entities(&self) -> Vec<Entity> {
@@ -258,6 +270,7 @@ pub struct StorageStats {
 impl HybridStorage {
     pub async fn stats(&self) -> StorageStats {
         let archetypes = self.archetype_graph.all_archetypes().await;
+        let archetype_count = archetypes.len();
         let entity_count = self.entity_locations.read().await.len();
         let sparse_component_count: usize = self.sparse_components
             .read().await
@@ -265,11 +278,16 @@ impl HybridStorage {
             .map(|s| s.components.len())
             .sum();
         
+        // Calculate approximate memory usage
+        let memory_usage = archetype_count * std::mem::size_of::<ArchetypeGraph>()
+            + entity_count * std::mem::size_of::<EntityLocation>()
+            + sparse_component_count * std::mem::size_of::<Component>();
+        
         StorageStats {
-            archetype_count: archetypes.len(),
+            archetype_count,
             entity_count,
             sparse_component_count,
-            memory_usage: 0, // TODO: Calculate actual memory usage
+            memory_usage,
         }
     }
 }

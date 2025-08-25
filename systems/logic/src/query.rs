@@ -1,16 +1,14 @@
 use crate::entity::Entity;
 use crate::storage::HybridStorage;
+use crate::component::ComponentId;
 use fnv::FnvHashMap;
-use tokio::sync::RwLock;
-use std::any::TypeId;
-use std::marker::PhantomData;
-use std::sync::Arc;
+use playground_core_types::{Shared, shared};
 
 /// Query builder for ECS queries
 pub struct QueryBuilder<'a> {
     storage: &'a HybridStorage,
-    with_components: Vec<TypeId>,
-    without_components: Vec<TypeId>,
+    with_components: Vec<ComponentId>,
+    without_components: Vec<ComponentId>,
     cached: bool,
 }
 
@@ -24,13 +22,13 @@ impl<'a> QueryBuilder<'a> {
         }
     }
     
-    pub fn with<T: 'static>(mut self) -> Self {
-        self.with_components.push(TypeId::of::<T>());
+    pub fn with_component(mut self, component_id: ComponentId) -> Self {
+        self.with_components.push(component_id);
         self
     }
     
-    pub fn without<T: 'static>(mut self) -> Self {
-        self.without_components.push(TypeId::of::<T>());
+    pub fn without_component(mut self, component_id: ComponentId) -> Self {
+        self.without_components.push(component_id);
         self
     }
     
@@ -59,8 +57,8 @@ impl<'a> QueryBuilder<'a> {
 /// Query result iterator
 pub struct Query<'a> {
     storage: &'a HybridStorage,
-    with_components: Vec<TypeId>,
-    without_components: Vec<TypeId>,
+    with_components: Vec<ComponentId>,
+    without_components: Vec<ComponentId>,
     cached: bool,
     cache_id: Option<u64>,
 }
@@ -120,15 +118,15 @@ impl<'a> Query<'a> {
     
     fn matches_entity(&self, entity: Entity) -> bool {
         // Check all required components are present
-        for &type_id in &self.with_components {
-            if !self.has_component(entity, type_id) {
+        for &component_id in &self.with_components {
+            if !self.has_component(entity, component_id) {
                 return false;
             }
         }
         
         // Check no excluded components are present
-        for &type_id in &self.without_components {
-            if self.has_component(entity, type_id) {
+        for &component_id in &self.without_components {
+            if self.has_component(entity, component_id) {
                 return false;
             }
         }
@@ -136,7 +134,7 @@ impl<'a> Query<'a> {
         true
     }
     
-    fn has_component(&self, entity: Entity, type_id: TypeId) -> bool {
+    fn has_component(&self, _entity: Entity, _component_id: ComponentId) -> bool {
         // This is simplified - real implementation would check both archetype and sparse
         false
     }
@@ -162,19 +160,19 @@ impl<'a> Iterator for QueryIter<'a> {
     }
 }
 
-/// Query cache for frequently used queries
+// Query cache for frequently used queries
 lazy_static::lazy_static! {
     static ref QUERY_CACHE: QueryCache = QueryCache::new();
 }
 
 struct QueryCache {
-    cache: Arc<RwLock<FnvHashMap<u64, Vec<Entity>>>>,
+    cache: Shared<FnvHashMap<u64, Vec<Entity>>>,
 }
 
 impl QueryCache {
     fn new() -> Self {
         Self {
-            cache: Arc::new(RwLock::new(FnvHashMap::default())),
+            cache: shared(FnvHashMap::default()),
         }
     }
     
@@ -195,42 +193,44 @@ impl QueryCache {
     }
 }
 
-fn generate_cache_id(with: &[TypeId], without: &[TypeId]) -> u64 {
+fn generate_cache_id(with: &[ComponentId], without: &[ComponentId]) -> u64 {
     use std::hash::{Hash, Hasher};
     let mut hasher = fnv::FnvHasher::default();
     
-    for type_id in with {
-        type_id.hash(&mut hasher);
+    for component_id in with {
+        component_id.hash(&mut hasher);
     }
     
     0u8.hash(&mut hasher); // Separator
     
-    for type_id in without {
-        type_id.hash(&mut hasher);
+    for component_id in without {
+        component_id.hash(&mut hasher);
     }
     
     hasher.finish()
 }
 
-/// Typed query for compile-time safety
-pub struct TypedQuery<T> {
-    _phantom: PhantomData<T>,
+/// Query configuration for commonly used queries
+pub struct QueryConfig {
+    pub with_components: Vec<ComponentId>,
+    pub without_components: Vec<ComponentId>,
 }
 
-/// Macro for creating typed queries
-#[macro_export]
-macro_rules! query {
-    ($storage:expr, $($with:ty),+) => {{
-        $storage.query()
-            $(.with::<$with>())+
-            .build()
-    }};
+impl QueryConfig {
+    pub fn new() -> Self {
+        Self {
+            with_components: Vec::new(),
+            without_components: Vec::new(),
+        }
+    }
     
-    ($storage:expr, $($with:ty),+ ; without $($without:ty),+) => {{
-        $storage.query()
-            $(.with::<$with>())+
-            $(.without::<$without>())+
-            .build()
-    }};
+    pub fn with(mut self, component_id: ComponentId) -> Self {
+        self.with_components.push(component_id);
+        self
+    }
+    
+    pub fn without(mut self, component_id: ComponentId) -> Self {
+        self.without_components.push(component_id);
+        self
+    }
 }
-

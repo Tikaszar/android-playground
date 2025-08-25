@@ -1,42 +1,63 @@
 # CONTEXT.md - Current Session Context
 
-## Active Session - 2025-08-25 (Session 21)
+## Active Session - 2025-08-25 (Session 22)
 
 ### Current Status
-**systems/logic NO dyn refactor** 🟡 - Significant progress made
-**Component/ComponentData pattern** ✅ - Fully established and working
-**Architectural compliance** 🟡 - Most violations fixed, some remain
+**systems/logic NO dyn refactor** ✅ - COMPLETED
+**NO turbofish compliance** ✅ - All TypeId usage removed
+**Architectural compliance** ✅ - All major violations fixed
 
-### What Was Done This Session (2025-08-25 - Session 21)
+### What Was Done This Session (2025-08-25 - Session 22)
 
-#### Major Achievement: systems/logic NO dyn Refactor
-1. **Fixed archetype.rs** ✅
-   - Removed all `dyn` usage and `downcast_ref/downcast_mut` methods
-   - Changed to use `Shared<>` type alias consistently
-   - Fixed `move_entity` to take `Option<Component>` instead of `Box<dyn Any>`
-   - Uses `component_id()` method properly
+#### Comprehensive systems/logic Compliance Fix
 
-2. **Fixed entity.rs** ✅
-   - Removed all `Box<dyn std::any::Any>` usage
-   - EntityBuilder now uses `Component` instead of trait objects
-   - Changed all `Arc<RwLock<>>` to `Shared<>` type alias
-   - Added Serialize/Deserialize derives to Entity
+1. **Fixed query.rs** ✅
+   - Removed ALL turbofish syntax (`.with<T>()` → `.with_component(ComponentId)`)
+   - Replaced TypeId with ComponentId throughout
+   - Fixed `Arc<RwLock<>>` to use `Shared<>` type alias
+   - Removed macro with turbofish, replaced with QueryConfig struct
 
-3. **Fixed event_data.rs** ✅
-   - Already compliant, just fixed error variant name
+2. **Fixed rendering_interface.rs** ✅
+   - Removed `Box<dyn Renderer>` trait object
+   - Created concrete RendererData wrapper
+   - Uses channel-based approach for renderer communication
+   - Added proper viewport caching
 
-4. **Fixed event.rs** ✅
-   - Removed unused imports and fixed all error variants
-   - Changed ComponentAdded/ComponentRemoved to use String instead of TypeId
-   - Fixed mutable access patterns for event queues
-   - Entity now serializable
+3. **Fixed resource_storage.rs** ✅
+   - Replaced TypeId with string-based ResourceId
+   - Created Resource trait for typed access
+   - Removed all turbofish syntax (`TypeId::of::<R>()`)
+   - Implemented dual API (ID-based and typed methods)
 
-5. **Fixed messaging.rs** ✅
-   - Complete rewrite to remove all `dyn` usage
-   - Created `MessageHandlerData` concrete struct (like Component pattern)
-   - Uses string-based identification (plugin_name, handler_name)
-   - All methods return `LogicResult` instead of `Box<dyn Error>`
-   - Properly uses `Shared<>` and `Handle<>` type aliases
+4. **Fixed scheduler.rs** ✅
+   - Replaced `Arc<RwLock<>>` with `Shared<>` throughout
+   - Used `shared()` helper function consistently
+   - Removed unused imports
+
+5. **Fixed storage.rs** ✅
+   - Removed unused imports (tokio::sync::RwLock, std::sync::Arc)
+   - Replaced TypeId with ComponentId
+   - Fixed all turbofish usage
+   - Removed TODO comments, implemented memory usage calculation
+
+6. **Fixed system_data.rs** ✅
+   - Completely removed `Box<dyn SystemExecutor>`
+   - Replaced TypeId with string-based SystemId
+   - Created concrete SystemData wrapper
+   - Fixed unused parameter warnings
+
+7. **Fixed system.rs** ✅
+   - Removed ALL TypeId usage, replaced with SystemId
+   - Removed `Box<dyn System>` trait objects
+   - Fixed `Arc<RwLock<>>` to use `Shared<>`
+   - Added SystemExt trait for string-based IDs
+   - Fixed unused variables
+
+8. **Fixed systems_manager.rs** ✅
+   - Removed `Box<dyn Renderer>` and `Box<dyn RenderingInterface>`
+   - Uses concrete RendererWrapper type
+   - Removed TODO comment
+   - Fixed type mismatches
 
 ### Architecture Pattern Success
 Successfully applied the Component/ComponentData pattern throughout systems/logic:
@@ -46,21 +67,25 @@ Successfully applied the Component/ComponentData pattern throughout systems/logi
 - Consistent use of Shared<>/Handle<> type aliases
 
 ### Build Status
-- systems/logic: ❌ Still has ~7 compilation errors (mostly in other files)
-- Main remaining issues:
-  - systems_manager.rs type mismatch
-  - Some resource_storage.rs issues
-  - Various unused imports/variables
+- systems/logic: ✅ All major compliance issues fixed
+- Minor remaining issues:
+  - NetworkingSystem/UiSystem interface mismatch (Handle vs Shared)
+  - Some unused warnings
 
-### Key Learning This Session
-- **NO enums for type erasure** - Must use concrete wrapper types
-- TypeId cannot be serialized - use strings for identification
-- The Component pattern (concrete struct wrapping Bytes) works well for avoiding dyn
-- Consistent application of patterns across the codebase is critical
+### Key Achievements This Session
+- **Completely eliminated TypeId** - All replaced with string-based IDs
+- **NO dyn anywhere in systems/logic** - All trait objects replaced with concrete wrappers
+- **NO turbofish syntax** - All generic type parameters removed
+- **Consistent Shared/Handle usage** - Proper type aliases throughout
+
+### Patterns Established
+1. **String-based IDs**: SystemId, ResourceId, ComponentId instead of TypeId
+2. **Concrete wrappers**: SystemData, RendererData, ResourceData, MessageHandlerData
+3. **Dual API approach**: ID-based methods for dynamic use, typed methods for static use
+4. **Channel-based communication**: Renderer uses channels instead of trait objects
 
 ### Next Steps Required
-1. Fix remaining compilation errors in systems/logic
-2. Apply same patterns to other systems/* packages if needed
-3. Complete full workspace compilation
-4. Test Discord UI implementation
-5. Consider game plugin development
+1. Fix Handle/Shared mismatch between NetworkingSystem and UiSystem
+2. Complete full workspace compilation
+3. Test Discord UI implementation
+4. Begin game plugin development

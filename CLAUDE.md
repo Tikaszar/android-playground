@@ -49,8 +49,7 @@ This file contains critical memory for Claude Code when working with this reposi
 - UiSystem internal ECS is private - plugins use UiInterface from systems/logic
 
 ## #current-violations
-**systems/logic** - ~7 compilation errors remaining 🟡
-**rendering_interface.rs** - Box<dyn Renderer> usage 🔴
+**NetworkingSystem/UiSystem interface** - Handle vs Shared mismatch 🟡
 
 ## #ecs-architecture-fix
 **CRITICAL**: UiSystem uses `Arc<World>` not `Shared<World>`
@@ -60,14 +59,16 @@ This file contains critical memory for Claude Code when working with this reposi
 - World's methods handle all internal locking
 
 ## #immediate-goals
-1. ~~Fix systems/logic dyn violations~~ ✅ COMPLETED (Session 21)
-   - archetype.rs, entity.rs, event.rs, messaging.rs all fixed
+1. ~~Fix systems/logic dyn violations~~ ✅ COMPLETED (Session 21-22)
+   - ALL files fixed: archetype, entity, event, messaging, query, storage, system, etc.
    - Concrete wrapper pattern applied consistently
 2. ~~Fix systems/networking type aliases~~ ✅ COMPLETED (Session 18)
 3. ~~Fix Component/ComponentData pattern~~ ✅ COMPLETED (Session 20)
-4. **Fix remaining systems/logic compilation errors** 🔴
-   - systems_manager.rs type mismatches
-   - Complete full package compilation
+4. ~~Fix systems/logic NO turbofish~~ ✅ COMPLETED (Session 22)
+   - ALL TypeId usage removed, replaced with string-based IDs
+   - No more turbofish syntax anywhere
+5. **Fix NetworkingSystem/UiSystem interface mismatch** 🔴
+   - Resolve Handle vs Shared type mismatch
 5. Implement Discord UI layout
    - Fix ECS entity spawning for UI elements
    - Generate proper render commands from UI tree

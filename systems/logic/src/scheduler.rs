@@ -2,7 +2,6 @@ use crate::error::LogicResult;
 use crate::system::{Stage, SystemExecutor};
 use crate::world::World;
 use playground_core_types::{Handle, handle, Shared, shared};
-use tokio::sync::RwLock;
 use std::time::{Duration, Instant};
 
 /// System scheduler with parallel execution support
@@ -146,7 +145,7 @@ impl Clone for SchedulerMetrics {
 pub struct FixedScheduler {
     base: Scheduler,
     fixed_timestep: Duration,
-    accumulator: Arc<RwLock<Duration>>,
+    accumulator: Shared<Duration>,
     max_steps_per_frame: usize,
 }
 
@@ -155,7 +154,7 @@ impl FixedScheduler {
         Self {
             base: Scheduler::new(),
             fixed_timestep: timestep,
-            accumulator: Arc::new(RwLock::new(Duration::ZERO)),
+            accumulator: shared(Duration::ZERO),
             max_steps_per_frame: 5,
         }
     }
@@ -181,7 +180,7 @@ impl FixedScheduler {
 pub struct AdaptiveScheduler {
     base: Scheduler,
     target_fps: f32,
-    time_scale: Arc<RwLock<f32>>,
+    time_scale: Shared<f32>,
     auto_adjust: bool,
 }
 
@@ -190,7 +189,7 @@ impl AdaptiveScheduler {
         Self {
             base: Scheduler::new(),
             target_fps,
-            time_scale: Arc::new(RwLock::new(1.0)),
+            time_scale: shared(1.0),
             auto_adjust: true,
         }
     }

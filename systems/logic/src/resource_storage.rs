@@ -1,30 +1,44 @@
 use bytes::Bytes;
 use serde::{Serialize, Deserialize};
-use std::any::TypeId;
 use playground_core_types::{Shared, shared};
 use crate::error::{LogicResult, LogicError};
 use fnv::FnvHashMap;
+
+/// Resource identifier using string instead of TypeId to avoid turbofish
+pub type ResourceId = String;
+
+/// Trait for types that can be used as resources
+pub trait Resource: Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static {
+    /// Get the unique resource ID for this type
+    fn resource_id() -> ResourceId;
+}
 
 /// Concrete wrapper for resource data that avoids Box<dyn Any>
 #[derive(Clone)]
 pub struct ResourceData {
     data: Bytes,
-    type_id: TypeId,
-    type_name: String,
+    resource_id: ResourceId,
 }
 
 impl ResourceData {
     /// Create new ResourceData from a resource
-    pub fn new<R: Serialize + 'static>(resource: R) -> LogicResult<Self> {
-        let data = bincode::serialize(&resource)
+    pub fn new<R: Resource>(resource: &R) -> LogicResult<Self> {
+        let data = bincode::serialize(resource)
             .map_err(|e| LogicError::SerializationError(e.to_string()))?
             .into();
         
         Ok(Self {
             data,
-            type_id: TypeId::of::<R>(),
-            type_name: std::any::type_name::<R>().to_string(),
+            resource_id: R::resource_id(),
         })
+    }
+    
+    /// Create ResourceData with explicit ID
+    pub fn new_with_id(resource_id: ResourceId, data: Bytes) -> Self {
+        Self {
+            data,
+            resource_id,
+        }
     }
     
     /// Deserialize back to the original resource type
@@ -33,20 +47,15 @@ impl ResourceData {
             .map_err(|e| LogicError::SerializationError(e.to_string()))
     }
     
-    /// Get the type ID of this resource
-    pub fn type_id(&self) -> TypeId {
-        self.type_id
-    }
-    
-    /// Get the type name of this resource
-    pub fn type_name(&self) -> &str {
-        &self.type_name
+    /// Get the resource ID
+    pub fn resource_id(&self) -> &ResourceId {
+        &self.resource_id
     }
 }
 
 /// Storage for global resources without Box<dyn Any>
 pub struct ResourceStorage {
-    resources: Shared<FnvHashMap<TypeId, ResourceData>>,
+    resources: Shared<FnvHashMap<ResourceId, ResourceData>>,
 }
 
 impl ResourceStorage {
@@ -57,40 +66,60 @@ impl ResourceStorage {
         }
     }
     
-    /// Insert a resource
-    pub async fn insert<R: Serialize + Send + Sync + 'static>(&self, resource: R) -> LogicResult<()> {
-        let resource_data = ResourceData::new(resource)?;
-        let type_id = resource_data.type_id();
-        
-        self.resources.write().await.insert(type_id, resource_data);
+    /// Insert a resource with explicit ID
+    pub async fn insert_with_id(&self, resource_id: ResourceId, data: Bytes) -> LogicResult<()> {
+        let resource_data = ResourceData::new_with_id(resource_id.clone(), data);
+        self.resources.write().await.insert(resource_id, resource_data);
         Ok(())
     }
     
-    /// Get a resource
-    pub async fn get<R: for<'de> Deserialize<'de> + 'static>(&self) -> Option<R> {
-        let resources = self.resources.read().await;
-        let type_id = TypeId::of::<R>();
+    /// Insert a typed resource
+    pub async fn insert<R: Resource>(&self, resource: R) -> LogicResult<()> {
+        let resource_data = ResourceData::new(&resource)?;
+        let resource_id = resource_data.resource_id().clone();
         
-        resources.get(&type_id)
+        self.resources.write().await.insert(resource_id, resource_data);
+        Ok(())
+    }
+    
+    /// Get a resource by ID and deserialize it
+    pub async fn get<R: for<'de> Deserialize<'de>>(&self, resource_id: &ResourceId) -> Option<R> {
+        let resources = self.resources.read().await;
+        
+        resources.get(resource_id)
             .and_then(|data| data.deserialize().ok())
     }
     
-    /// Check if a resource exists
-    pub async fn contains<R: 'static>(&self) -> bool {
-        let resources = self.resources.read().await;
-        resources.contains_key(&TypeId::of::<R>())
+    /// Get a typed resource
+    pub async fn get_typed<R: Resource>(&self) -> Option<R> {
+        let resource_id = R::resource_id();
+        self.get(&resource_id).await
     }
     
-    /// Remove a resource
-    pub async fn remove<R: 'static>(&self) -> Option<R> 
-    where
-        R: for<'de> Deserialize<'de>
-    {
+    /// Check if a resource exists by ID
+    pub async fn contains(&self, resource_id: &ResourceId) -> bool {
+        let resources = self.resources.read().await;
+        resources.contains_key(resource_id)
+    }
+    
+    /// Check if a typed resource exists
+    pub async fn contains_typed<R: Resource>(&self) -> bool {
+        let resource_id = R::resource_id();
+        self.contains(&resource_id).await
+    }
+    
+    /// Remove a resource by ID
+    pub async fn remove<R: for<'de> Deserialize<'de>>(&self, resource_id: &ResourceId) -> Option<R> {
         let mut resources = self.resources.write().await;
-        let type_id = TypeId::of::<R>();
         
-        resources.remove(&type_id)
+        resources.remove(resource_id)
             .and_then(|data| data.deserialize().ok())
+    }
+    
+    /// Remove a typed resource
+    pub async fn remove_typed<R: Resource>(&self) -> Option<R> {
+        let resource_id = R::resource_id();
+        self.remove(&resource_id).await
     }
     
     /// Clear all resources

@@ -1,8 +1,8 @@
-use playground_core_types::{Shared, shared};
+use playground_core_types::{Shared, shared, Handle, handle};
 use crate::error::{LogicResult, LogicError};
 use crate::world::World;
 use crate::ui_interface::UiInterface;
-use crate::rendering_interface::{RenderingInterface, RendererWrapper};
+use crate::rendering_interface::{RendererWrapper, RendererData};
 
 // Import other systems
 use playground_systems_networking::NetworkingSystem;
@@ -15,7 +15,8 @@ pub struct SystemsManager {
     world: Shared<World>,
     pub networking: Shared<NetworkingSystem>,
     pub ui: Shared<UiSystem>,
-    renderer: Option<Shared<Box<dyn playground_core_rendering::Renderer>>>,
+    renderer: Option<RendererWrapper>,
+    renderer_data: Option<Shared<RendererData>>,
     // pub physics: Shared<PhysicsSystem>, // Not yet implemented
 }
 
@@ -30,6 +31,7 @@ impl SystemsManager {
             networking: shared(networking),
             ui: shared(UiSystem::new()),
             renderer: None,
+            renderer_data: None,
         })
     }
     
@@ -68,11 +70,19 @@ impl SystemsManager {
             .map_err(|e| LogicError::InitializationFailed(format!("UiSystem: {}", e)))?;
         
         // Register UI system with networking and get its channel
-        let ui_channel = networking.register_system_channel("ui", 10).await
+        let _ui_channel = networking.register_system_channel("ui", 10).await
             .map_err(|e| LogicError::InitializationFailed(format!("Failed to register UI channel: {}", e)))?;
         
+        // Drop the networking write lock before cloning
+        drop(networking);
+        
         // Store networking reference in UI system so it can send render commands
-        ui.set_networking_system(self.networking.clone());
+        // UI expects Handle<NetworkingSystem>, so we need to get an Arc from the Shared
+        let networking_handle = {
+            let net = self.networking.read().await;
+            handle(net.clone())
+        };
+        ui.set_networking_system(networking_handle);
         
         if let Some(ref dashboard) = dashboard {
             use playground_core_server::dashboard::LogLevel;
@@ -119,7 +129,7 @@ impl SystemsManager {
     }
     
     /// Get reference to NetworkingSystem
-    pub fn networking(&self) -> Shared<NetworkingSystem> {
+    pub fn networking(&self) -> Handle<NetworkingSystem> {
         self.networking.clone()
     }
     
@@ -129,8 +139,10 @@ impl SystemsManager {
     }
     
     /// Set the renderer for the UI system
-    pub async fn set_renderer(&mut self, renderer: Box<dyn playground_core_rendering::Renderer>) {
-        self.renderer = Some(shared(renderer));
+    pub async fn set_renderer(&mut self, renderer_type: String, renderer_channel: u16) {
+        let renderer_data = shared(RendererData::new(renderer_type.clone()));
+        self.renderer = Some(RendererWrapper::new(renderer_type, renderer_channel));
+        self.renderer_data = Some(renderer_data);
     }
     
     /// Render a frame using the current renderer
@@ -155,8 +167,7 @@ impl SystemsManager {
         input_schema: serde_json::Value,
         handler_channel: u16,
     ) -> LogicResult<()> {
-        let net = self.networking.read().await;
-        net.register_mcp_tool(name.clone(), description, input_schema, handler_channel).await
+        self.networking.register_mcp_tool(name.clone(), description, input_schema, handler_channel).await
             .map_err(|e| LogicError::SystemError(format!("Failed to register MCP tool '{}': {}", name, e)))?;
         Ok(())
     }
@@ -167,10 +178,8 @@ impl SystemsManager {
     }
     
     /// Get rendering interface if a renderer is set
-    pub fn rendering_interface(&self) -> Option<Box<dyn RenderingInterface>> {
-        self.renderer.as_ref().map(|r| {
-            Box::new(RendererWrapper::new(r.clone())) as Box<dyn RenderingInterface>
-        })
+    pub fn rendering_interface(&self) -> Option<RendererWrapper> {
+        self.renderer.clone()
     }
     
     /// Get the shared World for plugins to use
@@ -180,7 +189,7 @@ impl SystemsManager {
     
     /// Log a message to the dashboard
     pub async fn log(&self, level: &str, message: String) {
-        if let Some(dashboard) = self.networking.read().await.get_dashboard().await {
+        if let Some(dashboard) = self.networking.get_dashboard().await {
             use playground_core_server::dashboard::LogLevel;
             let log_level = match level {
                 "error" | "Error" => LogLevel::Error,
@@ -198,9 +207,8 @@ impl SystemsManager {
         use std::time::{Duration, Instant};
         use tokio::time::interval_at;
         
-        // TODO: Get channel manager from networking system to connect UI
-        // The networking system needs to provide access to its channel manager
-        // For now, the UI will generate render commands but not send them
+        // The UI system has access to networking system and sends commands via channel 10
+        // This is already configured in initialize_all()
         
         // Create 60fps interval (16.67ms)
         let frame_duration = Duration::from_millis(16);

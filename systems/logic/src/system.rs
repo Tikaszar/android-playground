@@ -1,9 +1,9 @@
 use crate::error::LogicResult;
 use crate::world::World;
-use tokio::sync::RwLock;
-use std::any::TypeId;
-use std::sync::Arc;
+use crate::system_data::{SystemData, SystemId};
+use playground_core_types::{Shared, shared};
 use tokio::task::JoinHandle;
+use std::collections::VecDeque;
 
 /// System trait that all game systems must implement
 #[async_trait::async_trait]
@@ -12,7 +12,7 @@ pub trait System: Send + Sync + 'static {
     fn name(&self) -> &'static str;
     
     /// System dependencies - systems that must run before this one
-    fn dependencies(&self) -> Vec<TypeId> {
+    fn dependencies(&self) -> Vec<SystemId> {
         Vec::new()
     }
     
@@ -35,11 +35,29 @@ pub trait System: Send + Sync + 'static {
     }
 }
 
+/// Extension methods for System trait
+pub trait SystemExt {
+    /// Get the system ID as a string
+    fn system_id(&self) -> SystemId;
+    /// Get dependencies as strings
+    fn dependencies_as_strings(&self) -> Vec<SystemId>;
+}
+
+impl<S: System> SystemExt for S {
+    fn system_id(&self) -> SystemId {
+        format!("{}_{}", std::any::type_name::<S>(), self.name())
+    }
+    
+    fn dependencies_as_strings(&self) -> Vec<SystemId> {
+        self.dependencies()
+    }
+}
+
 /// System metadata for runtime management
 pub struct SystemInfo {
-    pub type_id: TypeId,
+    pub system_id: SystemId,
     pub name: String,
-    pub dependencies: Vec<TypeId>,
+    pub dependencies: Vec<SystemId>,
     pub parallel: bool,
     pub retry_count: u32,
     pub max_retries: u32,
@@ -47,10 +65,10 @@ pub struct SystemInfo {
     pub safe_mode: bool,
 }
 
-/// System instance wrapper
+/// System instance wrapper using concrete SystemData
 pub struct SystemInstance {
     pub info: SystemInfo,
-    pub system: Box<dyn System>,
+    pub system_data: SystemData,
     pub last_error: Option<String>,
 }
 
@@ -67,22 +85,33 @@ pub enum Stage {
 
 /// System registration builder
 pub struct SystemRegistration {
-    system: Box<dyn System>,
+    system_data: SystemData,
     stage: Stage,
-    dependencies: Vec<TypeId>,
-    before: Vec<TypeId>,
-    after: Vec<TypeId>,
+    dependencies: Vec<SystemId>,
+    before: Vec<SystemId>,
+    after: Vec<SystemId>,
+    system_id: SystemId,
+    name: String,
+    parallel: bool,
 }
 
 impl SystemRegistration {
-    pub fn new<S: System>(system: S) -> Self {
+    pub fn new<S: System + SystemExt>(system: S) -> Self {
+        let system_id = system.system_id();
+        let name = system.name().to_string();
         let dependencies = system.dependencies();
+        let parallel = system.parallel();
+        let system_data = SystemData::new(system);
+        
         Self {
-            system: Box::new(system),
+            system_data,
             stage: Stage::Update,
             dependencies,
             before: Vec::new(),
             after: Vec::new(),
+            system_id,
+            name,
+            parallel,
         }
     }
     
@@ -91,27 +120,27 @@ impl SystemRegistration {
         self
     }
     
-    pub fn depends_on<S: System + 'static>(mut self) -> Self {
-        self.dependencies.push(TypeId::of::<S>());
+    pub fn depends_on(mut self, system_id: SystemId) -> Self {
+        self.dependencies.push(system_id);
         self
     }
     
-    pub fn runs_before<S: System + 'static>(mut self) -> Self {
-        self.before.push(TypeId::of::<S>());
+    pub fn runs_before(mut self, system_id: SystemId) -> Self {
+        self.before.push(system_id);
         self
     }
     
-    pub fn runs_after<S: System + 'static>(mut self) -> Self {
-        self.after.push(TypeId::of::<S>());
+    pub fn runs_after(mut self, system_id: SystemId) -> Self {
+        self.after.push(system_id);
         self
     }
     
     pub fn build(self) -> (Stage, SystemInstance) {
         let info = SystemInfo {
-            type_id: TypeId::of::<Box<dyn System>>(), // Simplified
-            name: self.system.name().to_string(),
+            system_id: self.system_id,
+            name: self.name,
             dependencies: self.dependencies,
-            parallel: self.system.parallel(),
+            parallel: self.parallel,
             retry_count: 0,
             max_retries: 3,
             enabled: true,
@@ -122,7 +151,7 @@ impl SystemRegistration {
             self.stage,
             SystemInstance {
                 info,
-                system: self.system,
+                system_data: self.system_data,
                 last_error: None,
             },
         )
@@ -131,8 +160,8 @@ impl SystemRegistration {
 
 /// System executor state
 pub struct SystemExecutor {
-    stages: Arc<RwLock<indexmap::IndexMap<Stage, Vec<SystemInstance>>>>,
-    execution_order: Arc<RwLock<Vec<(Stage, Vec<usize>)>>>,
+    stages: Shared<indexmap::IndexMap<Stage, Vec<SystemInstance>>>,
+    execution_order: Shared<Vec<(Stage, Vec<usize>)>>,
 }
 
 impl SystemExecutor {
@@ -148,8 +177,8 @@ impl SystemExecutor {
         stages.insert(Stage::PostRender, Vec::new());
         
         Self {
-            stages: Arc::new(RwLock::new(stages)),
-            execution_order: Arc::new(RwLock::new(Vec::new())),
+            stages: shared(stages),
+            execution_order: shared(Vec::new()),
         }
     }
     
@@ -159,19 +188,25 @@ impl SystemExecutor {
     }
     
     /// Register a System (used by World::register_system)
-    pub async fn register(&self, system: Box<dyn System>) -> LogicResult<()> {
+    pub async fn register<S: System + SystemExt>(&self, system: S) -> LogicResult<()> {
+        let system_id = system.system_id();
+        let name = system.name().to_string();
+        let dependencies = system.dependencies();
+        let parallel = system.parallel();
+        let system_data = SystemData::new(system);
+        
         let instance = SystemInstance {
             info: SystemInfo {
-                type_id: TypeId::of::<Box<dyn System>>(),
-                name: system.name().to_string(),
-                dependencies: system.dependencies(),
-                parallel: system.parallel(),
+                system_id,
+                name,
+                dependencies,
+                parallel,
                 retry_count: 0,
                 max_retries: 3,
                 enabled: true,
                 safe_mode: false,
             },
-            system,
+            system_data,
             last_error: None,
         };
         
@@ -201,11 +236,11 @@ impl SystemExecutor {
         let mut graph = vec![vec![]; n];
         
         for (i, system) in systems.iter().enumerate() {
-            for (j, other) in systems.iter().enumerate() {
+            for (j, _other) in systems.iter().enumerate() {
                 if i != j {
                     // Check if system depends on other
-                    for dep in &system.info.dependencies {
-                        // Simplified - would check actual type IDs
+                    for _dep in &system.info.dependencies {
+                        // Simplified - would check actual system IDs
                         if j < i {
                             graph[i].push(j);
                         }
@@ -324,7 +359,7 @@ impl SystemExecutor {
         
         // Try to run with retry logic
         for attempt in 0..=system.info.max_retries {
-            match system.system.run(world, delta_time).await {
+            match system.system_data.run(world, delta_time).await {
                 Ok(()) => {
                     system.info.retry_count = 0;
                     return Ok(());
@@ -350,5 +385,3 @@ impl SystemExecutor {
         Ok(())
     }
 }
-
-use std::collections::VecDeque;
