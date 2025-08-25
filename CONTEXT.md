@@ -1,78 +1,66 @@
 # CONTEXT.md - Current Session Context
 
-## Active Session - 2025-01-24 (Session 20)
+## Active Session - 2025-08-25 (Session 21)
 
 ### Current Status
-**Component/ComponentData pattern FIXED** ✅ - Removed erroneous ComponentData struct, fixed async traits
-**systems/logic PARTIALLY FIXED** 🟡 - Component pattern corrected, some Event system issues remain
-**systems/networking FIXED** ✅ - All async ComponentData implementations complete
-**systems/rendering FIXED** ✅ - All async ComponentData implementations complete
-**systems/ui MOSTLY FIXED** 🟡 - Component pattern corrected, builds with warnings
+**systems/logic NO dyn refactor** 🟡 - Significant progress made
+**Component/ComponentData pattern** ✅ - Fully established and working
+**Architectural compliance** 🟡 - Most violations fixed, some remain
 
-### What Was Done This Session (2025-01-24 - Session 20)
+### What Was Done This Session (2025-08-25 - Session 21)
 
-#### Major Fix: Corrected Component/ComponentData Pattern
-1. **Identified the core issue** ✅
-   - Session 19 erroneously created a new ComponentData struct in systems/logic
-   - This was a migration attempt which is forbidden (no migrations in development)
-   - Should have updated existing Component from trait to struct
+#### Major Achievement: systems/logic NO dyn Refactor
+1. **Fixed archetype.rs** ✅
+   - Removed all `dyn` usage and `downcast_ref/downcast_mut` methods
+   - Changed to use `Shared<>` type alias consistently
+   - Fixed `move_entity` to take `Option<Component>` instead of `Box<dyn Any>`
+   - Uses `component_id()` method properly
 
-2. **Fixed core/ecs ComponentData trait** ✅
-   - Made serialize/deserialize methods async
-   - Added #[async_trait] to the trait
-   - Updated Component::new() to be async
-   - Fixed Component::deserialize() to be async
+2. **Fixed entity.rs** ✅
+   - Removed all `Box<dyn std::any::Any>` usage
+   - EntityBuilder now uses `Component` instead of trait objects
+   - Changed all `Arc<RwLock<>>` to `Shared<>` type alias
+   - Added Serialize/Deserialize derives to Entity
 
-3. **Removed erroneous component_data.rs** ✅
-   - Deleted systems/logic/src/component_data.rs completely
-   - Removed component_data module from lib.rs
-   - No migration code or patterns
+3. **Fixed event_data.rs** ✅
+   - Already compliant, just fixed error variant name
 
-4. **Updated systems/logic Component** ✅
-   - Changed Component from trait to concrete struct (base class pattern)
-   - Added ComponentData trait for actual component types
-   - Component stores Bytes internally for serialization
-   - Matches the pattern from core/ecs exactly
+4. **Fixed event.rs** ✅
+   - Removed unused imports and fixed all error variants
+   - Changed ComponentAdded/ComponentRemoved to use String instead of TypeId
+   - Fixed mutable access patterns for event queues
+   - Entity now serializable
 
-5. **Fixed all usage sites** ✅
-   - storage.rs: Changed ComponentData references to Component
-   - world.rs: Changed ComponentData references to Component
-   - archetype.rs: Changed ComponentData references to Component
-   - Fixed all Component::new() calls to handle async
-   - Fixed all component_id() calls to be trait-qualified
+5. **Fixed messaging.rs** ✅
+   - Complete rewrite to remove all `dyn` usage
+   - Created `MessageHandlerData` concrete struct (like Component pattern)
+   - Uses string-based identification (plugin_name, handler_name)
+   - All methods return `LogicResult` instead of `Box<dyn Error>`
+   - Properly uses `Shared<>` and `Handle<>` type aliases
 
-6. **Fixed all ComponentData implementations** ✅
-   - systems/ui: Added #[async_trait] and async methods
-   - systems/networking: Added async serialize/deserialize
-   - systems/rendering: Added async serialize/deserialize
-   - systems/logic events: Added proper ComponentData implementations
-
-### Architecture Pattern Corrected
-The correct pattern is now consistent across the codebase:
-- `Component` is a concrete struct (base class) that wraps component data
-- `ComponentData` is a trait that actual components implement
-- `Component::new<T: ComponentData>(component)` creates the wrapper
-- All serialize/deserialize methods are async per architecture rules
-
-### Key Achievement
-Successfully corrected the Component/ComponentData pattern without any migration code, maintaining the base class pattern and async-everywhere principle.
+### Architecture Pattern Success
+Successfully applied the Component/ComponentData pattern throughout systems/logic:
+- Concrete wrapper structs for type erasure (Component, MessageHandlerData, EventData)
+- String-based identification instead of TypeId where serialization needed
+- No trait objects, no enums for type erasure
+- Consistent use of Shared<>/Handle<> type aliases
 
 ### Build Status
-- core/ecs: ✅ Compiles successfully
-- systems/networking: ✅ Compiles successfully
-- systems/rendering: ✅ Compiles successfully
-- systems/ui: ⚠️ Compiles with warnings
-- systems/logic: ❌ Still has Event system issues (51 errors)
-- Overall: ❌ Full workspace build incomplete
+- systems/logic: ❌ Still has ~7 compilation errors (mostly in other files)
+- Main remaining issues:
+  - systems_manager.rs type mismatch
+  - Some resource_storage.rs issues
+  - Various unused imports/variables
 
-### Remaining Issues
-1. systems/logic Event system needs more fixes
-2. Some async propagation issues in systems/logic
-3. Build warnings in various packages
+### Key Learning This Session
+- **NO enums for type erasure** - Must use concrete wrapper types
+- TypeId cannot be serialized - use strings for identification
+- The Component pattern (concrete struct wrapping Bytes) works well for avoiding dyn
+- Consistent application of patterns across the codebase is critical
 
 ### Next Steps Required
-1. Complete Event system fixes in systems/logic
-2. Fix remaining async propagation issues
-3. Clean up build warnings
-4. Test full workspace compilation
-5. Verify Discord UI implementation works
+1. Fix remaining compilation errors in systems/logic
+2. Apply same patterns to other systems/* packages if needed
+3. Complete full workspace compilation
+4. Test Discord UI implementation
+5. Consider game plugin development

@@ -54,7 +54,7 @@ impl EventData {
     /// Deserialize back to the original event type
     pub fn deserialize<E: for<'de> Deserialize<'de>>(&self) -> LogicResult<E> {
         bincode::deserialize(&self.data)
-            .map_err(|e| LogicError::DeserializationError(e.to_string()))
+            .map_err(|e| LogicError::SerializationError(e.to_string()))
     }
 }
 

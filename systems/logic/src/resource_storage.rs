@@ -30,7 +30,7 @@ impl ResourceData {
     /// Deserialize back to the original resource type
     pub fn deserialize<R: for<'de> Deserialize<'de>>(&self) -> LogicResult<R> {
         bincode::deserialize(&self.data)
-            .map_err(|e| LogicError::DeserializationError(e.to_string()))
+            .map_err(|e| LogicError::SerializationError(e.to_string()))
     }
     
     /// Get the type ID of this resource

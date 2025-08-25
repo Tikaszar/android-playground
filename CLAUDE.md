@@ -49,7 +49,7 @@ This file contains critical memory for Claude Code when working with this reposi
 - UiSystem internal ECS is private - plugins use UiInterface from systems/logic
 
 ## #current-violations
-**systems/logic Event system** - Incomplete async fixes 🔴
+**systems/logic** - ~7 compilation errors remaining 🟡
 **rendering_interface.rs** - Box<dyn Renderer> usage 🔴
 
 ## #ecs-architecture-fix
@@ -60,15 +60,14 @@ This file contains critical memory for Claude Code when working with this reposi
 - World's methods handle all internal locking
 
 ## #immediate-goals
-1. ~~Fix systems/logic dyn violations~~ ✅ COMPLETED (Session 19)
+1. ~~Fix systems/logic dyn violations~~ ✅ COMPLETED (Session 21)
+   - archetype.rs, entity.rs, event.rs, messaging.rs all fixed
+   - Concrete wrapper pattern applied consistently
 2. ~~Fix systems/networking type aliases~~ ✅ COMPLETED (Session 18)
 3. ~~Fix Component/ComponentData pattern~~ ✅ COMPLETED (Session 20)
-   - Component is now concrete struct (base class)
-   - ComponentData is trait for actual types
-   - All serialize/deserialize are async
-4. **Fix systems/logic Event system** 🔴 CRITICAL
-   - Complete async implementations
-   - Fix remaining compilation errors
+4. **Fix remaining systems/logic compilation errors** 🔴
+   - systems_manager.rs type mismatches
+   - Complete full package compilation
 5. Implement Discord UI layout
    - Fix ECS entity spawning for UI elements
    - Generate proper render commands from UI tree

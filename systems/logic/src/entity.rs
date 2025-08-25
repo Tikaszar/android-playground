@@ -1,10 +1,12 @@
 use crate::error::LogicResult;
-use tokio::sync::RwLock;
-use std::sync::Arc;
+use crate::component::Component;
+use playground_core_types::{Shared, shared};
 use uuid::Uuid;
+use fnv::{FnvHashMap, FnvHashSet};
+use serde::{Serialize, Deserialize};
 
 /// Entity handle with generation tracking for safety
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct Entity {
     pub id: Uuid,
     pub generation: u32,
@@ -25,7 +27,7 @@ impl Entity {
 
 /// Entity builder for batch spawning
 pub struct EntityBuilder {
-    components: Vec<Box<dyn std::any::Any + Send + Sync>>,
+    components: Vec<Component>,
 }
 
 impl EntityBuilder {
@@ -35,31 +37,29 @@ impl EntityBuilder {
         }
     }
     
-    pub fn with<T: 'static + Send + Sync>(mut self, component: T) -> Self {
-        self.components.push(Box::new(component));
+    pub fn with(mut self, component: Component) -> Self {
+        self.components.push(component);
         self
     }
     
-    pub fn build(self) -> Vec<Box<dyn std::any::Any + Send + Sync>> {
+    pub fn build(self) -> Vec<Component> {
         self.components
     }
 }
 
 /// Entity manager with generation tracking
 pub struct EntityManager {
-    alive: Arc<RwLock<fnv::FnvHashSet<Entity>>>,
-    generations: Arc<RwLock<fnv::FnvHashMap<Uuid, u32>>>,
-    recycled: Arc<RwLock<Vec<Uuid>>>,
+    alive: Shared<FnvHashSet<Entity>>,
+    generations: Shared<FnvHashMap<Uuid, u32>>,
+    recycled: Shared<Vec<Uuid>>,
 }
-
-use fnv::{FnvHashMap, FnvHashSet};
 
 impl EntityManager {
     pub fn new() -> Self {
         Self {
-            alive: Arc::new(RwLock::new(FnvHashSet::default())),
-            generations: Arc::new(RwLock::new(FnvHashMap::default())),
-            recycled: Arc::new(RwLock::new(Vec::new())),
+            alive: shared(FnvHashSet::default()),
+            generations: shared(FnvHashMap::default()),
+            recycled: shared(Vec::new()),
         }
     }
     

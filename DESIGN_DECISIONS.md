@@ -50,11 +50,12 @@ This file documents key architectural decisions, why they were made, and how the
 - Clearer ownership and lifetime semantics
 - Forces better architectural decisions
 
-**Implementation** (Session 17, Corrected Session 20):
+**Implementation** (Session 17, Corrected Session 20, Extended Session 21):
 - Component is a concrete struct (base class pattern)
 - ComponentData trait for actual component types
 - Component stores data as Bytes internally for type erasure
-- ComponentStorage is a concrete struct with internal storage_type field
+- MessageHandlerData follows same pattern for message handlers
+- EventData wraps event data similarly
 - Query system uses component IDs directly, no Box<dyn Query>
 - World::execute_query is generic: `execute_query<Q: Query>`
 
@@ -84,6 +85,7 @@ let component = Component::new(MyComponentData { ... }).await?;
 - Session 17: Initial implementation with sync methods
 - Session 19: Erroneously created ComponentData struct (migration attempt)
 - Session 20: Corrected by removing struct, making trait methods async
+- Session 21: Applied pattern to all systems/logic files (archetype, entity, event, messaging)
 
 ### NO Turbofish Syntax
 **Decision**: Use `.with_component(ComponentId)` instead of `::<T>`

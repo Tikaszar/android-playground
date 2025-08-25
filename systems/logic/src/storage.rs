@@ -50,7 +50,7 @@ impl HybridStorage {
         let mut sparse_components_list = Vec::new();
         
         for component in components {
-            let type_id = component.type_id();
+            let type_id = component.component_id();
             if self.should_use_sparse(type_id) {
                 sparse_components_list.push(component);
             } else {
@@ -75,7 +75,7 @@ impl HybridStorage {
         if !sparse_components_list.is_empty() {
             let mut sparse = self.sparse_components.write().await;
             for component in sparse_components_list {
-                let type_id = component.type_id();
+                let type_id = component.component_id();
                 sparse
                     .entry(type_id)
                     .or_insert_with(|| SparseStorage {

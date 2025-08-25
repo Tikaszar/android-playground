@@ -1,9 +1,8 @@
-use crate::component::{Component, ComponentData, ComponentId};
+use crate::component::Component;
 use crate::entity::Entity;
 use crate::error::LogicResult;
 use fnv::FnvHashMap;
 use playground_core_types::{Handle, handle, Shared, shared};
-use tokio::sync::RwLock;
 use std::any::TypeId;
 
 /// Archetype represents a unique combination of component types
@@ -19,8 +18,8 @@ impl Archetype {
         component_types.sort_by_key(|t| format!("{:?}", t));
         
         // Generate ID from component types
-        let mut hasher = fnv::FnvHasher::default();
         use std::hash::{Hash, Hasher};
+        let mut hasher = fnv::FnvHasher::default();
         for type_id in &component_types {
             type_id.hash(&mut hasher);
         }
@@ -45,7 +44,6 @@ impl Archetype {
     }
 }
 
-use std::hash::Hasher;
 
 /// Storage for entities in an archetype (column-based for cache efficiency)
 pub struct ArchetypeStorage {
@@ -86,7 +84,7 @@ impl ArchetypeStorage {
         
         // Add components to columns
         for component in components {
-            let type_id = component.type_id();
+            let type_id = component.component_id();  // ComponentId is TypeId alias
             if let Some(column) = self.component_columns.get_mut(&type_id) {
                 column.data.push(component);
             }
@@ -120,18 +118,16 @@ impl ArchetypeStorage {
         Ok(components)
     }
     
-    pub fn get_component<T: 'static>(&self, entity: Entity) -> Option<&T> {
+    pub fn get_component(&self, entity: Entity, type_id: TypeId) -> Option<&Component> {
         let index = self.entity_indices.get(&entity)?;
-        let type_id = TypeId::of::<T>();
         let column = self.component_columns.get(&type_id)?;
-        column.data.get(*index)?.downcast_ref::<T>()
+        column.data.get(*index)
     }
     
-    pub fn get_component_mut<T: 'static>(&mut self, entity: Entity) -> Option<&mut T> {
+    pub fn get_component_mut(&mut self, entity: Entity, type_id: TypeId) -> Option<&mut Component> {
         let index = self.entity_indices.get(&entity)?;
-        let type_id = TypeId::of::<T>();
         let column = self.component_columns.get_mut(&type_id)?;
-        column.data.get_mut(*index)?.downcast_mut::<T>()
+        column.data.get_mut(*index)
     }
     
     pub fn entities(&self) -> &[Entity] {
@@ -149,30 +145,30 @@ impl ArchetypeStorage {
 
 /// Graph of archetype transitions for fast component add/remove
 pub struct ArchetypeGraph {
-    archetypes: Arc<RwLock<FnvHashMap<u64, Arc<RwLock<ArchetypeStorage>>>>>,
-    edges: Arc<RwLock<FnvHashMap<(u64, TypeId, bool), u64>>>, // (from_archetype, component_type, is_add) -> to_archetype
+    archetypes: Shared<FnvHashMap<u64, Shared<ArchetypeStorage>>>,
+    edges: Shared<FnvHashMap<(u64, TypeId, bool), u64>>, // (from_archetype, component_type, is_add) -> to_archetype
 }
 
 impl ArchetypeGraph {
     pub fn new() -> Self {
         Self {
-            archetypes: Arc::new(RwLock::new(FnvHashMap::default())),
-            edges: Arc::new(RwLock::new(FnvHashMap::default())),
+            archetypes: shared(FnvHashMap::default()),
+            edges: shared(FnvHashMap::default()),
         }
     }
     
-    pub async fn get_or_create_archetype(&self, component_types: Vec<TypeId>) -> Arc<RwLock<ArchetypeStorage>> {
+    pub async fn get_or_create_archetype(&self, component_types: Vec<TypeId>) -> Shared<ArchetypeStorage> {
         let archetype = Archetype::new(component_types);
         let id = archetype.id();
         
         let mut archetypes = self.archetypes.write().await;
         archetypes
             .entry(id)
-            .or_insert_with(|| Arc::new(RwLock::new(ArchetypeStorage::new(archetype))))
+            .or_insert_with(|| shared(ArchetypeStorage::new(archetype)))
             .clone()
     }
     
-    pub async fn get_archetype(&self, id: u64) -> Option<Arc<RwLock<ArchetypeStorage>>> {
+    pub async fn get_archetype(&self, id: u64) -> Option<Shared<ArchetypeStorage>> {
         self.archetypes.read().await.get(&id).cloned()
     }
     
@@ -190,7 +186,7 @@ impl ArchetypeGraph {
         from_archetype: u64,
         component_type: TypeId,
         is_add: bool,
-        new_component: Option<Box<dyn std::any::Any + Send + Sync>>,
+        new_component: Option<Component>,
     ) -> LogicResult<u64> {
         // Get source archetype
         let from = self.get_archetype(from_archetype).await
@@ -221,8 +217,8 @@ impl ArchetypeGraph {
                 components.push(new_comp);
             }
         } else {
-            // Remove component from list
-            // Note: This is simplified, real implementation would track component positions
+            // Remove component from list by type_id
+            components.retain(|c| c.component_id() != component_type);
         }
         
         let mut to_write = to.write().await;

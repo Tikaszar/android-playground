@@ -2,7 +2,55 @@
 
 This file tracks the detailed history of development sessions, including achievements, bug fixes, and implementation progress.
 
-## Session: 2025-01-24 - Component/ComponentData Pattern Fix (Session 20)
+## Session: 2025-08-25 - systems/logic NO dyn Refactor (Session 21)
+
+### What Was Accomplished
+1. **Comprehensive NO dyn Refactor for systems/logic** ✅
+   - Applied concrete wrapper pattern consistently across all files
+   - Fixed 5 major files: archetype.rs, entity.rs, event_data.rs, event.rs, messaging.rs
+   - Removed ALL trait object usage (Box<dyn Any>, Arc<dyn Handler>, etc.)
+   - Replaced with concrete types following Component pattern
+
+2. **Fixed archetype.rs** ✅
+   - Removed downcast_ref/downcast_mut methods that don't work without Any
+   - Changed all Arc<RwLock<>> to Shared<> type alias
+   - Fixed move_entity to use Component instead of Box<dyn Any>
+   - get_component methods now return &Component instead of trying to downcast
+
+3. **Fixed entity.rs** ✅
+   - EntityBuilder now uses Vec<Component> instead of Vec<Box<dyn Any>>
+   - EntityManager uses Shared<> consistently
+   - Added Serialize/Deserialize to Entity struct
+   - Removed all raw Arc/RwLock imports
+
+4. **Fixed event.rs** ✅
+   - ComponentAdded/ComponentRemoved now use String instead of TypeId for serialization
+   - Fixed all DeserializationError to SerializationError
+   - Removed unused imports
+   - Fixed mutable access patterns for event queues
+
+5. **Created MessageHandlerData Pattern** ✅
+   - Complete rewrite of messaging.rs
+   - MessageHandlerData concrete struct replaces trait objects
+   - Uses string-based identification (plugin_name, handler_name)
+   - All methods return LogicResult instead of Box<dyn Error>
+   - Follows Component pattern exactly
+
+### Key Learning
+- **NO enums for type erasure** - Must use concrete wrapper types (violated this initially)
+- TypeId cannot be serialized - use String for identification when needed
+- The Component pattern (concrete struct wrapping Bytes) is the canonical solution
+- Consistency is critical - apply same pattern everywhere
+
+### Architecture Pattern Established
+Concrete wrapper pattern for type erasure:
+- Component wraps component data as Bytes
+- MessageHandlerData wraps handler configuration as Bytes
+- EventData wraps event data as Bytes
+- All use string-based identification for serialization
+- No trait objects, no enums for type erasure
+
+## Session: 2025-08-24 - Component/ComponentData Pattern Fix (Session 20)
 
 ### What Was Accomplished
 1. **Identified and Fixed Core Architecture Issue** ✅

@@ -1,11 +1,9 @@
-use crate::component::{Component, ComponentData};
+use crate::component::ComponentData;
 use crate::entity::Entity;
 use crate::event_data::{EventData, EventQueueData};
 use crate::error::{LogicResult, LogicError};
-use playground_core_types::{Handle, handle, Shared, shared};
-use tokio::sync::RwLock;
+use playground_core_types::{Shared, shared};
 use std::any::TypeId;
-use std::collections::VecDeque;
 use serde::{Serialize, Deserialize};
 use bytes::Bytes;
 use async_trait::async_trait;
@@ -92,13 +90,13 @@ impl EventSystem {
         
         // Sort by priority
         let mut sorted_events: Vec<_> = queues.iter_mut().collect();
-        sorted_events.sort_by_key(|(type_id, _)| {
+        sorted_events.sort_by_key(|(_type_id, _)| {
             // Get priority from registered event types
             0u8 // Simplified - real implementation would track priorities
         });
         
         // Process each queue
-        for (_type_id, queue) in sorted_events {
+        for (_type_id, _queue) in sorted_events {
             // Events are processed by systems that read them
             // This just manages the queues
         }
@@ -124,9 +122,9 @@ pub struct EventReader {
 impl EventReader {
     /// Read all new events since last read
     pub async fn read<E: Event + Clone + for<'de> serde::Deserialize<'de> + 'static>(&self, event_system: &EventSystem) -> Vec<(Entity, E)> {
-        let queues = event_system.queues.read().await;
+        let mut queues = event_system.queues.write().await;
         
-        if let Some(queue) = queues.get(&self.event_type) {
+        if let Some(queue) = queues.get_mut(&self.event_type) {
             // Get all events and deserialize them
             let events = queue.drain();
             let mut result = Vec::new();
@@ -173,7 +171,7 @@ impl ComponentData for EntitySpawned {
     
     async fn deserialize(bytes: &Bytes) -> LogicResult<Self> where Self: Sized {
         bincode::deserialize(bytes)
-            .map_err(|e| LogicError::DeserializationError(e.to_string()))
+            .map_err(|e| LogicError::SerializationError(e.to_string()))
     }
 }
 
@@ -202,7 +200,7 @@ impl ComponentData for EntityDespawned {
     
     async fn deserialize(bytes: &Bytes) -> LogicResult<Self> where Self: Sized {
         bincode::deserialize(bytes)
-            .map_err(|e| LogicError::DeserializationError(e.to_string()))
+            .map_err(|e| LogicError::SerializationError(e.to_string()))
     }
 }
 
@@ -215,7 +213,7 @@ impl Event for EntityDespawned {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ComponentAdded {
     pub entity: Entity,
-    pub component_type: TypeId,
+    pub component_type_name: String,  // Use string for serialization
 }
 
 #[async_trait]
@@ -232,7 +230,7 @@ impl ComponentData for ComponentAdded {
     
     async fn deserialize(bytes: &Bytes) -> LogicResult<Self> where Self: Sized {
         bincode::deserialize(bytes)
-            .map_err(|e| LogicError::DeserializationError(e.to_string()))
+            .map_err(|e| LogicError::SerializationError(e.to_string()))
     }
 }
 
@@ -245,7 +243,7 @@ impl Event for ComponentAdded {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ComponentRemoved {
     pub entity: Entity,
-    pub component_type: TypeId,
+    pub component_type_name: String,  // Use string for serialization
 }
 
 #[async_trait]
@@ -262,7 +260,7 @@ impl ComponentData for ComponentRemoved {
     
     async fn deserialize(bytes: &Bytes) -> LogicResult<Self> where Self: Sized {
         bincode::deserialize(bytes)
-            .map_err(|e| LogicError::DeserializationError(e.to_string()))
+            .map_err(|e| LogicError::SerializationError(e.to_string()))
     }
 }
 
