@@ -1,6 +1,5 @@
 use playground_core_ecs::{World, EntityId};
-use playground_core_types::Shared;
-use std::sync::Arc;
+use playground_core_types::{Shared, Handle};
 use crate::error::{UiError, UiResult};
 use crate::element::ElementGraph;
 use crate::components::UiLayoutComponent;
@@ -16,7 +15,7 @@ impl AbsoluteLayout {
         &mut self,
         entity: EntityId,
         _graph: &Shared<ElementGraph>,
-        world: &Arc<World>,
+        world: &Handle<World>,
         screen_size: [f32; 2],
     ) -> UiResult<()> {
         // Absolute positioning - elements use their set positions

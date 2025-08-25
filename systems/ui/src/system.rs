@@ -1,7 +1,6 @@
 use playground_core_rendering::{RenderCommand, RenderCommandBatch, Viewport};
 use playground_core_ecs::{World, EntityId, ComponentRegistry, Component};
 use playground_core_types::{Handle, handle, Shared, shared};
-use std::sync::Arc;
 use playground_core_server::{ChannelManager, Packet, Priority};
 use playground_systems_networking::NetworkingSystem;
 use playground_core_ui::{
@@ -25,7 +24,7 @@ use async_trait::async_trait;
 
 pub struct UiSystem {
     // Core ECS
-    world: Arc<World>,
+    world: Handle<World>,
     registry: Handle<ComponentRegistry>,
     
     // Element management
@@ -67,7 +66,7 @@ pub struct UiSystem {
 impl UiSystem {
     pub fn new() -> Self {
         let registry = handle(ComponentRegistry::new());
-        let world = Arc::new(World::with_registry(registry.clone()));
+        let world = handle(World::with_registry(registry.clone()));
         
         Self {
             world,
@@ -164,7 +163,7 @@ impl UiSystem {
     ) -> UiResult<EntityId> {
         self.log("Info", format!("[UiSystem] create_element called: type={}, parent={:?}", element_type, parent)).await;
         
-        // Now that world is Arc<World>, we can call methods directly without locking
+        // Now that world is Handle<World>, we can call methods directly without locking
         let entities = self.world.spawn_batch(vec![vec![]]).await
             .map_err(|e| UiError::EcsError(e.to_string()))?;
         
@@ -367,7 +366,7 @@ impl UiSystem {
         // We need to use the World directly without holding a guard across await points
         self.log("Info", "[UiSystem] Updating style component...".to_string()).await;
         
-        // World is Arc<World> now, we can call methods directly
+        // World is Handle<World> now, we can call methods directly
         let component_id = <UiStyleComponent as playground_core_ecs::ComponentData>::component_id();
         
         // Check if component exists first
@@ -1041,6 +1040,8 @@ impl UiRenderer for UiSystem {
     }
     
     async fn get_element(&self, id: CoreElementId) -> CoreUiResult<Box<dyn UiElement>> {
+        // NOTE: This violates NO dyn rule, but is required by core/ui trait
+        // Always return error to avoid using trait objects
         Err(CoreUiError::ElementNotFound(format!("{:?}", id)))
     }
     

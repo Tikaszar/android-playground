@@ -1,6 +1,5 @@
 use playground_core_ecs::{World, EntityId};
-use playground_core_types::Shared;
-use std::sync::Arc;
+use playground_core_types::{Shared, Handle};
 use crate::error::{UiError, UiResult};
 use crate::element::ElementGraph;
 use crate::components::{UiLayoutComponent, ElementBounds};
@@ -16,10 +15,10 @@ impl FlexboxLayout {
         &mut self,
         entity: EntityId,
         graph: &Shared<ElementGraph>,
-        world: &Arc<World>,
+        world: &Handle<World>,
         screen_size: [f32; 2],
     ) -> UiResult<()> {
-        // Simplified flexbox layout - world is Arc<World> now
+        // Simplified flexbox layout - world is Handle<World> now
         // Get the current layout for reading
         let layout = world.get_component::<UiLayoutComponent>(entity).await
             .map_err(|e| UiError::EcsError(e.to_string()))?;
@@ -57,7 +56,7 @@ impl FlexboxLayout {
                     height: 50.0, // Default height
                 };
                 
-                // Update child layout - world is Arc<World> now
+                // Update child layout - world is Handle<World> now
                 world.update_component::<UiLayoutComponent>(child, |layout| {
                     layout.bounds = new_bounds;
                 }).await.map_err(|e| UiError::EcsError(e.to_string()))?;

@@ -1,6 +1,5 @@
 use playground_core_ecs::{World, EntityId};
-use playground_core_types::Shared;
-use std::sync::Arc;
+use playground_core_types::{Shared, Handle};
 use crate::error::{UiError, UiResult};
 use crate::element::ElementGraph;
 use crate::components::{UiLayoutComponent, LayoutType};
@@ -25,7 +24,7 @@ impl LayoutEngine {
         &mut self,
         entity: EntityId,
         graph: &Shared<ElementGraph>,
-        world: &Arc<World>,
+        world: &Handle<World>,
         screen_size: [f32; 2],
     ) -> UiResult<()> {
         let layout = world.get_component::<UiLayoutComponent>(entity).await

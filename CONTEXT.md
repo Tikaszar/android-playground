@@ -1,13 +1,61 @@
 # CONTEXT.md - Current Session Context
 
-## Active Session - 2025-08-25 (Session 24)
+## Active Session - 2025-08-25 (Session 25 - VS Code)
 
 ### Current Status
-**core/server architectural compliance** ✅ - COMPLETED
-**Handle/Shared pattern enforcement** ✅ - All core/server files fixed
-**Build status** ✅ - Full architectural compliance achieved
+**systems/ui Handle/Shared compliance** ✅ - COMPLETED
+**Plugin architecture violations identified** ✅ - core/plugin shouldn't exist
+**Build status** 🟡 - Compliance improved but core/plugin needs removal
 
-### What Was Done This Session (2025-08-25 - Session 24)
+### What Was Done This Session (2025-08-25 - Session 25)
+
+#### Fixed systems/ui Handle/Shared Compliance
+
+1. **Fixed input/manager.rs** ✅
+   - Imported `Handle` type alias from playground_core_types
+   - Replaced all `Arc<World>` with `Handle<World>` (6 occurrences)
+   - Updated comments to reflect Handle usage
+
+2. **Fixed layout modules** ✅
+   - **absolute.rs**: Replaced `Arc<World>` with `Handle<World>`
+   - **docking.rs**: Fixed Handle/Arc issues
+   - **engine.rs**: Updated to use Handle<World>
+   - **flexbox.rs**: Fixed all Arc usage and updated comments
+
+3. **Fixed system.rs** ✅
+   - Removed `std::sync::Arc` import
+   - Replaced `Arc::new(World::with_registry(...))` with `handle(World::with_registry(...))`
+   - Added comment explaining unavoidable `Box<dyn UiElement>` (required by core/ui trait)
+
+#### Reviewed Architecture Compliance
+
+4. **Reviewed core/client/src/connection.rs** ✅
+   - Identified `dyn` usage is required for JavaScript FFI with wasm_bindgen
+   - Added explanatory comments for legitimate exceptions
+   - File otherwise compliant (uses Rc<RefCell> correctly for WASM)
+
+5. **Identified Critical Architecture Violation** 🔴
+   - **core/plugin package shouldn't exist**
+   - Violates layering: Core shouldn't know about Plugins
+   - Uses unsafe code and dyn trait objects (major violations)
+   - Should use systems/logic::System trait instead
+   - HISTORY.md says this was removed in Session 2025-08-19
+
+### Key Findings
+
+**Architecture Violations in core/plugin:**
+- Layer violation: Core → Plugins is backward (should be Plugins → Systems → Core)
+- Wrong trait: Defines Plugin trait instead of using systems/logic::System
+- Uses unsafe dynamic loading (violates NO unsafe rule)
+- Uses dyn Plugin trait objects (violates NO dyn rule)
+
+**Correct Plugin Architecture:**
+- Plugins ARE Systems (implement systems/logic::System trait)
+- Statically compiled into binary, not dynamically loaded
+- No separate Plugin trait needed
+- Apps register plugins as Systems in World
+
+### Previous Session (2025-08-25 - Session 24)
 
 #### Complete core/server Architectural Compliance Review
 

@@ -1,7 +1,6 @@
 use playground_core_ecs::{World, EntityId};
-use playground_core_types::Shared;
+use playground_core_types::{Shared, Handle};
 use std::collections::HashMap;
-use std::sync::Arc;
 use crate::error::{UiError, UiResult};
 use crate::element::{ElementGraph, ElementId};
 use crate::components::{UiElementComponent, UiInputComponent, UiTextComponent};
@@ -30,7 +29,7 @@ impl InputManager {
         &mut self,
         event: InputEvent,
         graph: &Shared<ElementGraph>,
-        world: &Arc<World>,
+        world: &Handle<World>,
     ) -> UiResult<bool> {
         match event {
             InputEvent::MouseMove { x, y } => {
@@ -82,7 +81,7 @@ impl InputManager {
         x: f32,
         y: f32,
         graph: &Shared<ElementGraph>,
-        world: &Arc<World>,
+        world: &Handle<World>,
     ) -> UiResult<bool> {
         let hit = self.hit_test(x, y, graph, world).await?;
         
@@ -113,7 +112,7 @@ impl InputManager {
         x: f32,
         y: f32,
         graph: &Shared<ElementGraph>,
-        world: &Arc<World>,
+        world: &Handle<World>,
     ) -> UiResult<bool> {
         let hit = self.hit_test(x, y, graph, world).await?;
         
@@ -148,14 +147,14 @@ impl InputManager {
         x: f32,
         y: f32,
         graph: &Shared<ElementGraph>,
-        world: &Arc<World>,
+        world: &Handle<World>,
     ) -> UiResult<bool> {
         if let Some(pressed) = self.pressed_element {
             let hit = self.hit_test(x, y, graph, world).await?;
             
             // Click event if released on same element
             if hit == Some(pressed) {
-                // Handle click - world is Arc<World> now, call methods directly
+                // Handle click - world is Handle<World> now, call methods directly
                 let input = world.get_component::<UiInputComponent>(pressed).await
                     .map_err(|e| UiError::EcsError(e.to_string()))?;
                 
@@ -175,10 +174,10 @@ impl InputManager {
         &mut self,
         key: Key,
         _modifiers: Modifiers,
-        world: &Arc<World>,
+        world: &Handle<World>,
     ) -> UiResult<bool> {
         if let Some(focused) = self.focused_element {
-            // Check if element accepts input - world is Arc<World> now
+            // Check if element accepts input - world is Handle<World> now
             let input = world.get_component::<UiInputComponent>(focused).await
                 .map_err(|e| UiError::EcsError(e.to_string()))?;
             
@@ -189,7 +188,7 @@ impl InputManager {
                         // Tab navigation would go here
                     }
                     Key::Escape => {
-                        // Clear focus - world is Arc<World> now
+                        // Clear focus - world is Handle<World> now
                         let _ = world.update_component::<UiElementComponent>(focused, |elem| {
                             elem.focused = false;
                         }).await;
@@ -210,10 +209,10 @@ impl InputManager {
     async fn handle_text_input(
         &mut self,
         text: String,
-        world: &Arc<World>,
+        world: &Handle<World>,
     ) -> UiResult<bool> {
         if let Some(focused) = self.focused_element {
-            // Check if element has text component - world is Arc<World> now
+            // Check if element has text component - world is Handle<World> now
             if let Ok(text_comp) = world.get_component::<UiTextComponent>(focused).await {
                 if text_comp.editable {
                     let new_text = {
@@ -247,7 +246,7 @@ impl InputManager {
         _x: f32,
         _y: f32,
         _graph: &Shared<ElementGraph>,
-        _world: &Arc<World>,
+        _world: &Handle<World>,
     ) -> UiResult<Option<ElementId>> {
         // Simple hit test - find topmost element containing point
         // In real implementation, would traverse tree in reverse order

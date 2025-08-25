@@ -20,6 +20,7 @@ pub struct WebSocketClient {
 }
 
 pub struct ReconnectCallbacks {
+    // NOTE: dyn is required here for JavaScript FFI with wasm_bindgen
     pub on_reconnecting: Option<Box<dyn Fn(u32)>>,
     pub on_reconnected: Option<Box<dyn Fn()>>,
     pub on_reconnect_failed: Option<Box<dyn Fn(String)>>,
@@ -69,6 +70,7 @@ impl WebSocketClient {
         let _socket_clone = self.socket.clone();
         let reconnect_manager = self.reconnect_manager.clone();
         let reconnect_callbacks = self.reconnect_callbacks.clone();
+        // NOTE: dyn FnMut required for wasm_bindgen::Closure JavaScript FFI
         let onopen = Closure::wrap(Box::new(move || {
             web_sys::console::log_1(&"WebSocket connected".into());
             reconnect_manager.borrow_mut().on_connected();
