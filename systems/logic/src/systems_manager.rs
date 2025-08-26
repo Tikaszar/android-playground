@@ -13,7 +13,7 @@ use playground_systems_ui::UiSystem;
 /// Manages all system instances for the engine
 pub struct SystemsManager {
     world: Shared<World>,
-    pub networking: Shared<NetworkingSystem>,
+    pub networking: Shared<NetworkingSystem>,  // NetworkingSystem needs mutable methods
     pub ui: Shared<UiSystem>,
     renderer: Option<RendererWrapper>,
     renderer_data: Option<Shared<RendererData>>,
@@ -28,7 +28,7 @@ impl SystemsManager {
         
         Ok(Self {
             world,
-            networking: shared(networking),
+            networking: shared(networking),  // Use shared() for NetworkingSystem
             ui: shared(UiSystem::new()),
             renderer: None,
             renderer_data: None,
@@ -73,16 +73,12 @@ impl SystemsManager {
         let _ui_channel = networking.register_system_channel("ui", 10).await
             .map_err(|e| LogicError::InitializationFailed(format!("Failed to register UI channel: {}", e)))?;
         
-        // Drop the networking write lock before cloning
+        // Drop the networking write lock before setting it in UI
         drop(networking);
         
         // Store networking reference in UI system so it can send render commands
-        // UI expects Handle<NetworkingSystem>, but we have Shared<NetworkingSystem>
-        // This is the Handle vs Shared mismatch mentioned in CLAUDE.md
-        // For now, we'll need to extract the Arc<NetworkingSystem> somehow
-        // TODO: Fix this architectural mismatch between NetworkingSystem and UiSystem
-        
-        // ui.set_networking_system(self.networking.clone());
+        // UiSystem expects Handle but we have Shared - need to fix UiSystem
+        ui.set_networking_system_shared(self.networking.clone());
         
         if let Some(ref dashboard) = dashboard {
             use playground_core_server::dashboard::LogLevel;

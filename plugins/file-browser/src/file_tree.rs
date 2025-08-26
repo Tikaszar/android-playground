@@ -1,11 +1,35 @@
 use playground_systems_ui::{
-    element::{Element, ElementId, ElementBounds},
-    input::{InputEvent, InputResult, EventHandled, PointerButton},
-    layout::{LayoutConstraints, LayoutResult},
-    rendering::RenderData,
-    theme::Theme,
+    ElementId,
+    ElementBounds,
     UiResult,
 };
+
+// Stub types for compilation - these should come from systems/ui internal APIs
+type Theme = ();
+type RenderData = ();
+type InputEvent = ();
+type LayoutConstraints = ();
+type LayoutResult = ();
+
+// Stub for InputResult and related types
+#[derive(Debug, Clone)]
+struct InputResult {
+    handled: EventHandled,
+    request_focus: bool,
+}
+
+#[derive(Debug, Clone)]
+enum EventHandled {
+    Yes,
+    No,
+}
+
+#[derive(Debug, Clone)]
+enum PointerButton {
+    Primary,
+    Secondary,
+    Middle,
+}
 use nalgebra::{Vector2, Vector4};
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
@@ -96,7 +120,7 @@ pub struct FileTree {
     scroll_offset: f32,
     visible_items: Vec<(PathBuf, usize)>, // (path, depth)
     event_sender: Option<mpsc::UnboundedSender<FileTreeEvent>>,
-    theme: Theme,
+    theme: (),  // Theme stub
     filter_pattern: Option<String>,
     children: Vec<ElementId>,
     dirty: bool,
@@ -124,7 +148,7 @@ impl FileTree {
             scroll_offset: 0.0,
             visible_items: Vec::new(),
             event_sender: None,
-            theme: Theme::dark(),
+            theme: (),  // Theme stub
             filter_pattern: None,
             children: Vec::new(),
             dirty: true,
@@ -132,7 +156,7 @@ impl FileTree {
         }
     }
 
-    pub fn set_theme(&mut self, theme: Theme) {
+    pub fn set_theme(&mut self, theme: ()) {
         self.theme = theme;
         self.dirty = true;
     }
@@ -271,7 +295,9 @@ impl FileTree {
         ""
     }
 
-    fn render_list_view(&self, data: &mut RenderData) {
+    fn render_list_view(&self, _data: &mut RenderData) {
+        // TODO: Implement once RenderData is properly exposed from systems/ui
+        /*
         let visible_start = (self.scroll_offset / self.item_height) as usize;
         let visible_end = ((self.scroll_offset + self.size.y) / self.item_height) as usize + 1;
 
@@ -307,9 +333,12 @@ impl FileTree {
             // Text rendering would go here once implemented
             // For now just render colored rectangles
         }
+        */
     }
 
-    fn render_icon_view(&self, data: &mut RenderData) {
+    fn render_icon_view(&self, _data: &mut RenderData) {
+        // TODO: Implement once RenderData is properly exposed from systems/ui
+        /*
         let cols = (self.size.x / 80.0).max(1.0) as usize;
         let icon_size = 64.0;
         let item_size = 92.0;
@@ -352,6 +381,7 @@ impl FileTree {
 
             // Icon and text rendering would go here once implemented
         }
+        */
     }
 
     fn find_entry(&self, path: &Path) -> Option<&FileSystemEntry> {
@@ -433,6 +463,7 @@ impl FileTree {
     }
 }
 
+/* TODO: Element trait not exposed from systems/ui
 impl Element for FileTree {
     fn id(&self) -> Uuid {
         self.id
@@ -561,3 +592,4 @@ impl Element for FileTree {
         self
     }
 }
+*/

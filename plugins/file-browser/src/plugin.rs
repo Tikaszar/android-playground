@@ -36,7 +36,7 @@ impl FileBrowserPlugin {
         self
     }
 
-    async fn initialize_file_tree(&mut self) -> Result<(), PluginError> {
+    async fn initialize_file_tree(&mut self) -> LogicResult<()> {
         // Create event channel
         let (event_sender, event_receiver) = mpsc::unbounded_channel();
         
@@ -78,28 +78,35 @@ impl FileBrowserPlugin {
     }
 
     async fn handle_file_tree_events(&mut self) {
+        // Collect events first to avoid borrow issues
+        let mut events = Vec::new();
         if let Some(receiver) = &mut self.event_receiver {
             // Process all pending events
             while let Ok(event) = receiver.try_recv() {
-                match event {
-                    FileTreeEvent::FileOpened(path) => {
-                        info!("File opened: {:?}", path);
-                        // Send message to editor-core plugin to open the file
-                        self.send_open_file_message(path);
-                    }
-                    FileTreeEvent::DirectoryExpanded(path) => {
-                        debug!("Directory expanded: {:?}", path);
-                        // Load directory contents if not already loaded
-                        self.load_directory_contents(path).await;
-                    }
-                    FileTreeEvent::RefreshRequested(path) => {
-                        debug!("Refresh requested: {:?}", path);
-                        // Reload directory or file
-                        self.refresh_path(path).await;
-                    }
-                    _ => {
-                        debug!("File tree event: {:?}", event);
-                    }
+                events.push(event);
+            }
+        }
+        
+        // Now process the collected events
+        for event in events {
+            match event {
+                FileTreeEvent::FileOpened(path) => {
+                    info!("File opened: {:?}", path);
+                    // Send message to editor-core plugin to open the file
+                    self.send_open_file_message(path);
+                }
+                FileTreeEvent::DirectoryExpanded(path) => {
+                    debug!("Directory expanded: {:?}", path);
+                    // Load directory contents if not already loaded
+                    self.load_directory_contents(path).await;
+                }
+                FileTreeEvent::RefreshRequested(path) => {
+                    debug!("Refresh requested: {:?}", path);
+                    // Reload directory or file
+                    self.refresh_path(path).await;
+                }
+                _ => {
+                    debug!("File tree event: {:?}", event);
                 }
             }
         }

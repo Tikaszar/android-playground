@@ -17,10 +17,8 @@ use playground_plugins_theme_manager::ThemeManagerPlugin;
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    // Initialize logging
-    tracing_subscriber::fmt()
-        .with_env_filter("info")
-        .init();
+    // Initialize logging with simple setup
+    tracing_subscriber::fmt::init();
 
     // Create the World from systems/logic
     let world = Arc::new(RwLock::new(World::new()));
@@ -156,7 +154,7 @@ async fn main() -> Result<()> {
     // Cleanup all systems
     {
         let mut world_lock = world.write().await;
-        world_lock.shutdown().await?;
+        // World doesn't have a shutdown method - cleanup handled by drop
     }
     
     eprintln!("[EDITOR] Shutdown complete");

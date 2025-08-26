@@ -44,7 +44,6 @@ impl FileSystemHandler {
                     
                     entry.children.push(child);
                 }
-        }
         
         // Sort: directories first, then alphabetically
         entry.children.sort_by(|a, b| {

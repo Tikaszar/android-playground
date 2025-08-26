@@ -55,7 +55,7 @@ pub struct UiSystem {
     
     // Networking
     channel_manager: Option<Shared<ChannelManager>>,
-    networking_system: Option<Handle<NetworkingSystem>>,
+    networking_system: Option<Shared<NetworkingSystem>>,  // Fixed: Use Shared not Handle
     channel_id: u16,
     
     // State
@@ -662,6 +662,7 @@ impl UiSystem {
         
         // Log that we're sending render commands (if we have dashboard via networking)
         if let Some(ref networking) = self.networking_system {
+            let networking = networking.read().await;
             if let Some(dashboard) = networking.get_dashboard().await {
                 dashboard.log(
                     playground_core_server::dashboard::LogLevel::Debug,
@@ -675,6 +676,7 @@ impl UiSystem {
         // Use NetworkingSystem to send the packet, which will publish to the shared MessageBus
         // The MessageBridge in core/server will forward this to WebSocket clients
         if let Some(ref networking) = self.networking_system {
+            let networking = networking.read().await;
             networking.send_packet(self.channel_id, 104, data, Priority::High)
                 .await
                 .map_err(|e| UiError::SerializationError(format!("Failed to send packet: {}", e)))?;
@@ -689,6 +691,7 @@ impl UiSystem {
     pub async fn render(&mut self) -> UiResult<()> {
         // Log render call
         if let Some(ref networking) = self.networking_system {
+            let networking = networking.read().await;
             if let Some(dashboard) = networking.get_dashboard().await {
                 dashboard.log(
                     playground_core_server::dashboard::LogLevel::Debug,
@@ -729,6 +732,7 @@ impl UiSystem {
         if let Some(root) = self.root_entity {
             // Log if we have a root
             if let Some(ref networking) = self.networking_system {
+                let networking = networking.read().await;
                 if let Some(dashboard) = networking.get_dashboard().await {
                     dashboard.log(
                         playground_core_server::dashboard::LogLevel::Debug,
@@ -741,6 +745,7 @@ impl UiSystem {
         } else {
             // Log that we have no root
             if let Some(ref networking) = self.networking_system {
+                let networking = networking.read().await;
                 if let Some(dashboard) = networking.get_dashboard().await {
                     dashboard.log(
                         playground_core_server::dashboard::LogLevel::Warning,
@@ -765,14 +770,20 @@ impl UiSystem {
         self.channel_manager = Some(manager);
     }
     
-    pub fn set_networking_system(&mut self, networking: Handle<NetworkingSystem>) {
+    pub fn set_networking_system(&mut self, networking: Shared<NetworkingSystem>) {
         self.networking_system = Some(networking);
+    }
+    
+    /// Compatibility method for old Handle-based API (deprecated)
+    pub fn set_networking_system_shared(&mut self, networking: Shared<NetworkingSystem>) {
+        self.set_networking_system(networking);
     }
     
     /// Log a message to the dashboard via NetworkingSystem
     async fn log(&self, level: &str, message: String) {
         if let Some(ref networking) = self.networking_system {
             // Get dashboard reference
+            let networking = networking.read().await;
             let dashboard = networking.get_dashboard().await;
             
             if let Some(dashboard) = dashboard {
@@ -828,6 +839,7 @@ impl UiSystem {
         // Send via networking system
         if let Some(ref networking) = self.networking_system {
             // Send packet
+            let networking = networking.read().await;
             networking.send_packet(self.channel_id, UiPacketType::RendererInit as u16, data, Priority::High)
                 .await
                 .map_err(|e| UiError::SerializationError(format!("Failed to send init packet: {}", e)))?;
