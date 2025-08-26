@@ -2,6 +2,57 @@
 
 This file tracks the detailed history of development sessions, including achievements, bug fixes, and implementation progress.
 
+## Session: 2025-08-26 - Dynamic Channel Architecture Planning (Session 28)
+
+### Major Architecture Understanding Achieved
+1. **App and Browser are ONE Application** ✅
+   - Server-side: playground-editor (Rust app)
+   - Client-side: Browser (WebGL renderer)  
+   - They are two sides of the SAME distributed application
+   - Browser is the App's frontend, not a separate entity
+
+2. **Browser Must Communicate with ALL Components** ✅
+   - Browser needs channels to ALL systems the App uses
+   - Browser needs channels to ALL plugins the App loads
+   - Browser is not just a UI client, it's the distributed frontend
+
+3. **Dynamic Channel Architecture Designed** ✅
+   - Channel 0: ONLY hardcoded channel (control/discovery)
+   - All other channels: Dynamically allocated by SystemsManager
+   - No ranges, no categories, pure sequential assignment
+   - Browser discovers channels via manifest on channel 0
+
+### Architectural Decisions Made
+1. **UI Framework Plugin is NOT Special**
+   - Moved from channel 1200 to be with other plugins
+   - Gets dynamically assigned channel like any other plugin
+   - Just another IDE plugin, not a special case
+
+2. **Complete Channel Flexibility**
+   - No hardcoded channel numbers (except 0)
+   - No reserved ranges for systems vs plugins
+   - SystemsManager assigns channels sequentially
+   - Add/remove components without changing client
+
+3. **Channel Discovery Protocol**
+   - Browser connects and listens on channel 0
+   - Server sends channel manifest with all mappings
+   - Browser dynamically subscribes to discovered channels
+   - Browser maintains name → channel mapping
+
+### Implementation Plan Created
+1. Update SystemsManager with channel registry
+2. Implement channel discovery protocol on channel 0
+3. Fix UiSystem to send RenderCommandBatch on assigned channel
+4. Update Browser to dynamically subscribe to channels
+5. Remove ALL hardcoded channel numbers from codebase
+
+### Key Learning
+- **systems/logic is the orchestrator** - Apps use SystemsManager to coordinate
+- **Browser connects via core/server** - But then uses channels for everything
+- **Plugins don't know their channels** - Assigned dynamically at registration
+- **Maximum flexibility achieved** - Any component can be added/removed freely
+
 ## Session: 2025-08-26 - Complete Plugin Architecture Refactor (Session 27)
 
 ### What Was Accomplished

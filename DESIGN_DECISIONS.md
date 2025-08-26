@@ -117,20 +117,39 @@ let component = Component::new(MyComponentData { ... }).await?;
 2. Realized server-authority model fits better
 3. WebSocket with binary protocol chosen
 
-### Channel-Based Architecture
-**Decision**: Channel system with ID ranges
+### Dynamic Channel Architecture (Session 28)
+**Decision**: Fully dynamic channel allocation with only channel 0 hardcoded
 
-**Ranges**:
-- 0: Control channel
-- 1-999: Systems
-- 1000-1999: Plugins
-- 2000-2999: LLM sessions
+**Implementation**:
+- Channel 0: Control/discovery channel (ONLY hardcoded value)
+- All other channels: Dynamically assigned by SystemsManager
+- No ranges, no categories, pure sequential allocation
+- Browser discovers channels via manifest on channel 0
 
 **Why**:
-- Clear ownership of channels
-- Easy to route messages
-- Supports dynamic registration
-- Scales well with plugin system
+- Maximum flexibility for adding/removing components
+- No client changes needed when systems/plugins change
+- Simpler than maintaining ranges and categories
+- True plugin-and-play architecture
+
+**Evolution**:
+1. Started with hardcoded ranges (1-999 systems, 1000+ plugins)
+2. Realized this limits flexibility
+3. Moved to fully dynamic allocation
+4. Only channel 0 remains hardcoded for bootstrap
+
+**Channel Discovery Protocol**:
+```json
+{
+  "type": "channel_manifest",
+  "channels": {
+    "ui": 1,
+    "networking": 2,
+    "editor-core": 3,
+    // ... dynamically assigned
+  }
+}
+```
 
 ### Frame-Based Batching
 **Decision**: Batch packets at 60fps, never send immediately
@@ -389,6 +408,26 @@ map.write().await.insert(key, value);
 ```
 
 **Impact**: All functions using these collections must be async
+
+## App and Browser Architecture (Session 28)
+
+### App and Browser are ONE Application
+**Decision**: Browser is the distributed frontend of the App
+
+**Why**:
+- Server-side (App) handles logic and state
+- Client-side (Browser) handles rendering and input
+- They form one complete application split across network
+- Browser is not a separate entity, it's part of the App
+
+**Implementation**:
+- App runs all systems and plugins server-side
+- Browser connects via WebSocket to core/server
+- Browser communicates with ALL systems/plugins via channels
+- Browser dynamically learns channel mappings
+
+**Key Insight**: 
+The Browser isn't "using" the App, it IS the App's frontend. This understanding fundamentally changes how we think about the architecture.
 
 ## Plugin System
 

@@ -31,6 +31,9 @@ This file contains critical memory for Claude Code when working with this reposi
 - Systems provide generic engine capabilities
 - Core provides foundation (server, ecs, types)
 - Plugins customize Systems for specific use cases (e.g., Discord UI)
+- **App and Browser are ONE application** - distributed across network
+- **Browser is the App's frontend** - not a separate entity
+- **Channel 0 is control** - only hardcoded channel for discovery
 
 ## #package-naming
 - Core: `playground-core-*` (e.g., playground-core-ecs)
@@ -69,13 +72,18 @@ This file contains critical memory for Claude Code when working with this reposi
    - All IDE plugins implement systems/logic::System
    - Plugins are self-contained
    - App coordinates all plugins
-8. **Implement plugin functionality** 🔴
+8. **Implement dynamic channel system** 🔴 (Session 28)
+   - SystemsManager channel registry
+   - Channel discovery protocol on channel 0
+   - Remove all hardcoded channels except 0
+9. **Complete UI rendering pipeline** 🔴
+   - UiSystem sends RenderCommandBatch
+   - Browser receives and renders with WebGL
+   - Full render loop working
+10. **Implement plugin functionality** 🔴
    - Wire up actual editor functionality
    - Implement terminal PTY support
    - Add file browser operations
-9. **Connect UI Framework** 🔴
-   - Render Discord-style interface
-   - Connect plugins to UI components
 
 ## #architecture-fixed
 ✅ Plugins ARE Systems - implement systems/logic::System trait
@@ -87,12 +95,11 @@ This file contains critical memory for Claude Code when working with this reposi
 ✅ playground-editor coordinates all plugins as the App authority
 
 ## #channel-allocation
-- 0: Control channel
-- 1-999: Systems (UI on 10)
-- 1000-1079: IDE plugins
-- 1100-1199: Game plugins
-- 1200-1209: UI Framework Plugin
-- 2000-2999: LLM sessions via MCP
+- **0: Control channel** - ONLY hardcoded channel for discovery/registration
+- **All others: Dynamic** - Assigned sequentially by SystemsManager
+- **No ranges or categories** - Pure dynamic allocation
+- **Browser discovers channels** - Via manifest on channel 0
+- **Complete flexibility** - Add/remove components without client changes
 
 ## #key-apis
 ```rust
