@@ -1,69 +1,55 @@
 use async_trait::async_trait;
-use playground_core_plugin::Plugin;
-use playground_core_types::{
-    PluginMetadata, PluginId, Version, Event,
-    context::Context,
-    render_context::RenderContext,
-    error::PluginError,
-};
-use tracing::info;
+use playground_systems_logic::{System, World, LogicResult, SystemsManager};
+use std::sync::Arc;
+use tracing::{info, debug};
 
-pub struct Version_controlPlugin {
-    metadata: PluginMetadata,
-    channel_id: Option<u16>,
+pub struct VersionControlPlugin {
+    channel_id: u16,
+    systems_manager: Arc<SystemsManager>,
+    // VersionControlPlugin-specific fields
+    // e.g., language_servers: HashMap<String, LspConnection>
 }
 
-impl Version_controlPlugin {
-    pub fn new() -> Self {
+impl VersionControlPlugin {
+    pub fn new(systems_manager: Arc<SystemsManager>) -> Self {
         Self {
-            metadata: PluginMetadata {
-                id: PluginId("version-control".to_string()),
-                name: "Version Control".to_string(),
-                version: Version {
-                    major: 0,
-                    minor: 1,
-                    patch: 0,
-                },
-            },
-            channel_id: None,
+            channel_id: 1006,
+            systems_manager,
         }
+    }
+    
+    async fn setup(&mut self) -> LogicResult<()> {
+        // Initialize LSP client infrastructure
+        debug!("version control plugin setting up version-control components");
+        Ok(())
     }
 }
 
 #[async_trait]
-impl Plugin for Version_controlPlugin {
-    fn metadata(&self) -> &PluginMetadata {
-        &self.metadata
+impl System for VersionControlPlugin {
+    fn name(&self) -> &'static str {
+        "VersionControlPlugin"
     }
-
-    async fn on_load(&mut self, _ctx: &mut Context) -> Result<(), PluginError> {
-        info!("version-control plugin loading");
+    
+    async fn initialize(&mut self, _world: &World) -> LogicResult<()> {
+        info!("VersionControl Plugin initializing on channel {}", self.channel_id);
         
-        // Register with networking system for appropriate channels
-        // self.channel_id = Some(CHANNEL_BASE);
         
-        info!("version-control plugin loaded successfully");
+        // Plugin-specific initialization
+        self.setup().await?;
+        
+        info!("version control plugin initialized successfully");
         Ok(())
     }
-
-    async fn on_unload(&mut self, _ctx: &mut Context) {
-        info!("version-control plugin unloading");
+    
+    async fn run(&mut self, _world: &World, _delta_time: f32) -> LogicResult<()> {
+        // Process LSP messages, handle completions, diagnostics, etc.
+        Ok(())
     }
-
-    async fn update(&mut self, _ctx: &mut Context, _delta_time: f32) {
-        // Update logic here
+    
+    async fn cleanup(&mut self, _world: &World) -> LogicResult<()> {
+        info!("version control plugin shutting down");
+        // Clean up version-control resources
+        Ok(())
     }
-
-    async fn render(&mut self, _ctx: &mut RenderContext) {
-        // Render logic here
-    }
-
-    async fn on_event(&mut self, _event: &Event) -> bool {
-        // Handle events, return true if handled
-        false
-    }
-}
-
-pub fn create() -> Version_controlPlugin {
-    Version_controlPlugin::new()
 }

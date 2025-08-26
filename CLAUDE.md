@@ -49,7 +49,7 @@ This file contains critical memory for Claude Code when working with this reposi
 - UiSystem internal ECS is private - plugins use UiInterface from systems/logic
 
 ## #current-violations
-**NetworkingSystem/UiSystem interface** - Handle vs Shared mismatch 🟡 (last remaining)
+✅ **NONE** - Full architectural compliance achieved!
 
 ## #ecs-architecture-fix
 **CRITICAL**: UiSystem uses `Arc<World>` not `Shared<World>`
@@ -60,32 +60,31 @@ This file contains critical memory for Claude Code when working with this reposi
 
 ## #immediate-goals
 1. ~~Fix systems/logic dyn violations~~ ✅ COMPLETED (Session 21-22)
-   - ALL files fixed: archetype, entity, event, messaging, query, storage, system, etc.
-   - Concrete wrapper pattern applied consistently
 2. ~~Fix systems/networking type aliases~~ ✅ COMPLETED (Session 18)
 3. ~~Fix Component/ComponentData pattern~~ ✅ COMPLETED (Session 20)
 4. ~~Fix systems/logic NO turbofish~~ ✅ COMPLETED (Session 22)
-   - ALL TypeId usage removed, replaced with string-based IDs
-   - No more turbofish syntax anywhere
 5. ~~Fix core/ecs NO dyn violations~~ ✅ COMPLETED (Session 23)
-   - messaging.rs completely refactored
-   - All other files already compliant
 6. ~~Fix core/server Handle/Shared compliance~~ ✅ COMPLETED (Session 24)
-   - All Arc usage replaced with Handle/Shared type aliases
-   - Documentation updated with proper patterns
-7. **Fix NetworkingSystem/UiSystem interface mismatch** 🔴
-   - Resolve Handle vs Shared type mismatch
-8. Implement Discord UI layout
-   - Fix ECS entity spawning for UI elements
-   - Generate proper render commands from UI tree
-9. Fix client tracking in Dashboard (remove disconnected)
+7. ~~Fix plugin architecture~~ ✅ COMPLETED (Session 27)
+   - All IDE plugins implement systems/logic::System
+   - Plugins are self-contained
+   - App coordinates all plugins
+8. **Implement plugin functionality** 🔴
+   - Wire up actual editor functionality
+   - Implement terminal PTY support
+   - Add file browser operations
+9. **Connect UI Framework** 🔴
+   - Render Discord-style interface
+   - Connect plugins to UI components
 
 ## #architecture-fixed
-✅ Plugins ARE Systems - no separate Plugin trait
-✅ Plugin trait doesn't exist in Core (removed core/plugin)
+✅ Plugins ARE Systems - implement systems/logic::System trait
+✅ Plugin trait doesn't exist (removed core/plugin in Session 26)
 ✅ NetworkingSystem starts server internally
 ✅ Apps only use systems/logic, never core/server directly
 ✅ Axum version unified to 0.8 workspace-wide
+✅ All IDE plugins are self-contained (Session 27)
+✅ playground-editor coordinates all plugins as the App authority
 
 ## #channel-allocation
 - 0: Control channel

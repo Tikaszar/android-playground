@@ -1,14 +1,7 @@
 use async_trait::async_trait;
-use playground_core_plugin::Plugin;
-use playground_core_types::{
-    PluginMetadata, PluginId, Version, Event,
-    context::Context,
-    render_context::RenderContext,
-    error::PluginError,
-};
-use playground_systems_networking::NetworkingSystem;
-use playground_systems_ui::ElementGraph;
+use playground_systems_logic::{System, World, LogicResult, SystemsManager};
 use std::path::PathBuf;
+use std::sync::Arc;
 use tokio::sync::mpsc;
 use tracing::{info, error, debug, warn};
 
@@ -16,33 +9,25 @@ use crate::file_tree::{FileTree, FileTreeEvent};
 use crate::file_system::{FileSystemHandler, FileWatcher};
 
 pub struct FileBrowserPlugin {
-    metadata: PluginMetadata,
     file_tree: Option<FileTree>,
     fs_handler: Option<FileSystemHandler>,
     file_watcher: Option<FileWatcher>,
     event_receiver: Option<mpsc::UnboundedReceiver<FileTreeEvent>>,
-    channel_id: Option<u16>,
+    channel_id: u16,
     root_path: PathBuf,
+    systems_manager: Arc<SystemsManager>,
 }
 
 impl FileBrowserPlugin {
-    pub fn new() -> Self {
+    pub fn new(systems_manager: Arc<SystemsManager>) -> Self {
         Self {
-            metadata: PluginMetadata {
-                id: PluginId("file-browser".to_string()),
-                name: "File Browser".to_string(),
-                version: Version {
-                    major: 0,
-                    minor: 1,
-                    patch: 0,
-                },
-            },
             file_tree: None,
             fs_handler: None,
             file_watcher: None,
             event_receiver: None,
-            channel_id: None,
+            channel_id: 1001,  // File browser uses channel 1001
             root_path: PathBuf::from("."),
+            systems_manager,
         }
     }
 
@@ -164,29 +149,29 @@ impl FileBrowserPlugin {
 }
 
 #[async_trait]
-impl Plugin for FileBrowserPlugin {
-    fn metadata(&self) -> &PluginMetadata {
-        &self.metadata
+impl System for FileBrowserPlugin {
+    fn name(&self) -> &'static str {
+        "FileBrowserPlugin"
     }
-
-    async fn on_load(&mut self, _ctx: &mut Context) -> Result<(), PluginError> {
-        info!("File browser plugin loading");
+    
+    async fn initialize(&mut self, _world: &World) -> LogicResult<()> {
+        info!("File Browser Plugin initializing on channel {}", self.channel_id);
         
-        // Register with networking system for channels 1010-1019
-        // This would normally be done through the context
-        self.channel_id = Some(1010);
         
-        // Initialize file tree in blocking context since on_load is sync
-        let runtime = tokio::runtime::Runtime::new()
-            .map_err(|e| PluginError::InitializationFailed(e.to_string()))?;
-        runtime.block_on(self.initialize_file_tree())
-            .map_err(|e| PluginError::InitializationFailed(e.to_string()))?;
+        // Initialize file tree
+        self.initialize_file_tree().await?;
         
         info!("File browser plugin loaded successfully");
         Ok(())
     }
-
-    async fn on_unload(&mut self, _ctx: &mut Context) {
+    
+    async fn run(&mut self, _world: &World, _delta_time: f32) -> LogicResult<()> {
+        // Handle file tree events
+        self.handle_file_tree_events().await;
+        Ok(())
+    }
+    
+    async fn cleanup(&mut self, _world: &World) -> LogicResult<()> {
         info!("File browser plugin unloading");
         
         // Clean up resources
@@ -194,25 +179,7 @@ impl Plugin for FileBrowserPlugin {
         self.fs_handler = None;
         self.file_watcher = None;
         self.event_receiver = None;
+        
+        Ok(())
     }
-
-    async fn update(&mut self, _ctx: &mut Context, _delta_time: f32) {
-        // Handle file tree events
-        self.handle_file_tree_events().await;
-    }
-
-    async fn render(&mut self, _ctx: &mut RenderContext) {
-        // File tree rendering is handled by the UI system
-        // through the Element trait implementation
-    }
-
-    async fn on_event(&mut self, _event: &Event) -> bool {
-        // Handle plugin events
-        // Return true if event was handled, false otherwise
-        false
-    }
-}
-
-pub fn create() -> FileBrowserPlugin {
-    FileBrowserPlugin::new()
 }

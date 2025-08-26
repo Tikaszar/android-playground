@@ -16,8 +16,16 @@ playground-systems-logic = { path = "../../systems/logic" }
 # Core dependencies
 playground-core-types = { path = "../../core/types" }
 
-# Plugins
+# IDE Plugins - Each is self-contained, coordinated by this app
 playground-plugins-ui-framework = { path = "../../plugins/ui-framework" }
+playground-plugins-editor-core = { path = "../../plugins/editor-core" }
+playground-plugins-file-browser = { path = "../../plugins/file-browser" }
+playground-plugins-terminal = { path = "../../plugins/terminal" }
+playground-plugins-lsp-client = { path = "../../plugins/lsp-client" }
+playground-plugins-debugger = { path = "../../plugins/debugger" }
+playground-plugins-chat-assistant = { path = "../../plugins/chat-assistant" }
+playground-plugins-version-control = { path = "../../plugins/version-control" }
+playground-plugins-theme-manager = { path = "../../plugins/theme-manager" }
 
 # Web server
 axum = { workspace = true }

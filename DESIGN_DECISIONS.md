@@ -401,13 +401,35 @@ map.write().await.insert(key, value);
 - Plugins are just Systems to the ECS
 - Cleaner abstraction layers
 - Apps handle plugin loading, Systems handle execution
+- Plugins remain self-contained with no inter-dependencies
 
 **Evolution**:
 1. Initially had Plugin trait in core/plugin (WRONG)
 2. Realized this violated layering - Core shouldn't know about Plugins
 3. Understood Plugins are just Systems with special loading
-4. Removed core/plugin entirely
+4. Removed core/plugin entirely (Session 26)
 5. Plugins now implement systems/logic::System trait
+6. All IDE plugins refactored to be self-contained Systems (Session 27)
+
+**Implementation Pattern** (Session 27):
+```rust
+pub struct PluginName {
+    channel_id: u16,
+    systems_manager: Arc<SystemsManager>,
+}
+
+impl PluginName {
+    pub fn new(systems_manager: Arc<SystemsManager>) -> Self {
+        Self { channel_id: ASSIGNED_CHANNEL, systems_manager }
+    }
+}
+
+#[async_trait]
+impl System for PluginName {
+    fn name(&self) -> &'static str { "PluginName" }
+    // Standard System methods
+}
+```
 
 ### Plugins MUST Use systems/logic ECS
 **Decision**: Plugins cannot use core/ecs directly
@@ -448,8 +470,13 @@ map.write().await.insert(key, value);
 - Apps can override plugin behavior when needed
 - Apps own the main update loop
 - Prevents plugins from conflicting
+- Apps coordinate communication between plugins
 
-**Example**: playground-editor app loads ui-framework plugin but maintains control over when systems run and can override plugin decisions
+**Example** (Session 27): playground-editor app:
+- Loads 9 IDE plugins (UI Framework, Editor Core, File Browser, Terminal, LSP Client, Debugger, Chat Assistant, Version Control, Theme Manager)
+- Each plugin is self-contained with its own channel
+- App coordinates all inter-plugin communication
+- Maintains 60fps update loop for all Systems
 
 ### Plugins as Feature Providers
 **Decision**: Plugins provide reusable features using generic Systems

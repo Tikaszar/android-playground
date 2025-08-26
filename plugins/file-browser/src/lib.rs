@@ -2,9 +2,6 @@ mod plugin;
 mod file_tree;
 mod file_system;
 
-pub use plugin::*;
-
-#[no_mangle]
-pub extern "C" fn create_plugin() -> Box<dyn playground_core_plugin::Plugin> {
-    Box::new(plugin::create())
-}
+pub use plugin::FileBrowserPlugin;
+pub use file_tree::{FileTree, FileTreeEvent};
+pub use file_system::{FileSystemHandler, FileWatcher};

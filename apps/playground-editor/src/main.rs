@@ -1,59 +1,133 @@
-// mod messages;
-// mod message_bus;
-// mod layout;
-
 use anyhow::Result;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
-use playground_systems_logic::{World, SystemsManager, System};
+use playground_systems_logic::{World, SystemsManager, System, SystemData};
+
+// Import all IDE plugins - each is self-contained
+use playground_plugins_ui_framework::UiFrameworkPlugin;
+use playground_plugins_editor_core::EditorCorePlugin;
+use playground_plugins_file_browser::FileBrowserPlugin;
+use playground_plugins_terminal::TerminalPlugin;
+use playground_plugins_lsp_client::LspClientPlugin;
+use playground_plugins_debugger::DebuggerPlugin;
+use playground_plugins_chat_assistant::ChatAssistantPlugin;
+use playground_plugins_version_control::VersionControlPlugin;
+use playground_plugins_theme_manager::ThemeManagerPlugin;
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    // Initialize logging
+    tracing_subscriber::fmt()
+        .with_env_filter("info")
+        .init();
+
     // Create the World from systems/logic
     let world = Arc::new(RwLock::new(World::new()));
     
-    // Create SystemsManager
+    // Create SystemsManager which initializes all engine systems
     let systems = Arc::new(SystemsManager::new(world.clone()).await?);
-    eprintln!("[MAIN] SystemsManager created");
+    eprintln!("[EDITOR] SystemsManager created");
     systems.initialize_all().await?;
-    eprintln!("[MAIN] SystemsManager.initialize_all() completed");
+    eprintln!("[EDITOR] All engine systems initialized");
     
-    // Check if UI system has root element
+    // Verify UI system is ready
     {
         let ui = systems.ui();
         let ui_read = ui.read().await;
-        let has_root = ui_read.get_root_element().is_some();
-        eprintln!("[MAIN] UI System has root element: {}", has_root);
-        eprintln!("[MAIN] UI System initialized: {}", ui_read.is_initialized());
+        eprintln!("[EDITOR] UI System ready: {}", ui_read.is_initialized());
     }
     
-    // Load and register the UI Framework Plugin as a System
-    use playground_plugins_ui_framework::UiFrameworkPlugin;
+    // Load and register all IDE plugins as Systems
+    // The App coordinates all plugins - they don't depend on each other
     
-    eprintln!("[MAIN] Creating UI Framework Plugin...");
-    let mut ui_plugin = UiFrameworkPlugin::new(systems.clone());
-    eprintln!("[MAIN] UI Framework Plugin created");
+    eprintln!("[EDITOR] Loading IDE plugins...");
     
-    // Initialize the plugin
-    eprintln!("[MAIN] Calling ui_plugin.initialize()...");
-    match ui_plugin.initialize(&*world.read().await).await {
-        Ok(_) => eprintln!("[MAIN] ✓ UI Framework Plugin initialized successfully"),
-        Err(e) => {
-            eprintln!("[MAIN] ✗ Failed to initialize UI Framework Plugin: {}", e);
-            return Err(e.into());
-        }
+    // 1. UI Framework - Discord-style mobile UI (channels 1200-1209)
+    {
+        let mut plugin = UiFrameworkPlugin::new(systems.clone());
+        plugin.initialize(&*world.read().await).await?;
+        world.write().await.register_plugin_system(SystemData::new(plugin)).await?;
+        eprintln!("[EDITOR] ✓ UI Framework Plugin loaded (Discord UI)");
     }
-    eprintln!("[MAIN] After ui_plugin.initialize()");
     
-    // Register the plugin as a System in the World
-    use playground_systems_logic::SystemData;
-    let system_data = SystemData::new(ui_plugin);
-    world.write().await.register_plugin_system(system_data).await?;
+    // 2. Editor Core - Text editing with vim mode (channel 1000)
+    {
+        let mut plugin = EditorCorePlugin::new(systems.clone());
+        plugin.initialize(&*world.read().await).await?;
+        world.write().await.register_plugin_system(SystemData::new(plugin)).await?;
+        eprintln!("[EDITOR] ✓ Editor Core Plugin loaded");
+    }
     
-    // Note: render loop already started in systems.initialize_all()
+    // 3. File Browser - File navigation (channel 1001)
+    {
+        let mut plugin = FileBrowserPlugin::new(systems.clone());
+        plugin.initialize(&*world.read().await).await?;
+        world.write().await.register_plugin_system(SystemData::new(plugin)).await?;
+        eprintln!("[EDITOR] ✓ File Browser Plugin loaded");
+    }
     
-    // Start the main update loop that runs all Systems
+    // 4. Terminal - Termux integration (channel 1002)
+    {
+        let mut plugin = TerminalPlugin::new(systems.clone());
+        plugin.initialize(&*world.read().await).await?;
+        world.write().await.register_plugin_system(SystemData::new(plugin)).await?;
+        eprintln!("[EDITOR] ✓ Terminal Plugin loaded");
+    }
+    
+    // 5. LSP Client - Language server protocol (channel 1003)
+    {
+        let mut plugin = LspClientPlugin::new(systems.clone());
+        plugin.initialize(&*world.read().await).await?;
+        world.write().await.register_plugin_system(SystemData::new(plugin)).await?;
+        eprintln!("[EDITOR] ✓ LSP Client Plugin loaded");
+    }
+    
+    // 6. Debugger - Debug support (channel 1004)
+    {
+        let mut plugin = DebuggerPlugin::new(systems.clone());
+        plugin.initialize(&*world.read().await).await?;
+        world.write().await.register_plugin_system(SystemData::new(plugin)).await?;
+        eprintln!("[EDITOR] ✓ Debugger Plugin loaded");
+    }
+    
+    // 7. Chat Assistant - MCP/LLM integration (channel 1005)
+    {
+        let mut plugin = ChatAssistantPlugin::new(systems.clone());
+        plugin.initialize(&*world.read().await).await?;
+        world.write().await.register_plugin_system(SystemData::new(plugin)).await?;
+        eprintln!("[EDITOR] ✓ Chat Assistant Plugin loaded (MCP integration)");
+    }
+    
+    // 8. Version Control - Git integration (channel 1006)
+    {
+        let mut plugin = VersionControlPlugin::new(systems.clone());
+        plugin.initialize(&*world.read().await).await?;
+        world.write().await.register_plugin_system(SystemData::new(plugin)).await?;
+        eprintln!("[EDITOR] ✓ Version Control Plugin loaded");
+    }
+    
+    // 9. Theme Manager - UI theming (channel 1007)
+    {
+        let mut plugin = ThemeManagerPlugin::new(systems.clone());
+        plugin.initialize(&*world.read().await).await?;
+        world.write().await.register_plugin_system(SystemData::new(plugin)).await?;
+        eprintln!("[EDITOR] ✓ Theme Manager Plugin loaded");
+    }
+    
+    eprintln!("[EDITOR] All IDE plugins loaded successfully!");
+    eprintln!("[EDITOR] Channel allocations:");
+    eprintln!("  - 1000: Editor Core");
+    eprintln!("  - 1001: File Browser");
+    eprintln!("  - 1002: Terminal");
+    eprintln!("  - 1003: LSP Client");
+    eprintln!("  - 1004: Debugger");
+    eprintln!("  - 1005: Chat Assistant (MCP)");
+    eprintln!("  - 1006: Version Control");
+    eprintln!("  - 1007: Theme Manager");
+    eprintln!("  - 1200-1209: UI Framework");
+    
+    // Start the main update loop that runs all Systems (including plugins)
     let world_for_update = world.clone();
     tokio::spawn(async move {
         let mut interval = tokio::time::interval(tokio::time::Duration::from_millis(16)); // ~60fps
@@ -61,22 +135,30 @@ async fn main() -> Result<()> {
             interval.tick().await;
             
             // Run all registered Systems
-            // Use a block to ensure the lock is dropped before the next iteration
             {
                 let mut world_lock = world_for_update.write().await;
-                let _ = world_lock.run_systems(0.016).await;
+                if let Err(e) = world_lock.run_systems(0.016).await {
+                    eprintln!("[EDITOR] Error running systems: {}", e);
+                }
             }
         }
     });
     
-    // Note: The IDE interface is served by core/server at /playground-editor/
+    eprintln!("[EDITOR] Main update loop started");
+    eprintln!("[EDITOR] IDE interface served at: http://localhost:8080/playground-editor/");
+    eprintln!("[EDITOR] MCP endpoint: http://localhost:8080/mcp");
+    eprintln!("[EDITOR] Press Ctrl+C to shutdown");
     
-    // Dashboard will show all status - just wait 100ms for it to start
-    tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
-    
-    // Keep the application running
+    // Wait for shutdown signal
     tokio::signal::ctrl_c().await?;
-    // Dashboard will handle shutdown message
+    eprintln!("[EDITOR] Shutting down...");
     
+    // Cleanup all systems
+    {
+        let mut world_lock = world.write().await;
+        world_lock.shutdown().await?;
+    }
+    
+    eprintln!("[EDITOR] Shutdown complete");
     Ok(())
 }

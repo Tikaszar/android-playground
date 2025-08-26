@@ -5,9 +5,6 @@ authors.workspace = true
 edition.workspace = true
 license.workspace = true
 
-[lib]
-crate-type = ["cdylib"]
-
 [dependencies]
 async-trait = { workspace = true }
 # Systems - Plugins use Systems APIs only (never Core directly)
@@ -15,7 +12,7 @@ playground-systems-ui = { path = "../../systems/ui" }
 playground-systems-logic = { path = "../../systems/logic" }
 playground-systems-networking = { path = "../../systems/networking" }
 
-# Plugin trait (required for all plugins)
+# Core types for shared data structures
 playground-core-types = { path = "../../core/types" }
 
 # Standard dependencies

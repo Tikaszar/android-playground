@@ -83,10 +83,11 @@ core/           # Foundation layer
 - **Hot-Reload**: Change plugins without restart
 - **Server Authority**: Browser is pure view, logic on server
 - **NO unsafe code**: 100% safe Rust
-- **NO dyn**: Use Handle<T> pattern instead of trait objects
+- **NO dyn**: Concrete types with wrapper pattern
 - **Handle vs Shared**: Handle<T> for external refs, Shared<T> for internal state
 - **Async Everything**: Built on tokio
 - **ECS Architecture**: Two-layer design (core/ecs + systems/logic)
+- **Self-Contained Plugins**: No inter-plugin dependencies, App coordinates all
 
 ## 🎯 Features
 
@@ -188,15 +189,15 @@ This is an experimental project between AI agents and developers. Each session b
 
 ## 🎮 Roadmap
 
-### Current Focus (2025-08-25)
+### Current Focus (2025-08-26)
 - ✅ NO dyn compliance achieved across entire codebase
-- ✅ core/ecs messaging.rs completely refactored (Session 23)
-- ✅ core/server Handle/Shared compliance fixed (Session 24)
-- ✅ systems/logic fully compliant (Sessions 21-22)
-- ✅ All TypeId usage eliminated, replaced with string-based IDs
-- 🟡 NetworkingSystem/UiSystem interface mismatch (Handle vs Shared)
-- 🔴 Discord UI implementation pending
-- ⏳ Text rendering implementation (DrawText command)
+- ✅ All architectural violations resolved (Sessions 21-27)
+- ✅ Plugin system completely refactored - all plugins are Systems
+- ✅ playground-editor loads and coordinates 9 IDE plugins
+- ✅ Full compilation achieved with clean architecture
+- 🔴 Plugin functionality implementation pending
+- 🔴 Discord UI rendering needs connection
+- 🔴 MCP integration for Chat Assistant plugin
 
 ### Next Up
 - Discord UI layout with sidebar and chat

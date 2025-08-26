@@ -1,69 +1,55 @@
 use async_trait::async_trait;
-use playground_core_plugin::Plugin;
-use playground_core_types::{
-    PluginMetadata, PluginId, Version, Event,
-    context::Context,
-    render_context::RenderContext,
-    error::PluginError,
-};
-use tracing::info;
+use playground_systems_logic::{System, World, LogicResult, SystemsManager};
+use std::sync::Arc;
+use tracing::{info, debug};
 
-pub struct Theme_managerPlugin {
-    metadata: PluginMetadata,
-    channel_id: Option<u16>,
+pub struct ThemeManagerPlugin {
+    channel_id: u16,
+    systems_manager: Arc<SystemsManager>,
+    // ThemeManagerPlugin-specific fields
+    // e.g., language_servers: HashMap<String, LspConnection>
 }
 
-impl Theme_managerPlugin {
-    pub fn new() -> Self {
+impl ThemeManagerPlugin {
+    pub fn new(systems_manager: Arc<SystemsManager>) -> Self {
         Self {
-            metadata: PluginMetadata {
-                id: PluginId("theme-manager".to_string()),
-                name: "Theme Manager".to_string(),
-                version: Version {
-                    major: 0,
-                    minor: 1,
-                    patch: 0,
-                },
-            },
-            channel_id: None,
+            channel_id: 1007,
+            systems_manager,
         }
+    }
+    
+    async fn setup(&mut self) -> LogicResult<()> {
+        // Initialize LSP client infrastructure
+        debug!("theme manager plugin setting up theme-manager components");
+        Ok(())
     }
 }
 
 #[async_trait]
-impl Plugin for Theme_managerPlugin {
-    fn metadata(&self) -> &PluginMetadata {
-        &self.metadata
+impl System for ThemeManagerPlugin {
+    fn name(&self) -> &'static str {
+        "ThemeManagerPlugin"
     }
-
-    async fn on_load(&mut self, _ctx: &mut Context) -> Result<(), PluginError> {
-        info!("theme-manager plugin loading");
+    
+    async fn initialize(&mut self, _world: &World) -> LogicResult<()> {
+        info!("ThemeManager Plugin initializing on channel {}", self.channel_id);
         
-        // Register with networking system for appropriate channels
-        // self.channel_id = Some(CHANNEL_BASE);
         
-        info!("theme-manager plugin loaded successfully");
+        // Plugin-specific initialization
+        self.setup().await?;
+        
+        info!("theme manager plugin initialized successfully");
         Ok(())
     }
-
-    async fn on_unload(&mut self, _ctx: &mut Context) {
-        info!("theme-manager plugin unloading");
+    
+    async fn run(&mut self, _world: &World, _delta_time: f32) -> LogicResult<()> {
+        // Process LSP messages, handle completions, diagnostics, etc.
+        Ok(())
     }
-
-    async fn update(&mut self, _ctx: &mut Context, _delta_time: f32) {
-        // Update logic here
+    
+    async fn cleanup(&mut self, _world: &World) -> LogicResult<()> {
+        info!("theme manager plugin shutting down");
+        // Clean up theme-manager resources
+        Ok(())
     }
-
-    async fn render(&mut self, _ctx: &mut RenderContext) {
-        // Render logic here
-    }
-
-    async fn on_event(&mut self, _event: &Event) -> bool {
-        // Handle events, return true if handled
-        false
-    }
-}
-
-pub fn create() -> Theme_managerPlugin {
-    Theme_managerPlugin::new()
 }

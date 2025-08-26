@@ -2,16 +2,10 @@ mod plugin;
 mod state;
 mod buffer;
 mod vim;
-mod editor_view;
+// mod editor_view; // TODO: Update to use new UI APIs
 
 pub use plugin::EditorCorePlugin;
 pub use state::{EditorState, OpenFile, CursorPosition};
 pub use buffer::TextBuffer;
 pub use vim::{VimState, VimMode, VimCommand, Direction, Motion};
-pub use editor_view::EditorView;
-
-/// Plugin entry point - required for dynamic loading
-#[no_mangle]
-pub extern "C" fn create_plugin() -> Box<dyn playground_core_plugin::Plugin> {
-    Box::new(EditorCorePlugin::new())
-}
+// pub use editor_view::EditorView;
