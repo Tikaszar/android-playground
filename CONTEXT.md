@@ -9,10 +9,30 @@
 **Networking**: ✅ Fixed packet broadcasting - all clients receive packets
 **Channels**: ✅ Dynamic channel allocation fully implemented
 **Browser**: 🟡 Partially working - connects but manifest not received
+**Lifecycle**: ✅ Fixed circular dependency in startup
 
-### Session 33 Progress
+### Session 33 Accomplishments
 
-#### 🟡 IN PROGRESS: UI Rendering Pipeline Fix
+#### ✅ COMPLETED: Fixed Circular Dependency in Startup
+- **Issue**: Plugin initialization error "Not connected"
+- **Root Cause**: Circular dependency between plugin registration and NetworkingSystem initialization
+  - Plugins tried to register MCP tools during initialize()
+  - NetworkingSystem wasn't initialized yet
+  - NetworkingSystem needed all plugins registered for channel manifest
+  
+- **Solution**: Formalized three-phase startup sequence
+  1. **Phase 1: Registration** - Register all plugins WITHOUT initialization
+  2. **Phase 2: Core Initialization** - Initialize core systems with complete channel manifest
+  3. **Phase 3: Plugin Initialization** - Initialize all plugins after NetworkingSystem ready
+  
+- **Implementation**:
+  - Added `initialize_all_plugins()` to World for lifecycle management
+  - Added `shutdown()` to World for clean teardown
+  - Separated plugin registration from initialization in main.rs
+  - World now stores plugins in `plugin_systems: Shared<Vec<Box<dyn System>>>`
+  - Clean build with no errors
+
+#### 🔴 REMAINING: UI Rendering Pipeline Fix  
 - **Issue**: Black screen despite complete pipeline
 - **Diagnosed**:
   1. UiSystem was hardcoded to channel 10, now uses dynamic channel 1 ✅
@@ -107,20 +127,19 @@
 - **Shared<> for internal, Handle<> for external**
 
 ### Next Steps
-1. **Test packet broadcasting** ✅:
-   - Run the editor: `cargo run -p playground-apps-editor`
-   - Open multiple browser tabs to http://localhost:8080/playground-editor/
-   - Verify all clients receive render packets
+1. **Fix channel manifest response**:
+   - Server must respond to RequestChannelManifest (type 8) with manifest (type 9)
+   - Add handler for type 8 in handle_control_message()
+   - Browser needs manifest to discover channels
 
 2. **Verify Discord UI rendering**:
    - Check UI Framework Plugin creates elements properly
    - Ensure render_element_tree() generates correct commands
    - Confirm WebGL renderer displays Discord UI layout
 
-3. **Implement dynamic channel system** (Session 28 goal):
-   - SystemsManager channel registry
-   - Channel discovery protocol on channel 0
-   - Remove remaining hardcoded channels
+3. **Test with multiple clients**:
+   - Open multiple browser tabs to http://localhost:8080/playground-editor/
+   - Verify all clients receive render packets via broadcast
 
 ### Running the IDE
 ```bash

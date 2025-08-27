@@ -22,6 +22,8 @@ pub struct World {
     scheduler: Handle<Scheduler>,
     dirty_tracker: Handle<DirtyTracker>,
     resources: Handle<ResourceStorage>,
+    // Plugin systems that need lifecycle management
+    plugin_systems: playground_core_types::Shared<Vec<Box<dyn crate::system::System>>>,
 }
 
 impl World {
@@ -34,6 +36,7 @@ impl World {
             scheduler: handle(Scheduler::new()),
             dirty_tracker: handle(DirtyTracker::new()),
             resources: handle(ResourceStorage::new()),
+            plugin_systems: shared(Vec::new()),
         }
     }
     
@@ -221,17 +224,51 @@ impl World {
         Ok(())
     }
     
-    /// Register a System with the World (for plugins)
-    pub async fn register_plugin_system(&mut self, _system: SystemData) -> LogicResult<()> {
-        // SystemData wraps the system execution - add it to the executor
-        // Note: This may need refactoring to properly handle SystemData
-        // For now, we skip this functionality as it requires architectural changes
+    /// Register a plugin system WITHOUT initializing it
+    /// This allows all plugins to be registered before any are initialized
+    pub async fn register_plugin_system(&mut self, system: Box<dyn crate::system::System>) -> LogicResult<()> {
+        let mut systems = self.plugin_systems.write().await;
+        systems.push(system);
+        Ok(())
+    }
+    
+    /// Initialize all registered plugin systems
+    /// This should be called AFTER all plugins are registered and AFTER core systems are initialized
+    pub async fn initialize_all_plugins(&mut self) -> LogicResult<()> {
+        let mut systems = self.plugin_systems.write().await;
+        for system in systems.iter_mut() {
+            system.initialize(self).await?;
+        }
         Ok(())
     }
     
     /// Run all registered systems for one frame
     pub async fn run_systems(&mut self, delta_time: f32) -> LogicResult<()> {
-        self.scheduler.run_frame(self, delta_time).await
+        // Run scheduler systems
+        self.scheduler.run_frame(self, delta_time).await?;
+        
+        // Run plugin systems
+        let mut systems = self.plugin_systems.write().await;
+        for system in systems.iter_mut() {
+            system.run(self, delta_time).await?;
+        }
+        
+        Ok(())
+    }
+    
+    /// Cleanup all systems on shutdown
+    pub async fn shutdown(&mut self) -> LogicResult<()> {
+        // Cleanup plugin systems
+        let mut systems = self.plugin_systems.write().await;
+        for system in systems.iter_mut() {
+            system.cleanup(self).await?;
+        }
+        systems.clear();
+        
+        // Clear other resources
+        self.clear().await;
+        
+        Ok(())
     }
 }
 

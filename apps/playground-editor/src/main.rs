@@ -1,6 +1,6 @@
 use anyhow::Result;
 
-use playground_systems_logic::{World, SystemsManager, System, SystemData, Handle, handle, shared};
+use playground_systems_logic::{World, SystemsManager, handle, shared};
 
 // Import all IDE plugins - each is self-contained
 use playground_plugins_ui_framework::UiFrameworkPlugin;
@@ -24,94 +24,95 @@ async fn main() -> Result<()> {
     // Create SystemsManager which initializes all engine systems
     let systems = handle(SystemsManager::new(world.clone()).await?);
     eprintln!("[EDITOR] SystemsManager created");
-    systems.initialize_all().await?;
-    eprintln!("[EDITOR] All engine systems initialized");
-    
+
     // Verify UI system is ready
     {
         let ui = systems.ui();
         let ui_read = ui.read().await;
         eprintln!("[EDITOR] UI System ready: {}", ui_read.is_initialized());
     }
-    
-    // Load and register all IDE plugins as Systems
-    // The App coordinates all plugins - they don't depend on each other
-    
-    eprintln!("[EDITOR] Loading IDE plugins...");
-    
-    // 1. UI Framework - Discord-style mobile UI (channels 1200-1209)
+
+    // Phase 1: REGISTRATION - Register all IDE plugins WITHOUT initializing them
+    // This ensures all plugins are known before any initialization happens
+    eprintln!("[EDITOR] Phase 1: Registering IDE plugins...");
+
+    // 1. UI Framework - Discord-style mobile UI
     {
-        let mut plugin = UiFrameworkPlugin::new(systems.clone());
-        plugin.initialize(&*world.read().await).await?;
-        world.write().await.register_plugin_system(SystemData::new(plugin)).await?;
-        eprintln!("[EDITOR] ✓ UI Framework Plugin loaded (Discord UI)");
+        let plugin = UiFrameworkPlugin::new(systems.clone());
+        world.write().await.register_plugin_system(Box::new(plugin)).await?;
+        eprintln!("[EDITOR] ✓ UiFrameworkPlugin registered (not initialized)");
     }
-    
-    // 2. Editor Core - Text editing with vim mode (channel 1000)
+
+    // 2. Editor Core - Text editing with vim mode
     {
-        let mut plugin = EditorCorePlugin::new(systems.clone());
-        plugin.initialize(&*world.read().await).await?;
-        world.write().await.register_plugin_system(SystemData::new(plugin)).await?;
-        eprintln!("[EDITOR] ✓ Editor Core Plugin loaded");
+        let plugin = EditorCorePlugin::new(systems.clone());
+        world.write().await.register_plugin_system(Box::new(plugin)).await?;
+        eprintln!("[EDITOR] ✓ EditorCorePlugin registered (not initialized)");
     }
-    
-    // 3. File Browser - File navigation (channel 1001)
+
+    // 3. File Browser - File navigation
     {
-        let mut plugin = FileBrowserPlugin::new(systems.clone());
-        plugin.initialize(&*world.read().await).await?;
-        world.write().await.register_plugin_system(SystemData::new(plugin)).await?;
-        eprintln!("[EDITOR] ✓ File Browser Plugin loaded");
+        let plugin = FileBrowserPlugin::new(systems.clone());
+        world.write().await.register_plugin_system(Box::new(plugin)).await?;
+        eprintln!("[EDITOR] ✓ FileBrowserPlugin registered (not initialized)");
     }
-    
-    // 4. Terminal - Termux integration (channel 1002)
+
+    // 4. Terminal - Termux integration
     {
-        let mut plugin = TerminalPlugin::new(systems.clone());
-        plugin.initialize(&*world.read().await).await?;
-        world.write().await.register_plugin_system(SystemData::new(plugin)).await?;
-        eprintln!("[EDITOR] ✓ Terminal Plugin loaded");
+        let plugin = TerminalPlugin::new(systems.clone());
+        world.write().await.register_plugin_system(Box::new(plugin)).await?;
+        eprintln!("[EDITOR] ✓ TerminalPlugin registered (not initialized)");
     }
-    
-    // 5. LSP Client - Language server protocol (channel 1003)
+
+    // 5. LSP Client - Language server protocol
     {
-        let mut plugin = LspClientPlugin::new(systems.clone());
-        plugin.initialize(&*world.read().await).await?;
-        world.write().await.register_plugin_system(SystemData::new(plugin)).await?;
-        eprintln!("[EDITOR] ✓ LSP Client Plugin loaded");
+        let plugin = LspClientPlugin::new(systems.clone());
+        world.write().await.register_plugin_system(Box::new(plugin)).await?;
+        eprintln!("[EDITOR] ✓ LspClientPlugin registered (not initialized)");
     }
-    
-    // 6. Debugger - Debug support (channel 1004)
+
+    // 6. Debugger - Debug support
     {
-        let mut plugin = DebuggerPlugin::new(systems.clone());
-        plugin.initialize(&*world.read().await).await?;
-        world.write().await.register_plugin_system(SystemData::new(plugin)).await?;
-        eprintln!("[EDITOR] ✓ Debugger Plugin loaded");
+        let plugin = DebuggerPlugin::new(systems.clone());
+        world.write().await.register_plugin_system(Box::new(plugin)).await?;
+        eprintln!("[EDITOR] ✓ DebuggerPlugin registered (not initialized)");
     }
-    
-    // 7. Chat Assistant - MCP/LLM integration (channel 1005)
+
+    // 7. Chat Assistant - MCP/LLM integration
     {
-        let mut plugin = ChatAssistantPlugin::new(systems.clone());
-        plugin.initialize(&*world.read().await).await?;
-        world.write().await.register_plugin_system(SystemData::new(plugin)).await?;
-        eprintln!("[EDITOR] ✓ Chat Assistant Plugin loaded (MCP integration)");
+        let plugin = ChatAssistantPlugin::new(systems.clone());
+        world.write().await.register_plugin_system(Box::new(plugin)).await?;
+        eprintln!("[EDITOR] ✓ ChatAssistantPlugin registered (not initialized)");
     }
-    
-    // 8. Version Control - Git integration (channel 1006)
+
+    // 8. Version Control - Git integration
     {
-        let mut plugin = VersionControlPlugin::new(systems.clone());
-        plugin.initialize(&*world.read().await).await?;
-        world.write().await.register_plugin_system(SystemData::new(plugin)).await?;
-        eprintln!("[EDITOR] ✓ Version Control Plugin loaded");
+        let plugin = VersionControlPlugin::new(systems.clone());
+        world.write().await.register_plugin_system(Box::new(plugin)).await?;
+        eprintln!("[EDITOR] ✓ VersionControlPlugin registered (not initialized)");
     }
-    
-    // 9. Theme Manager - UI theming (channel 1007)
+
+    // 9. Theme Manager - UI theming
     {
-        let mut plugin = ThemeManagerPlugin::new(systems.clone());
-        plugin.initialize(&*world.read().await).await?;
-        world.write().await.register_plugin_system(SystemData::new(plugin)).await?;
-        eprintln!("[EDITOR] ✓ Theme Manager Plugin loaded");
+        let plugin = ThemeManagerPlugin::new(systems.clone());
+        world.write().await.register_plugin_system(Box::new(plugin)).await?;
+        eprintln!("[EDITOR] ✓ ThemeManagerPlugin registered (not initialized)");
     }
-    
-    eprintln!("[EDITOR] All IDE plugins loaded successfully!");
+
+    eprintln!("[EDITOR] Phase 1 complete: All IDE plugins registered!");
+
+    // Phase 2: CORE INITIALIZATION - Initialize core engine systems
+    // Now that all plugins are registered, the NetworkingSystem can build
+    // a complete channel manifest
+    eprintln!("[EDITOR] Phase 2: Initializing core engine systems...");
+    systems.initialize_all().await?;
+    eprintln!("[EDITOR] Phase 2 complete: Core engine systems initialized!");
+
+    // Phase 3: PLUGIN INITIALIZATION - Initialize all registered plugins
+    // Now that NetworkingSystem is ready, plugins can perform network operations
+    eprintln!("[EDITOR] Phase 3: Initializing all plugins...");
+    world.write().await.initialize_all_plugins().await?;
+    eprintln!("[EDITOR] Phase 3 complete: All plugins initialized!");
     eprintln!("[EDITOR] Channel allocations:");
     eprintln!("  - 1000: Editor Core");
     eprintln!("  - 1001: File Browser");
@@ -152,7 +153,7 @@ async fn main() -> Result<()> {
     // Cleanup all systems
     {
         let mut world_lock = world.write().await;
-        // World doesn't have a shutdown method - cleanup handled by drop
+        world_lock.shutdown().await?;
     }
     
     eprintln!("[EDITOR] Shutdown complete");

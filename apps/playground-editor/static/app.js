@@ -142,42 +142,43 @@ class UIFrameworkClient {
     }
     
     onConnect() {
-        console.log('Connected to server');
         this.reconnectAttempts = 0;
-        
+        this.sendLog('info', 'WebSocket connection established.');
+
         // DO NOT show UI yet - wait for channel discovery
         // Small delay to ensure WebSocket is fully ready
         setTimeout(() => {
-            console.log('Requesting channel manifest...');
+            this.sendLog('info', 'Requesting channel manifest from server...');
             // Request channel manifest to discover available channels
             // IMPORTANT: Do NOT send any other messages until channels are discovered
             this.requestChannelManifest();
         }, 100);
-        
+
         // DO NOT send any messages until we have discovered channels
         // The handleChannelManifest function will trigger the initial setup
     }
-    
+
     requestChannelManifest() {
         // Send RequestChannelManifest message on control channel (0)
         const packet = new ArrayBuffer(9); // No payload needed
         const view = new DataView(packet);
-        
+
         // Header (big-endian to match server)
         view.setUint16(0, 0, false);        // Channel 0 (control)
         view.setUint16(2, 8, false);        // Type 8 (RequestChannelManifest)
         view.setUint8(4, 2);                // Priority high
         view.setUint32(5, 0, false);        // No payload
-        
+
         try {
             this.ws.send(packet);
-            console.log('Requested channel manifest from server');
-            // Cannot use sendLog here - we haven't discovered channels yet!
+            // Use sendLog for visibility on the server dashboard
+            this.sendLog('debug', 'Channel manifest packet sent.');
         } catch (e) {
+            this.sendLog('error', `Failed to request channel manifest: ${e.message}`);
             console.error('Failed to request channel manifest:', e);
         }
     }
-    
+
     onMessage(event) {
         if (event.data instanceof ArrayBuffer) {
             this.handleBinaryMessage(event.data);
@@ -186,23 +187,23 @@ class UIFrameworkClient {
                 const msg = JSON.parse(event.data);
                 this.handleJsonMessage(msg);
             } catch (e) {
+                this.sendLog('error', `Failed to parse JSON message: ${e.message}`);
                 console.error('Failed to parse message:', e);
             }
         }
     }
-    
+
     handleBinaryMessage(data) {
         const view = new DataView(data);
-        
+
         // Parse packet header (big-endian to match server)
         const channelId = view.getUint16(0, false);
         const packetType = view.getUint16(2, false);
         const priority = view.getUint8(4);
-        const payloadSize = view.getUint32(5, false);  // Note: offset 5 is correct per Rust code
-        
+        const payloadSize = view.getUint32(5, false);
+
         // Check if this is a control channel message
         if (channelId === 0) {
-            // Control channel messages
             if (packetType === 9) { // ChannelManifest
                 this.handleChannelManifest(data, payloadSize);
             } else if (packetType === 10) { // ChannelRegistered
@@ -212,20 +213,15 @@ class UIFrameworkClient {
             }
             return;
         }
-        
+
         // Check if this is the UI channel (dynamically discovered)
         if (this.channelNames[channelId] === 'ui') {
-            // Extract payload
             const payload = new Uint8Array(data, 9, payloadSize);
-            
             this.sendLog('debug', `Received packet on UI channel ${channelId}: type ${packetType}, size ${payloadSize}`);
             
-            // Handle UI system packets
             if (packetType === 104) { // RenderBatch
-                this.sendLog('debug', `Calling renderFrame with ${payloadSize} bytes`);
                 this.renderFrame(payload);
             } else if (packetType === 106) { // RendererInit
-                this.sendLog('debug', `Calling initializeRenderer with ${payloadSize} bytes`);
                 this.initializeRenderer(payload);
             } else if (packetType === 107) { // RendererShutdown
                 this.shutdownRenderer();
@@ -236,17 +232,12 @@ class UIFrameworkClient {
             } else if (packetType === 110) { // UnloadResource
                 this.unloadResource(payload);
             } else {
-                console.log(`UI packet type ${packetType} on channel ${channelId}`);
                 this.sendLog('warning', `Unknown UI packet type ${packetType} on channel ${channelId}`);
             }
         }
         // Check if this is a UI Framework channel (dynamically discovered)
         else if (this.UI_FRAMEWORK_CHANNELS.includes(channelId)) {
-            
-            // Extract payload
             const payload = new Uint8Array(data, 9, payloadSize);
-            
-            // Handle based on packet type
             switch (packetType) {
                 case this.MSG_TYPES.RENDER_FRAME:
                     this.renderFrame(payload);
@@ -261,37 +252,37 @@ class UIFrameworkClient {
                     this.updateChat(payload);
                     break;
                 default:
-                    console.log(`Unknown packet type ${packetType} on channel ${channelId}`);
+                    this.sendLog('warning', `Unknown packet type ${packetType} on UI Framework channel ${channelId}`);
             }
         }
     }
-    
+
     handleJsonMessage(msg) {
         // Handle control messages
         if (msg.type === 'channel_registered') {
-            console.log(`Registered for channel ${msg.channel_id}`);
+            this.sendLog('info', `Registered for channel ${msg.channel_id}`);
             this.channels.add(msg.channel_id);
         }
     }
-    
+
     handleChannelManifest(data, payloadSize) {
-        // Extract payload
+        this.sendLog('info', 'Received ChannelManifest packet from server.');
         const payload = new Uint8Array(data, 9, payloadSize);
-        
+
         try {
             // Parse bincode-serialized ChannelManifest
             const manifest = this.deserializeChannelManifest(payload);
-            console.log('Received channel manifest:', manifest);
-            
+            this.sendLog('info', `Successfully parsed channel manifest: ${JSON.stringify(manifest.channels)}`);
+
             // Store channel mappings
             this.channelMap = manifest.channels || {};
-            
+
             // Build reverse mapping
             this.channelNames = {};
             for (const [name, id] of Object.entries(this.channelMap)) {
                 this.channelNames[id] = name;
             }
-            
+
             // Find UI Framework channels
             this.UI_FRAMEWORK_CHANNELS = [];
             for (const [name, id] of Object.entries(this.channelMap)) {
@@ -299,30 +290,30 @@ class UIFrameworkClient {
                     this.UI_FRAMEWORK_CHANNELS.push(id);
                 }
             }
-            
+
             // Set base channel if we found any
             if (this.UI_FRAMEWORK_CHANNELS.length > 0) {
                 this.UI_FRAMEWORK_BASE = Math.min(...this.UI_FRAMEWORK_CHANNELS);
             }
-            
-            // Log all discovered channels (using sendLog now that we have channels)
-            this.sendLog('info', `Received channel manifest with ${Object.keys(this.channelMap).length} channels`);
-            this.sendLog('info', `Channels: ${JSON.stringify(this.channelMap)}`);
+
+            // Log all discovered channels
+            this.sendLog('info', `Processed manifest with ${Object.keys(this.channelMap).length} channels.`);
+            this.sendLog('info', `Discovered channels: ${JSON.stringify(this.channelMap)}`);
             this.sendLog('info', `UI Framework channels: ${this.UI_FRAMEWORK_CHANNELS.join(', ')}`);
-            
+
             // NOW we can show the UI
             document.body.classList.add('ui-ready');
             document.getElementById('loading').style.display = 'none';
             document.getElementById('error').style.display = 'none';
             this.canvas.style.display = 'block';
-            
+
             // Send initial resize event to UI Framework Plugin
-            this.sendLog('info', 'Sending initial resize to UI Framework');
+            this.sendLog('info', 'Client initialized. Sending initial resize event.');
             this.handleResize();
-            
+
         } catch (e) {
+            this.sendLog('error', `Failed to parse channel manifest: ${e.message}`);
             console.error('Failed to parse channel manifest:', e);
-            // Can't use sendLog yet if parsing failed
         }
     }
     

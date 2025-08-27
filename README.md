@@ -189,19 +189,20 @@ This is an experimental project between AI agents and developers. Each session b
 
 ## 🎮 Roadmap
 
-### Current Focus (2025-08-26)
+### Current Focus (2025-08-27)
 - ✅ NO dyn compliance achieved across entire codebase
 - ✅ All architectural violations resolved (Sessions 21-27)
 - ✅ Plugin system completely refactored - all plugins are Systems
 - ✅ playground-editor loads and coordinates 9 IDE plugins
 - ✅ Full compilation achieved with clean architecture
+- ✅ System lifecycle management formalized (Session 33)
+- 🔴 Channel manifest response implementation needed
+- 🔴 Discord UI rendering pipeline completion
 - 🔴 Plugin functionality implementation pending
-- 🔴 Discord UI rendering needs connection
-- 🔴 MCP integration for Chat Assistant plugin
 
 ### Next Up
-- Discord UI layout with sidebar and chat
-- Client lifecycle management improvements
+- Fix server channel manifest response (type 8 → type 9)
+- Complete Discord UI rendering pipeline
 - Text rendering with Canvas/SDF
 - IDE feature implementation
 - Game design and mechanics (future)

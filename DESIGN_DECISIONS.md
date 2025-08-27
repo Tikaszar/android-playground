@@ -540,6 +540,55 @@ impl System for PluginName {
 - Better for network operations
 - Natural fit with tokio runtime
 
+### System Lifecycle Management (Session 33)
+**Decision**: Three-phase startup sequence for Systems and Plugins
+
+**Why**:
+- Resolves circular dependencies between plugin registration and core system initialization
+- NetworkingSystem needs all plugins registered to build channel manifest
+- Plugins need NetworkingSystem initialized to perform network operations
+- Clean separation of registration from initialization
+
+**Implementation**:
+```rust
+// Phase 1: Registration (no initialization)
+let plugin = UiFrameworkPlugin::new(systems.clone());
+world.register_plugin_system(Box::new(plugin)).await?;
+
+// Phase 2: Core System Initialization
+systems.initialize_all().await?;
+
+// Phase 3: Plugin Initialization
+world.initialize_all_plugins().await?;
+```
+
+**Lifecycle Phases**:
+1. **Registration Phase**: All plugins registered but NOT initialized
+   - Plugins added to World's plugin_systems collection
+   - No network operations or resource allocation
+   - Channel manifest can be built with all registered components
+
+2. **Core Initialization Phase**: Core systems (NetworkingSystem, UiSystem) initialize
+   - Server starts and network is ready
+   - Channel manifest callback configured with complete plugin list
+   - Dashboard and logging available
+
+3. **Plugin Initialization Phase**: All registered plugins initialize
+   - NetworkingSystem fully operational
+   - Plugins can safely register MCP tools
+   - Resources allocated and connections established
+
+**Shutdown Sequence**:
+- Reverse order: Plugins cleanup → Core cleanup → Deregistration
+- World::shutdown() handles coordinated teardown
+- Prevents resource leaks and ensures clean exit
+
+**Evolution**:
+1. Initially plugins initialized immediately after registration (WRONG)
+2. Caused "Not connected" errors when plugins tried network operations
+3. Recognized circular dependency in requirements
+4. Formalized three-phase lifecycle (Session 33)
+
 ## Rendering Decisions
 
 ### Separate core/rendering and systems/webgl

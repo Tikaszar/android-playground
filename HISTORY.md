@@ -2,6 +2,66 @@
 
 This file tracks the detailed history of development sessions, including achievements, bug fixes, and implementation progress.
 
+## Session: 2025-08-27 - System Lifecycle Formalization (Session 33)
+
+### Major Achievement: Fixed Circular Dependency in Startup
+
+#### Problem Identified
+The application was failing with "System error: Failed to register MCP tool 'ui_create_panel': Not connected" during startup.
+
+**Root Cause**: Circular dependency in the startup logic
+- **Requirement A**: NetworkingSystem needs all plugins registered to build complete channel manifest
+- **Requirement B**: Plugins need NetworkingSystem initialized to perform network operations (MCP tool registration)
+- The old code violated this by initializing plugins immediately after registration
+
+#### Solution Implemented: Three-Phase Startup Sequence
+
+**Phase 1: Registration**
+- All plugins created and registered WITHOUT initialization
+- Plugins added to World's new `plugin_systems` field
+- No network operations attempted
+
+**Phase 2: Core System Initialization**  
+- SystemsManager initializes all core systems (NetworkingSystem, UiSystem)
+- NetworkingSystem can now build complete channel manifest
+- Server starts and is ready for connections
+
+**Phase 3: Plugin Initialization**
+- World's new `initialize_all_plugins()` method called
+- All plugins initialize with NetworkingSystem ready
+- Plugins can safely register MCP tools and perform network operations
+
+#### Implementation Details
+
+1. **Modified World (systems/logic/src/world.rs)**:
+   ```rust
+   pub struct World {
+       // ... existing fields ...
+       plugin_systems: Shared<Vec<Box<dyn System>>>,
+   }
+   
+   // New methods:
+   pub async fn register_plugin_system(&mut self, system: Box<dyn System>)
+   pub async fn initialize_all_plugins(&mut self)
+   pub async fn shutdown(&mut self)
+   ```
+
+2. **Refactored main.rs**:
+   - Separated plugin creation from initialization
+   - Clear phase boundaries with logging
+   - Proper shutdown sequence
+
+3. **Architecture Pattern Established**:
+   - Registration ≠ Initialization
+   - Core systems initialize before plugins
+   - Clean lifecycle management
+
+### Build Status
+✅ **FULLY COMPILING** - Zero errors, minimal warnings
+
+### Key Learning
+**Lifecycle management is critical** - Complex systems with interdependencies need formalized startup/shutdown sequences. The three-phase approach (Register → Initialize Core → Initialize Plugins) resolves circular dependencies cleanly.
+
 ## Session: 2025-08-26 - Dynamic Channel Architecture Planning (Session 28)
 
 ### Major Architecture Understanding Achieved
