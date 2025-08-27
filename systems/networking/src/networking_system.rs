@@ -6,7 +6,11 @@ use crate::{
 };
 use playground_core_ecs::{World, EntityId, Component, ComponentData};
 use playground_core_types::{ChannelId, Priority, Shared, shared, Handle, handle};
-use std::sync::Arc;
+use std::future::Future;
+use std::pin::Pin;
+
+/// Type for channel manifest callback function
+pub type ChannelManifestCallback = Box<dyn Fn() -> Pin<Box<dyn Future<Output = Result<Vec<u8>, String>> + Send>> + Send + Sync>;
 
 /// Main networking system that Plugins interact with
 /// Now uses MessageBus for internal communication instead of WebSocket
@@ -18,9 +22,13 @@ pub struct NetworkingSystem {
     // Packet queue for batching (kept for compatibility)
     packet_queue: Shared<PacketQueue>,
     // Dashboard reference (only available after server starts)
-    dashboard: Option<Arc<playground_core_server::Dashboard>>,
+    dashboard: Option<Handle<playground_core_server::Dashboard>>,
     // MessageBus for internal system communication
-    message_bus: Option<Arc<playground_core_ecs::MessageBus>>,
+    message_bus: Option<Handle<playground_core_ecs::MessageBus>>,
+    // WebSocketState reference (for channel manifest)
+    websocket_state: Option<Handle<playground_core_server::WebSocketState>>,
+    // Callback to get channel manifest from SystemsManager
+    channel_manifest_callback: Option<Handle<ChannelManifestCallback>>,
 }
 
 impl NetworkingSystem {
@@ -34,11 +42,18 @@ impl NetworkingSystem {
             packet_queue: shared(PacketQueue::new()),
             dashboard: None,
             message_bus: None,
+            websocket_state: None,
+            channel_manifest_callback: None,
         })
     }
     
+    /// Set the channel manifest callback
+    pub fn set_channel_manifest_callback(&mut self, callback: ChannelManifestCallback) {
+        self.channel_manifest_callback = Some(handle(callback));
+    }
+    
     /// Get dashboard reference if available
-    pub async fn get_dashboard(&self) -> Option<Arc<playground_core_server::Dashboard>> {
+    pub async fn get_dashboard(&self) -> Option<Handle<playground_core_server::Dashboard>> {
         self.dashboard.clone()
     }
     
@@ -46,10 +61,11 @@ impl NetworkingSystem {
     pub async fn initialize(&mut self, _server_url: Option<String>) -> NetworkResult<()> {
         // Start the core server internally 
         // Note: We no longer connect via WebSocket - systems use MessageBus
-        match Self::start_core_server().await {
-            Ok((dashboard, message_bus)) => {
+        match Self::start_core_server(self.channel_manifest_callback.clone()).await {
+            Ok((dashboard, message_bus, websocket_state)) => {
                 self.dashboard = Some(dashboard);
                 self.message_bus = Some(message_bus);
+                self.websocket_state = Some(websocket_state);
             }
             Err(e) => {
                 eprintln!("Core server startup failed: {}", e);
@@ -301,7 +317,9 @@ impl NetworkingSystem {
     
     /// Start the core server internally (called by initialize)
     /// This version starts the server and returns immediately with the dashboard and message bus references
-    async fn start_core_server() -> Result<(Arc<playground_core_server::Dashboard>, Arc<playground_core_ecs::MessageBus>), Box<dyn std::error::Error>> {
+    async fn start_core_server(
+        channel_manifest_callback: Option<Handle<ChannelManifestCallback>>
+    ) -> Result<(Handle<playground_core_server::Dashboard>, Handle<playground_core_ecs::MessageBus>, Handle<playground_core_server::WebSocketState>), Box<dyn std::error::Error>> {
         use playground_core_server::{
             Dashboard, McpServer, WebSocketState, websocket_handler,
             list_plugins, reload_plugin, root,
@@ -312,9 +330,10 @@ impl NetworkingSystem {
         use tower_http::cors::CorsLayer;
         use tower_http::services::ServeDir;
         use tower_http::trace::TraceLayer;
+        use playground_core_types::handle;
         
         // Server creates and owns the dashboard
-        let dashboard = Arc::new(Dashboard::new());
+        let dashboard = handle(Dashboard::new());
         
         // Initialize log file
         if let Err(e) = dashboard.init_log_file().await {
@@ -325,13 +344,18 @@ impl NetworkingSystem {
         dashboard.clone().start_render_loop().await;
         
         // Create WebSocketState with the dashboard
-        let ws_state = Arc::new(WebSocketState::new_with_dashboard(dashboard.clone()));
+        let ws_state = handle(WebSocketState::new_with_dashboard(dashboard.clone()));
+        
+        // Set the channel manifest callback if provided
+        if let Some(callback) = channel_manifest_callback {
+            ws_state.set_channel_manifest_callback(callback).await;
+        }
         
         // Create MessageBus and MessageBridge to connect internal systems to WebSocket
         use playground_core_ecs::MessageBus;
         use playground_core_server::MessageBridge;
         
-        let message_bus = Arc::new(MessageBus::new());
+        let message_bus = handle(MessageBus::new());
         let message_bridge = MessageBridge::new(message_bus.clone(), ws_state.clone());
         
         // Setup standard channel bridges (UI on channel 10, etc.)
@@ -375,7 +399,7 @@ impl NetworkingSystem {
             .nest("/mcp", mcp_router)
             .layer(CorsLayer::permissive())
             .layer(TraceLayer::new_for_http())
-            .with_state(ws_state);
+            .with_state(ws_state.clone());
         
         // Return the dashboard reference before starting the server
         let dashboard_clone = dashboard.clone();
@@ -392,6 +416,6 @@ impl NetworkingSystem {
         // Give server a moment to fully start
         tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
         
-        Ok((dashboard_clone, message_bus))
+        Ok((dashboard_clone, message_bus, ws_state))
     }
 }

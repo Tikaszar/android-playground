@@ -5,6 +5,7 @@ use crate::ui_interface::UiInterface;
 use crate::rendering_interface::{RendererWrapper, RendererData};
 use std::collections::HashMap;
 use std::time::SystemTime;
+use serde::{Serialize, Deserialize};
 
 // Import other systems
 use playground_systems_networking::NetworkingSystem;
@@ -13,7 +14,7 @@ use playground_systems_ui::UiSystem;
 // use playground_systems_physics::PhysicsSystem; // Not yet implemented
 
 /// Type of channel registration
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum ChannelType {
     System,   // Core systems (ui, networking, etc.)
     Plugin,   // Plugin channels
@@ -21,7 +22,7 @@ pub enum ChannelType {
 }
 
 /// Metadata about a registered channel
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ChannelMetadata {
     pub name: String,
     pub channel_id: u16,
@@ -31,7 +32,7 @@ pub struct ChannelMetadata {
 }
 
 /// Channel manifest sent to browser for discovery
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ChannelManifest {
     pub version: u32,
     pub channels: HashMap<String, u16>,
@@ -140,6 +141,28 @@ impl SystemsManager {
     
     /// Initialize all systems
     pub async fn initialize_all(&self) -> LogicResult<()> {
+        // Set up the channel manifest callback before initializing networking
+        {
+            let mut networking = self.networking.write().await;
+            
+            // Create a weak reference to avoid circular dependency
+            let channel_registry = self.channel_registry.clone();
+            
+            // Set the callback that will provide channel manifest
+            use playground_systems_networking::ChannelManifestCallback;
+            let callback: ChannelManifestCallback = Box::new(move || {
+                let registry = channel_registry.clone();
+                Box::pin(async move {
+                    let reg = registry.read().await;
+                    let manifest = reg.generate_manifest();
+                    bincode::serialize(&manifest)
+                        .map_err(|e| format!("Failed to serialize manifest: {}", e))
+                })
+            });
+            
+            networking.set_channel_manifest_callback(callback);
+        }
+        
         // Initialize NetworkingSystem
         // It will start core/server internally if not already running
         let mut networking = self.networking.write().await;
@@ -325,6 +348,13 @@ impl SystemsManager {
     pub async fn get_channel_manifest(&self) -> ChannelManifest {
         let registry = self.channel_registry.read().await;
         registry.generate_manifest()
+    }
+    
+    /// Get serialized channel manifest for sending to browser
+    pub async fn get_channel_manifest_bytes(&self) -> LogicResult<Vec<u8>> {
+        let manifest = self.get_channel_manifest().await;
+        bincode::serialize(&manifest)
+            .map_err(|e| LogicError::SystemError(format!("Failed to serialize manifest: {}", e)))
     }
     
     /// Get channel ID by name

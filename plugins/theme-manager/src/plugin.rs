@@ -1,19 +1,18 @@
 use async_trait::async_trait;
-use playground_systems_logic::{System, World, LogicResult, SystemsManager};
-use std::sync::Arc;
+use playground_systems_logic::{System, World, LogicResult, SystemsManager, Handle};
 use tracing::{info, debug};
 
 pub struct ThemeManagerPlugin {
-    channel_id: u16,
-    systems_manager: Arc<SystemsManager>,
+    channel_id: Option<u16>,
+    systems_manager: Handle<SystemsManager>,
     // ThemeManagerPlugin-specific fields
     // e.g., language_servers: HashMap<String, LspConnection>
 }
 
 impl ThemeManagerPlugin {
-    pub fn new(systems_manager: Arc<SystemsManager>) -> Self {
+    pub fn new(systems_manager: Handle<SystemsManager>) -> Self {
         Self {
-            channel_id: 1007,
+            channel_id: None,
             systems_manager,
         }
     }
@@ -32,8 +31,10 @@ impl System for ThemeManagerPlugin {
     }
     
     async fn initialize(&mut self, _world: &World) -> LogicResult<()> {
-        info!("ThemeManager Plugin initializing on channel {}", self.channel_id);
+        // Request dynamic channel allocation
+        self.channel_id = Some(self.systems_manager.register_plugin("theme-manager").await?);
         
+        info!("ThemeManager Plugin initialized on dynamic channel {}", self.channel_id.unwrap());
         
         // Plugin-specific initialization
         self.setup().await?;

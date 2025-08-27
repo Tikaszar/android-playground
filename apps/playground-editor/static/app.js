@@ -143,24 +143,22 @@ class UIFrameworkClient {
         console.log('Connected to server');
         this.reconnectAttempts = 0;
         
-        // Request channel manifest to discover available channels
-        this.requestChannelManifest();
-        
         // Hide loading, show canvas
         document.body.classList.add('ui-ready');
         document.getElementById('loading').style.display = 'none';
         document.getElementById('error').style.display = 'none';
         this.canvas.style.display = 'block';
         
-        // Wait a bit for WebSocket to fully stabilize before sending first message
-        // This avoids race condition with async connection establishment
-        
-        // Send connection log to server
-        this.sendLog('info', 'Browser connected and requesting channel manifest');
+        // Small delay to ensure WebSocket is fully ready
         setTimeout(() => {
-            // Send initial resize event to UI Framework Plugin
-            this.handleResize();
+            console.log('Requesting channel manifest...');
+            // Request channel manifest to discover available channels
+            // IMPORTANT: Do NOT send any other messages until channels are discovered
+            this.requestChannelManifest();
         }, 100);
+        
+        // DO NOT send any messages until we have discovered channels
+        // The handleChannelManifest function will trigger the initial setup
     }
     
     requestChannelManifest() {
@@ -177,7 +175,7 @@ class UIFrameworkClient {
         try {
             this.ws.send(packet);
             console.log('Requested channel manifest from server');
-            this.sendLog('debug', 'Requested channel manifest');
+            // Cannot use sendLog here - we haven't discovered channels yet!
         } catch (e) {
             console.error('Failed to request channel manifest:', e);
         }
@@ -223,7 +221,7 @@ class UIFrameworkClient {
             // Extract payload
             const payload = new Uint8Array(data, 9, payloadSize);
             
-            this.sendLog('debug', `Received packet on channel 10: type ${packetType}, size ${payloadSize}`);
+            this.sendLog('debug', `Received packet on UI channel ${channelId}: type ${packetType}, size ${payloadSize}`);
             
             // Handle UI system packets
             if (packetType === 104) { // RenderBatch
@@ -280,11 +278,10 @@ class UIFrameworkClient {
     handleChannelManifest(data, payloadSize) {
         // Extract payload
         const payload = new Uint8Array(data, 9, payloadSize);
-        const decoder = new TextDecoder();
-        const manifestJson = decoder.decode(payload);
         
         try {
-            const manifest = JSON.parse(manifestJson);
+            // Parse bincode-serialized ChannelManifest
+            const manifest = this.deserializeChannelManifest(payload);
             console.log('Received channel manifest:', manifest);
             this.sendLog('info', `Received channel manifest with ${Object.keys(manifest.channels || {}).length} channels`);
             
@@ -314,6 +311,12 @@ class UIFrameworkClient {
             // Log all discovered channels
             console.log('Channel mappings:', this.channelMap);
             console.log('UI Framework channels:', this.UI_FRAMEWORK_CHANNELS);
+            
+            // NOW we can send initial messages since we have discovered channels
+            this.sendLog('info', 'Channels discovered, initializing UI');
+            
+            // Send initial resize event to UI Framework Plugin
+            this.handleResize();
             
         } catch (e) {
             console.error('Failed to parse channel manifest:', e);
@@ -579,6 +582,52 @@ class UIFrameworkClient {
         };
     }
     
+    // Deserialize bincode ChannelManifest
+    deserializeChannelManifest(payload) {
+        const view = new DataView(payload.buffer, payload.byteOffset, payload.byteLength);
+        let offset = 0;
+        
+        // ChannelManifest struct:
+        // version: u32
+        // channels: HashMap<String, u16>
+        // metadata: HashMap<u16, ChannelMetadata>
+        
+        // Read version (u32)
+        const version = view.getUint32(offset, true);
+        offset += 4;
+        
+        // Read channels HashMap length (u64)
+        const channelsLen = Number(view.getBigUint64(offset, true));
+        offset += 8;
+        
+        const channels = {};
+        for (let i = 0; i < channelsLen; i++) {
+            // Read string key length (u64)
+            const keyLen = Number(view.getBigUint64(offset, true));
+            offset += 8;
+            
+            // Read string key bytes
+            const keyBytes = new Uint8Array(payload.buffer, payload.byteOffset + offset, keyLen);
+            const key = new TextDecoder().decode(keyBytes);
+            offset += keyLen;
+            
+            // Read u16 value
+            const value = view.getUint16(offset, true);
+            offset += 2;
+            
+            channels[key] = value;
+        }
+        
+        // Skip metadata for now - we only need the channels mapping
+        // The metadata HashMap would follow the same pattern but with more complex values
+        
+        return {
+            version: version,
+            channels: channels,
+            metadata: {} // We can skip parsing this for now
+        };
+    }
+    
     // executeRenderCommands removed - now handled by WebGL renderer
     
     updateUI(payload) {
@@ -768,7 +817,7 @@ class UIFrameworkClient {
     }
     
     // Browser doesn't need to register channels - it's a client
-    // The UI Framework Plugin (server-side) handles messages on channels 1200-1209
+    // The UI Framework Plugin (server-side) handles messages on dynamically allocated channels
     // We just send messages to those channels
     
     onError(error) {

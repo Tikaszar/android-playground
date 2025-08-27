@@ -1,7 +1,6 @@
 use async_trait::async_trait;
-use playground_systems_logic::{System, World, LogicResult, SystemsManager};
+use playground_systems_logic::{System, World, LogicResult, SystemsManager, Handle};
 use std::path::PathBuf;
-use std::sync::Arc;
 use tokio::sync::mpsc;
 use tracing::{info, error, debug, warn};
 
@@ -13,19 +12,19 @@ pub struct FileBrowserPlugin {
     fs_handler: Option<FileSystemHandler>,
     file_watcher: Option<FileWatcher>,
     event_receiver: Option<mpsc::UnboundedReceiver<FileTreeEvent>>,
-    channel_id: u16,
+    channel_id: Option<u16>,
     root_path: PathBuf,
-    systems_manager: Arc<SystemsManager>,
+    systems_manager: Handle<SystemsManager>,
 }
 
 impl FileBrowserPlugin {
-    pub fn new(systems_manager: Arc<SystemsManager>) -> Self {
+    pub fn new(systems_manager: Handle<SystemsManager>) -> Self {
         Self {
             file_tree: None,
             fs_handler: None,
             file_watcher: None,
             event_receiver: None,
-            channel_id: 1001,  // File browser uses channel 1001
+            channel_id: None,  // Will be assigned dynamically
             root_path: PathBuf::from("."),
             systems_manager,
         }
@@ -162,8 +161,10 @@ impl System for FileBrowserPlugin {
     }
     
     async fn initialize(&mut self, _world: &World) -> LogicResult<()> {
-        info!("File Browser Plugin initializing on channel {}", self.channel_id);
+        // Request dynamic channel allocation
+        self.channel_id = Some(self.systems_manager.register_plugin("file-browser").await?);
         
+        info!("File Browser Plugin initialized on dynamic channel {}", self.channel_id.unwrap());
         
         // Initialize file tree
         self.initialize_file_tree().await?;

@@ -1,19 +1,18 @@
 use async_trait::async_trait;
-use playground_systems_logic::{System, World, LogicResult, SystemsManager};
-use std::sync::Arc;
+use playground_systems_logic::{System, World, LogicResult, SystemsManager, Handle};
 use tracing::{info, debug};
 
 pub struct DebuggerPlugin {
-    channel_id: u16,
-    systems_manager: Arc<SystemsManager>,
+    channel_id: Option<u16>,
+    systems_manager: Handle<SystemsManager>,
     // DebuggerPlugin-specific fields
     // e.g., language_servers: HashMap<String, LspConnection>
 }
 
 impl DebuggerPlugin {
-    pub fn new(systems_manager: Arc<SystemsManager>) -> Self {
+    pub fn new(systems_manager: Handle<SystemsManager>) -> Self {
         Self {
-            channel_id: 1004,
+            channel_id: None,
             systems_manager,
         }
     }
@@ -32,8 +31,10 @@ impl System for DebuggerPlugin {
     }
     
     async fn initialize(&mut self, _world: &World) -> LogicResult<()> {
-        info!("Debugger Plugin initializing on channel {}", self.channel_id);
+        // Request dynamic channel allocation
+        self.channel_id = Some(self.systems_manager.register_plugin("debugger").await?);
         
+        info!("Debugger Plugin initialized on dynamic channel {}", self.channel_id.unwrap());
         
         // Plugin-specific initialization
         self.setup().await?;

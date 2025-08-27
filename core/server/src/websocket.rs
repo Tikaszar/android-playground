@@ -8,7 +8,6 @@ use axum::{
     extract::{ws::{WebSocket, WebSocketUpgrade, Message}, State},
     response::Response,
 };
-use std::sync::Arc;
 use std::collections::HashMap;
 use playground_core_types::{Handle, handle, Shared, shared};
 use futures_util::{StreamExt, SinkExt};
@@ -16,6 +15,8 @@ use bytes::{Bytes, BytesMut, BufMut};
 // Dashboard logging is used instead of tracing
 use tokio::time;
 use serde_json::Value;
+use std::future::Future;
+use std::pin::Pin;
 
 /// MCP Tool definition
 #[derive(Clone, Debug)]
@@ -26,6 +27,9 @@ pub struct McpTool {
     pub handler_channel: u16, // Channel to forward tool calls to
 }
 
+/// Type for channel manifest callback function
+pub type ChannelManifestCallback = Box<dyn Fn() -> Pin<Box<dyn Future<Output = Result<Vec<u8>, String>> + Send>> + Send + Sync>;
+
 pub struct WebSocketState {
     pub channel_manager: Handle<ChannelManager>,
     pub batcher: Handle<FrameBatcher>,
@@ -33,6 +37,7 @@ pub struct WebSocketState {
     pub mcp_tools: Shared<HashMap<String, McpTool>>, // Dynamic MCP tool registry
     pub dashboard: Handle<Dashboard>,
     broadcast_task_started: Shared<bool>, // Track if broadcast task is running
+    channel_manifest_callback: Shared<Option<Handle<ChannelManifestCallback>>>, // Callback to get channel manifest
 }
 
 pub struct WebSocketConnection {
@@ -58,6 +63,7 @@ impl WebSocketState {
             mcp_tools: shared(HashMap::new()),
             dashboard,
             broadcast_task_started: shared(false),
+            channel_manifest_callback: shared(None),
         }
     }
     
@@ -69,7 +75,14 @@ impl WebSocketState {
             mcp_tools: shared(HashMap::new()),
             dashboard,
             broadcast_task_started: shared(false),
+            channel_manifest_callback: shared(None),
         }
+    }
+    
+    /// Set the channel manifest callback
+    pub async fn set_channel_manifest_callback(&self, callback: Handle<ChannelManifestCallback>) {
+        let mut cb = self.channel_manifest_callback.write().await;
+        *cb = Some(callback);
     }
     
     /// Start the global broadcast task that prepares packets for all clients
@@ -404,6 +417,47 @@ async fn handle_control_message(packet: Packet, state: &WebSocketState) -> anyho
             let channels = state.channel_manager.list_channels().await;
             let response = create_list_response(channels);
             state.batcher.queue_packet(response).await;
+        }
+        ControlMessageType::RequestChannelManifest => {
+            // Get the channel manifest callback and call it
+            let callback_opt = state.channel_manifest_callback.read().await;
+            if let Some(ref callback) = *callback_opt {
+                // Call the callback to get the manifest bytes
+                match callback().await {
+                    Ok(manifest_bytes) => {
+                        // Send the manifest back to the client
+                        let response = Packet::new(
+                            0,
+                            ControlMessageType::ChannelManifest as u16,
+                            Priority::High,
+                            Bytes::from(manifest_bytes),
+                        );
+                        state.batcher.queue_packet(response).await;
+                        state.dashboard.log(
+                            crate::dashboard::LogLevel::Info,
+                            "Sent channel manifest to browser".to_string(),
+                            None
+                        ).await;
+                    }
+                    Err(e) => {
+                        let error = create_error_response(format!("Failed to get channel manifest: {}", e));
+                        state.batcher.queue_packet(error).await;
+                        state.dashboard.log_error(
+                            format!("Failed to get channel manifest: {}", e),
+                            None
+                        ).await;
+                    }
+                }
+            } else {
+                // No manifest callback set, return empty manifest
+                state.dashboard.log(
+                    crate::dashboard::LogLevel::Warning,
+                    "Channel manifest requested but no callback set".to_string(),
+                    None
+                ).await;
+                let error = create_error_response("Channel manifest not available".to_string());
+                state.batcher.queue_packet(error).await;
+            }
         }
         _ => {
             // Ignoring unhandled control message type
