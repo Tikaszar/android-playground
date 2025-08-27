@@ -1,4 +1,4 @@
-use super::core::UiSystem;
+use crate::system::UiSystem;
 use crate::error::{UiError, UiResult};
 use crate::element::ElementId;
 use playground_core_ecs::EntityId;

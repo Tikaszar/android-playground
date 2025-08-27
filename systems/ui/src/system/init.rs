@@ -1,4 +1,4 @@
-use super::core::UiSystem;
+use crate::system::UiSystem;
 use crate::error::{UiError, UiResult};
 use crate::components::*;
 use playground_core_ecs::{Component, EntityId};
@@ -141,59 +141,5 @@ impl UiSystem {
         ).await.map_err(|e| UiError::EcsError(e.to_string()))?;
         
         Ok(entity)
-    }
-    
-    pub async fn initialize_client_renderer(&self, client_id: usize) -> UiResult<()> {
-        use crate::messages::{RendererInitMessage, ViewportConfig, BlendMode, ShaderProgram, UiPacketType};
-        use playground_core_server::Priority;
-        
-        let init_msg = RendererInitMessage {
-            viewport: ViewportConfig {
-                width: self.viewport.width,
-                height: self.viewport.height,
-                device_pixel_ratio: 1.0,
-            },
-            clear_color: [0.133, 0.137, 0.153, 1.0],
-            blend_mode: BlendMode::Normal,
-            shaders: vec![
-                ShaderProgram {
-                    id: "quad".to_string(),
-                    vertex_source: self.get_quad_vertex_shader(),
-                    fragment_source: self.get_quad_fragment_shader(),
-                },
-                ShaderProgram {
-                    id: "line".to_string(),
-                    vertex_source: self.get_line_vertex_shader(),
-                    fragment_source: self.get_line_fragment_shader(),
-                },
-                ShaderProgram {
-                    id: "text".to_string(),
-                    vertex_source: self.get_text_vertex_shader(),
-                    fragment_source: self.get_text_fragment_shader(),
-                },
-            ],
-        };
-        
-        let data = bincode::serialize(&init_msg)
-            .map_err(|e| UiError::SerializationError(e.to_string()))?;
-        
-        if let Some(ref networking) = self.networking_system {
-            let networking = networking.read().await;
-            networking.send_packet(self.channel_id, UiPacketType::RendererInit as u16, data, Priority::High)
-                .await
-                .map_err(|e| UiError::SerializationError(format!("Failed to send init packet: {}", e)))?;
-            
-            let dashboard = networking.get_dashboard().await;
-            
-            if let Some(dashboard) = dashboard {
-                dashboard.log(
-                    playground_core_server::dashboard::LogLevel::Info,
-                    format!("Initialized renderer for client {}", client_id),
-                    Some(client_id)
-                ).await;
-            }
-        }
-        
-        Ok(())
     }
 }

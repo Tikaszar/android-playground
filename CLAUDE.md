@@ -206,3 +206,5 @@ http://localhost:8080/mcp
 - Read a file fully during a read, not partially, so it can easily be referenced later.
 - No dyn, No any, No turbofish, No unsafe
 - Use Shared<> for Internal, Handle<> for External
+- Never use Super
+- Do not cheat and search with Bash using grep, NO Searching!
