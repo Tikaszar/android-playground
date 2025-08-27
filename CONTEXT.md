@@ -11,6 +11,34 @@
 **Browser**: 🟡 Partially working - connects but manifest not received
 **Lifecycle**: ✅ Fixed circular dependency in startup
 
+### Session 34 Accomplishments
+
+#### ✅ COMPLETED: Fixed Channel Manifest for Browser Discovery
+- **Issue**: Browser wasn't receiving channel manifest because plugins weren't registered in SystemsManager's ChannelRegistry
+- **Root Cause**: Plugins registered with World but not with SystemsManager during Phase 1
+- **Solution**: 
+  - Modified main.rs to call `systems.register_plugin()` for each plugin during Phase 1
+  - This populates ChannelRegistry BEFORE NetworkingSystem initialization
+  - Channel manifest callback now returns complete list of all channels
+  
+- **Implementation**:
+  - Each plugin gets `systems.register_plugin(name)` call in Phase 1
+  - SystemsManager allocates dynamic channels starting from 1
+  - Channel manifest includes all registered channels for browser discovery
+  - Browser can now properly discover ui-framework, editor-core, etc.
+
+#### ✅ COMPLETED: Dashboard Channel Display
+- **Added channel display to dashboard** showing:
+  - Status dots (🟢 Active, 🟡 Idle, ⚫ Inactive)
+  - Channel ID and type (C=Control, S=System, P=Plugin, M=Session)
+  - Channels displayed on right side of dashboard for mobile visibility
+  - Automatic status updates based on activity
+  
+- **Dashboard Integration**:
+  - SystemsManager reports channels to Dashboard when registered
+  - Dashboard tracks channel activity and updates status
+  - Two-column layout optimized for mobile Termux display
+
 ### Session 33 Accomplishments
 
 #### ✅ COMPLETED: Fixed Circular Dependency in Startup

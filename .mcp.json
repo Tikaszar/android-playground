@@ -1,5 +1,11 @@
 {
   "mcpServers": {
+    "ccusage": {
+      "type":"stdio",
+      "command": "npx",
+      "args": ["ccusage@latest", "mcp"],
+      "env": {}
+     },
     "android-playground": {
       "type": "http",
       "url": "http://localhost:8080/mcp",

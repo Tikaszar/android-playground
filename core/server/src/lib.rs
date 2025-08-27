@@ -13,5 +13,5 @@ pub use batcher::FrameBatcher;
 pub use websocket::{WebSocketState, websocket_handler};
 pub use mcp::McpServer;
 pub use handlers::{list_plugins, reload_plugin, root};
-pub use dashboard::Dashboard;
+pub use dashboard::{Dashboard, ChannelType as DashboardChannelType};
 pub use bridge::{MessageBridge, WebSocketBroadcaster};

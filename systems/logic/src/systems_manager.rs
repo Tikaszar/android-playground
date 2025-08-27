@@ -201,6 +201,12 @@ impl SystemsManager {
             registry.allocate_channel("ui".to_string(), ChannelType::System)?
         };
         
+        // Register UI system with dashboard
+        if let Some(ref dashboard) = dashboard {
+            use playground_core_server::dashboard::ChannelType as DashChannelType;
+            dashboard.register_channel(ui_channel, "ui".to_string(), DashChannelType::System).await;
+        }
+        
         // Register UI system with networking using dynamic channel
         let _ui_channel = networking.register_system_channel("ui", ui_channel).await
             .map_err(|e| LogicError::InitializationFailed(format!("Failed to register UI channel: {}", e)))?;
@@ -338,13 +344,39 @@ impl SystemsManager {
     /// Register a system and get its dynamically allocated channel
     pub async fn register_system(&self, name: &str) -> LogicResult<u16> {
         let mut registry = self.channel_registry.write().await;
-        registry.allocate_channel(name.to_string(), ChannelType::System)
+        let channel_id = registry.allocate_channel(name.to_string(), ChannelType::System)?;
+        
+        // Report to dashboard if available
+        let networking = self.networking.read().await;
+        if let Some(dashboard) = networking.get_dashboard().await {
+            use playground_core_server::dashboard::ChannelType as DashChannelType;
+            dashboard.register_channel(
+                channel_id, 
+                name.to_string(),
+                DashChannelType::System
+            ).await;
+        }
+        
+        Ok(channel_id)
     }
     
     /// Register a plugin and get its dynamically allocated channel
     pub async fn register_plugin(&self, name: &str) -> LogicResult<u16> {
         let mut registry = self.channel_registry.write().await;
-        registry.allocate_channel(name.to_string(), ChannelType::Plugin)
+        let channel_id = registry.allocate_channel(name.to_string(), ChannelType::Plugin)?;
+        
+        // Report to dashboard if available
+        let networking = self.networking.read().await;
+        if let Some(dashboard) = networking.get_dashboard().await {
+            use playground_core_server::dashboard::ChannelType as DashChannelType;
+            dashboard.register_channel(
+                channel_id,
+                name.to_string(), 
+                DashChannelType::Plugin
+            ).await;
+        }
+        
+        Ok(channel_id)
     }
     
     /// Get channel manifest for browser discovery

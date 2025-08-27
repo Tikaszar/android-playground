@@ -208,3 +208,4 @@ http://localhost:8080/mcp
 - Use Shared<> for Internal, Handle<> for External
 - Never use Super
 - Do not cheat and search with Bash using grep, NO Searching!
+- Use ccusage MCP to check your usage for the current 5-hour block. Tell me when you hit the next $10 increment or so, we can move to the next session.

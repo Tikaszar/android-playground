@@ -36,70 +36,87 @@ async fn main() -> Result<()> {
     // This ensures all plugins are known before any initialization happens
     eprintln!("[EDITOR] Phase 1: Registering IDE plugins...");
 
-    // 1. UI Framework - Discord-style mobile UI
+    // CRITICAL: Register plugin channels with SystemsManager's ChannelRegistry
+    // This must happen BEFORE core initialization so the channel manifest is complete
+    
+    // 1. UI Framework - Discord-style mobile UI (gets multiple channels)
     {
+        // Register main UI Framework channel and sub-channels
+        let ui_framework_base = systems.register_plugin("ui-framework").await?;
+        for i in 1..10 {
+            let _sub_channel = systems.register_plugin(&format!("ui-framework-{}", i)).await?;
+        }
+        
         let plugin = UiFrameworkPlugin::new(systems.clone());
         world.write().await.register_plugin_system(Box::new(plugin)).await?;
-        eprintln!("[EDITOR] ✓ UiFrameworkPlugin registered (not initialized)");
+        eprintln!("[EDITOR] ✓ UiFrameworkPlugin registered with channel {} (not initialized)", ui_framework_base);
     }
 
     // 2. Editor Core - Text editing with vim mode
     {
+        let channel = systems.register_plugin("editor-core").await?;
         let plugin = EditorCorePlugin::new(systems.clone());
         world.write().await.register_plugin_system(Box::new(plugin)).await?;
-        eprintln!("[EDITOR] ✓ EditorCorePlugin registered (not initialized)");
+        eprintln!("[EDITOR] ✓ EditorCorePlugin registered with channel {} (not initialized)", channel);
     }
 
     // 3. File Browser - File navigation
     {
+        let channel = systems.register_plugin("file-browser").await?;
         let plugin = FileBrowserPlugin::new(systems.clone());
         world.write().await.register_plugin_system(Box::new(plugin)).await?;
-        eprintln!("[EDITOR] ✓ FileBrowserPlugin registered (not initialized)");
+        eprintln!("[EDITOR] ✓ FileBrowserPlugin registered with channel {} (not initialized)", channel);
     }
 
     // 4. Terminal - Termux integration
     {
+        let channel = systems.register_plugin("terminal").await?;
         let plugin = TerminalPlugin::new(systems.clone());
         world.write().await.register_plugin_system(Box::new(plugin)).await?;
-        eprintln!("[EDITOR] ✓ TerminalPlugin registered (not initialized)");
+        eprintln!("[EDITOR] ✓ TerminalPlugin registered with channel {} (not initialized)", channel);
     }
 
     // 5. LSP Client - Language server protocol
     {
+        let channel = systems.register_plugin("lsp-client").await?;
         let plugin = LspClientPlugin::new(systems.clone());
         world.write().await.register_plugin_system(Box::new(plugin)).await?;
-        eprintln!("[EDITOR] ✓ LspClientPlugin registered (not initialized)");
+        eprintln!("[EDITOR] ✓ LspClientPlugin registered with channel {} (not initialized)", channel);
     }
 
     // 6. Debugger - Debug support
     {
+        let channel = systems.register_plugin("debugger").await?;
         let plugin = DebuggerPlugin::new(systems.clone());
         world.write().await.register_plugin_system(Box::new(plugin)).await?;
-        eprintln!("[EDITOR] ✓ DebuggerPlugin registered (not initialized)");
+        eprintln!("[EDITOR] ✓ DebuggerPlugin registered with channel {} (not initialized)", channel);
     }
 
     // 7. Chat Assistant - MCP/LLM integration
     {
+        let channel = systems.register_plugin("chat-assistant").await?;
         let plugin = ChatAssistantPlugin::new(systems.clone());
         world.write().await.register_plugin_system(Box::new(plugin)).await?;
-        eprintln!("[EDITOR] ✓ ChatAssistantPlugin registered (not initialized)");
+        eprintln!("[EDITOR] ✓ ChatAssistantPlugin registered with channel {} (not initialized)", channel);
     }
 
     // 8. Version Control - Git integration
     {
+        let channel = systems.register_plugin("version-control").await?;
         let plugin = VersionControlPlugin::new(systems.clone());
         world.write().await.register_plugin_system(Box::new(plugin)).await?;
-        eprintln!("[EDITOR] ✓ VersionControlPlugin registered (not initialized)");
+        eprintln!("[EDITOR] ✓ VersionControlPlugin registered with channel {} (not initialized)", channel);
     }
 
     // 9. Theme Manager - UI theming
     {
+        let channel = systems.register_plugin("theme-manager").await?;
         let plugin = ThemeManagerPlugin::new(systems.clone());
         world.write().await.register_plugin_system(Box::new(plugin)).await?;
-        eprintln!("[EDITOR] ✓ ThemeManagerPlugin registered (not initialized)");
+        eprintln!("[EDITOR] ✓ ThemeManagerPlugin registered with channel {} (not initialized)", channel);
     }
 
-    eprintln!("[EDITOR] Phase 1 complete: All IDE plugins registered!");
+    eprintln!("[EDITOR] Phase 1 complete: All IDE plugins registered with dynamic channels!");
 
     // Phase 2: CORE INITIALIZATION - Initialize core engine systems
     // Now that all plugins are registered, the NetworkingSystem can build
@@ -113,16 +130,13 @@ async fn main() -> Result<()> {
     eprintln!("[EDITOR] Phase 3: Initializing all plugins...");
     world.write().await.initialize_all_plugins().await?;
     eprintln!("[EDITOR] Phase 3 complete: All plugins initialized!");
-    eprintln!("[EDITOR] Channel allocations:");
-    eprintln!("  - 1000: Editor Core");
-    eprintln!("  - 1001: File Browser");
-    eprintln!("  - 1002: Terminal");
-    eprintln!("  - 1003: LSP Client");
-    eprintln!("  - 1004: Debugger");
-    eprintln!("  - 1005: Chat Assistant (MCP)");
-    eprintln!("  - 1006: Version Control");
-    eprintln!("  - 1007: Theme Manager");
-    eprintln!("  - 1200-1209: UI Framework");
+    
+    // Display the dynamically allocated channels
+    eprintln!("[EDITOR] Dynamic channel allocations:");
+    let manifest = systems.get_channel_manifest().await;
+    for (name, channel) in &manifest.channels {
+        eprintln!("  - {}: {}", channel, name);
+    }
     
     // Start the main update loop that runs all Systems (including plugins)
     let world_for_update = world.clone();

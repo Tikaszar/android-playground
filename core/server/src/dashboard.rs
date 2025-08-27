@@ -90,6 +90,50 @@ impl LogLevel {
     }
 }
 
+/// Channel info for dashboard display
+#[derive(Clone, Debug)]
+pub struct DashboardChannelInfo {
+    pub name: String,
+    pub channel_id: u16,
+    pub channel_type: ChannelType,
+    pub status: ChannelStatus,
+    pub registered_at: Instant,
+    pub last_activity: Option<Instant>,
+}
+
+#[derive(Clone, Debug)]
+pub enum ChannelType {
+    Control,
+    System,
+    Plugin,
+    Session,
+}
+
+#[derive(Clone, Debug)]
+pub enum ChannelStatus {
+    Active,
+    Idle,
+    Inactive,
+}
+
+impl ChannelStatus {
+    pub fn as_emoji(&self) -> &str {
+        match self {
+            ChannelStatus::Active => "🟢",
+            ChannelStatus::Idle => "🟡",
+            ChannelStatus::Inactive => "⚫",
+        }
+    }
+    
+    pub fn as_color_code(&self) -> &str {
+        match self {
+            ChannelStatus::Active => "\x1b[92m",    // Bright green
+            ChannelStatus::Idle => "\x1b[93m",       // Yellow
+            ChannelStatus::Inactive => "\x1b[90m",   // Gray
+        }
+    }
+}
+
 pub struct Dashboard {
     clients: Shared<HashMap<usize, ClientInfo>>,
     temp_clients: Shared<HashMap<usize, ClientInfo>>,  // Unverified connections
@@ -102,10 +146,22 @@ pub struct Dashboard {
     recent_logs: Shared<VecDeque<LogEntry>>,
     log_file: Shared<Option<tokio::fs::File>>,
     max_log_entries: usize,
+    channels: Shared<HashMap<u16, DashboardChannelInfo>>,  // Channel registry for display
 }
 
 impl Dashboard {
     pub fn new() -> Self {
+        // Initialize with control channel (0) always present
+        let mut initial_channels = HashMap::new();
+        initial_channels.insert(0, DashboardChannelInfo {
+            name: "control".to_string(),
+            channel_id: 0,
+            channel_type: ChannelType::Control,
+            status: ChannelStatus::Active,
+            registered_at: Instant::now(),
+            last_activity: Some(Instant::now()),
+        });
+        
         Self {
             clients: shared(HashMap::new()),
             temp_clients: shared(HashMap::new()),
@@ -118,6 +174,7 @@ impl Dashboard {
             recent_logs: shared(VecDeque::with_capacity(100)),
             log_file: shared(None),
             max_log_entries: 10, // Show last 10 logs in dashboard
+            channels: shared(initial_channels),
         }
     }
     
@@ -300,6 +357,56 @@ impl Dashboard {
         ).await;
     }
     
+    /// Register a channel with the dashboard
+    pub async fn register_channel(&self, channel_id: u16, name: String, channel_type: ChannelType) {
+        let mut channels = self.channels.write().await;
+        channels.insert(channel_id, DashboardChannelInfo {
+            name: name.clone(),
+            channel_id,
+            channel_type,
+            status: ChannelStatus::Inactive,
+            registered_at: Instant::now(),
+            last_activity: None,
+        });
+        
+        // Log channel registration
+        self.log(
+            LogLevel::Info,
+            format!("Channel registered: {} (ID: {})", name, channel_id),
+            None
+        ).await;
+    }
+    
+    /// Update channel activity status
+    pub async fn update_channel_activity(&self, channel_id: u16) {
+        let mut channels = self.channels.write().await;
+        if let Some(channel) = channels.get_mut(&channel_id) {
+            channel.last_activity = Some(Instant::now());
+            channel.status = ChannelStatus::Active;
+        }
+    }
+    
+    /// Update all channel statuses based on activity
+    pub async fn update_channel_statuses(&self) {
+        let mut channels = self.channels.write().await;
+        let now = Instant::now();
+        
+        for channel in channels.values_mut() {
+            if let Some(last_activity) = channel.last_activity {
+                let idle_time = now.duration_since(last_activity);
+                if idle_time > Duration::from_secs(60) {
+                    channel.status = ChannelStatus::Inactive;
+                } else if idle_time > Duration::from_secs(10) {
+                    channel.status = ChannelStatus::Idle;
+                } else {
+                    channel.status = ChannelStatus::Active;
+                }
+            } else {
+                channel.status = ChannelStatus::Inactive;
+            }
+        }
+    }
+    
     /// Log an error with client context
     pub async fn log_error(&self, message: String, client_id: Option<usize>) {
         self.log(LogLevel::Error, message, client_id).await;
@@ -320,33 +427,97 @@ impl Dashboard {
         print!("\x1b[2J\x1b[H");
         let _ = io::stdout().flush();
         
+        // Update channel statuses before rendering
+        self.update_channel_statuses().await;
+        
         let temp_clients = self.temp_clients.read().await;
         let clients = self.clients.read().await;
         let total_conns = self.total_connections.read().await;
         let total_msgs = self.total_messages.read().await;
         let total_bytes = self.total_bytes.read().await;
         let mcp_sessions = self.mcp_sessions.read().await;
+        let channels = self.channels.read().await;
         
         let uptime = self.server_start.elapsed();
         let active_clients = clients.len() + temp_clients.len();
         
-        // Header
-        println!("\x1b[1;36m╔════════════════════════════════════════════════════════════════════╗\x1b[0m");
-        println!("\x1b[1;36m║       🚀 ANDROID PLAYGROUND SERVER DASHBOARD 🚀                    ║\x1b[0m");
-        println!("\x1b[1;36m╚════════════════════════════════════════════════════════════════════╝\x1b[0m");
+        // Prepare channel list for display
+        let mut channel_list: Vec<_> = channels.values().collect();
+        channel_list.sort_by_key(|c| c.channel_id);
+        
+        // Header - spans full width
+        println!("\x1b[1;36m╔══════════════════════════════════════════════════════════════════════════════════════════════════════╗\x1b[0m");
+        println!("\x1b[1;36m║                           🚀 ANDROID PLAYGROUND SERVER DASHBOARD 🚀                                  ║\x1b[0m");
+        println!("\x1b[1;36m╚══════════════════════════════════════════════════════════════════════════════════════════════════════╝\x1b[0m");
         println!();
         
-        // Server Stats
-        println!("\x1b[1;33m📊 Server Statistics\x1b[0m");
-        println!("├─ Uptime: \x1b[32m{}\x1b[0m", format_duration(uptime));
-        println!("├─ Total Connections: \x1b[32m{}\x1b[0m", total_conns);
-        println!("├─ Active Clients: \x1b[32m{}/{}\x1b[0m", active_clients, clients.len());
-        println!("├─ MCP Sessions: \x1b[32m{}\x1b[0m", mcp_sessions.len());
-        println!("├─ Total Messages: \x1b[32m{}\x1b[0m", format_number(*total_msgs));
-        println!("└─ Total Data: \x1b[32m{}\x1b[0m", format_bytes(*total_bytes));
+        // Build lines for left and right columns
+        let mut left_lines = Vec::new();
+        let mut right_lines = Vec::new();
+        
+        // Left column: Server Stats
+        left_lines.push(format!("\x1b[1;33m📊 Server Statistics\x1b[0m"));
+        left_lines.push(format!("├─ Uptime: \x1b[32m{}\x1b[0m", format_duration(uptime)));
+        left_lines.push(format!("├─ Total Connections: \x1b[32m{}\x1b[0m", total_conns));
+        left_lines.push(format!("├─ Active Clients: \x1b[32m{}/{}\x1b[0m", active_clients, clients.len()));
+        left_lines.push(format!("├─ MCP Sessions: \x1b[32m{}\x1b[0m", mcp_sessions.len()));
+        left_lines.push(format!("├─ Total Messages: \x1b[32m{}\x1b[0m", format_number(*total_msgs)));
+        left_lines.push(format!("└─ Total Data: \x1b[32m{}\x1b[0m", format_bytes(*total_bytes)));
+        left_lines.push(String::new());
+        
+        // Right column: Channels
+        right_lines.push(format!("\x1b[1;35m📡 Channels ({})\x1b[0m", channels.len()));
+        for (i, channel) in channel_list.iter().enumerate() {
+            let is_last = i == channel_list.len() - 1;
+            let prefix = if is_last { "└" } else { "├" };
+            
+            // Format channel name (truncate if too long)
+            let name = if channel.name.len() > 18 {
+                format!("{}...", &channel.name[..15])
+            } else {
+                channel.name.clone()
+            };
+            
+            // Channel type indicator
+            let type_char = match channel.channel_type {
+                ChannelType::Control => "C",
+                ChannelType::System => "S",
+                ChannelType::Plugin => "P",
+                ChannelType::Session => "M",
+            };
+            
+            right_lines.push(format!(
+                "{}─ {} [{:>3}] {}{} {}\x1b[0m",
+                prefix,
+                channel.status.as_emoji(),
+                channel.channel_id,
+                channel.status.as_color_code(),
+                type_char,
+                name
+            ));
+        }
+        
+        // Print side-by-side columns
+        let left_width = 50;
+        let max_lines = left_lines.len().max(right_lines.len());
+        
+        for i in 0..max_lines {
+            let left = left_lines.get(i).map(|s| s.as_str()).unwrap_or("");
+            let right = right_lines.get(i).map(|s| s.as_str()).unwrap_or("");
+            
+            // Calculate visible length without ANSI codes
+            let visible_len = strip_ansi_codes(left).len();
+            let padding = if visible_len < left_width {
+                " ".repeat(left_width - visible_len)
+            } else {
+                String::new()
+            };
+            
+            println!("{}{} │ {}", left, padding, right);
+        }
         println!();
         
-        // MCP Sessions
+        // MCP Sessions (if any)
         if !mcp_sessions.is_empty() {
             println!("\x1b[1;35m🤖 MCP Sessions\x1b[0m");
             for (session_id, connected_at) in mcp_sessions.iter() {
@@ -564,6 +735,25 @@ impl Dashboard {
             }
         });
     }
+}
+
+fn strip_ansi_codes(s: &str) -> String {
+    // Remove ANSI escape sequences for accurate length calculation
+    let mut result = String::new();
+    let mut in_escape = false;
+    
+    for ch in s.chars() {
+        if ch == '\x1b' {
+            in_escape = true;
+        } else if in_escape {
+            if ch == 'm' {
+                in_escape = false;
+            }
+        } else {
+            result.push(ch);
+        }
+    }
+    result
 }
 
 fn format_duration(duration: Duration) -> String {
