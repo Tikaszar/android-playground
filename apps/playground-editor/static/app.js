@@ -19,9 +19,13 @@ class UIFrameworkClient {
         this.maxReconnectAttempts = 10;
         this.reconnectDelay = 1000;
         
-        // UI Framework Plugin channels (1200-1209)
-        this.UI_FRAMEWORK_BASE = 1200;
-        this.UI_FRAMEWORK_CHANNELS = 10;
+        // Dynamic channel mapping (discovered from server)
+        this.channelMap = {};  // name -> channel ID
+        this.channelNames = {}; // channel ID -> name
+        
+        // Will be set dynamically from manifest
+        this.UI_FRAMEWORK_BASE = null;
+        this.UI_FRAMEWORK_CHANNELS = [];
         
         // Message types for UI Framework
         this.MSG_TYPES = {
@@ -136,11 +140,11 @@ class UIFrameworkClient {
     }
     
     onConnect() {
-        console.log('Connected to UI Framework');
+        console.log('Connected to server');
         this.reconnectAttempts = 0;
         
-        // Browser is a client - no need to register channels
-        // The UI Framework Plugin on the server handles our messages
+        // Request channel manifest to discover available channels
+        this.requestChannelManifest();
         
         // Hide loading, show canvas
         document.body.classList.add('ui-ready');
@@ -152,11 +156,31 @@ class UIFrameworkClient {
         // This avoids race condition with async connection establishment
         
         // Send connection log to server
-        this.sendLog('info', 'Browser connected and ready');
+        this.sendLog('info', 'Browser connected and requesting channel manifest');
         setTimeout(() => {
             // Send initial resize event to UI Framework Plugin
             this.handleResize();
         }, 100);
+    }
+    
+    requestChannelManifest() {
+        // Send RequestChannelManifest message on control channel (0)
+        const packet = new ArrayBuffer(9); // No payload needed
+        const view = new DataView(packet);
+        
+        // Header (big-endian to match server)
+        view.setUint16(0, 0, false);        // Channel 0 (control)
+        view.setUint16(2, 8, false);        // Type 8 (RequestChannelManifest)
+        view.setUint8(4, 2);                // Priority high
+        view.setUint32(5, 0, false);        // No payload
+        
+        try {
+            this.ws.send(packet);
+            console.log('Requested channel manifest from server');
+            this.sendLog('debug', 'Requested channel manifest');
+        } catch (e) {
+            console.error('Failed to request channel manifest:', e);
+        }
     }
     
     onMessage(event) {
@@ -181,8 +205,21 @@ class UIFrameworkClient {
         const priority = view.getUint8(4);
         const payloadSize = view.getUint32(5, false);  // Note: offset 5 is correct per Rust code
         
-        // Check if this is the UI channel (channel 10)
-        if (channelId === 10) {
+        // Check if this is a control channel message
+        if (channelId === 0) {
+            // Control channel messages
+            if (packetType === 9) { // ChannelManifest
+                this.handleChannelManifest(data, payloadSize);
+            } else if (packetType === 10) { // ChannelRegistered
+                this.handleChannelRegistered(data, payloadSize);
+            } else if (packetType === 11) { // ChannelUnregistered
+                this.handleChannelUnregistered(data, payloadSize);
+            }
+            return;
+        }
+        
+        // Check if this is the UI channel (dynamically discovered)
+        if (this.channelNames[channelId] === 'ui') {
             // Extract payload
             const payload = new Uint8Array(data, 9, payloadSize);
             
@@ -206,9 +243,8 @@ class UIFrameworkClient {
                 this.sendLog('warning', `Unknown UI packet type ${packetType} on channel ${channelId}`);
             }
         }
-        // Check if this is a UI Framework channel
-        else if (channelId >= this.UI_FRAMEWORK_BASE && 
-                 channelId < this.UI_FRAMEWORK_BASE + this.UI_FRAMEWORK_CHANNELS) {
+        // Check if this is a UI Framework channel (dynamically discovered)
+        else if (this.UI_FRAMEWORK_CHANNELS.includes(channelId)) {
             
             // Extract payload
             const payload = new Uint8Array(data, 9, payloadSize);
@@ -238,6 +274,102 @@ class UIFrameworkClient {
         if (msg.type === 'channel_registered') {
             console.log(`Registered for channel ${msg.channel_id}`);
             this.channels.add(msg.channel_id);
+        }
+    }
+    
+    handleChannelManifest(data, payloadSize) {
+        // Extract payload
+        const payload = new Uint8Array(data, 9, payloadSize);
+        const decoder = new TextDecoder();
+        const manifestJson = decoder.decode(payload);
+        
+        try {
+            const manifest = JSON.parse(manifestJson);
+            console.log('Received channel manifest:', manifest);
+            this.sendLog('info', `Received channel manifest with ${Object.keys(manifest.channels || {}).length} channels`);
+            
+            // Store channel mappings
+            this.channelMap = manifest.channels || {};
+            
+            // Build reverse mapping
+            this.channelNames = {};
+            for (const [name, id] of Object.entries(this.channelMap)) {
+                this.channelNames[id] = name;
+            }
+            
+            // Find UI Framework channels
+            this.UI_FRAMEWORK_CHANNELS = [];
+            for (const [name, id] of Object.entries(this.channelMap)) {
+                if (name.startsWith('ui-framework-')) {
+                    this.UI_FRAMEWORK_CHANNELS.push(id);
+                }
+            }
+            
+            // Set base channel if we found any
+            if (this.UI_FRAMEWORK_CHANNELS.length > 0) {
+                this.UI_FRAMEWORK_BASE = Math.min(...this.UI_FRAMEWORK_CHANNELS);
+                this.sendLog('info', `UI Framework channels discovered: ${this.UI_FRAMEWORK_CHANNELS.join(', ')}`);
+            }
+            
+            // Log all discovered channels
+            console.log('Channel mappings:', this.channelMap);
+            console.log('UI Framework channels:', this.UI_FRAMEWORK_CHANNELS);
+            
+        } catch (e) {
+            console.error('Failed to parse channel manifest:', e);
+            this.sendLog('error', `Failed to parse channel manifest: ${e.message}`);
+        }
+    }
+    
+    handleChannelRegistered(data, payloadSize) {
+        // Extract payload
+        const payload = new Uint8Array(data, 9, payloadSize);
+        const decoder = new TextDecoder();
+        const json = decoder.decode(payload);
+        
+        try {
+            const info = JSON.parse(json);
+            console.log(`Channel registered: ${info.name} -> ${info.channel_id}`);
+            
+            // Update our mappings
+            this.channelMap[info.name] = info.channel_id;
+            this.channelNames[info.channel_id] = info.name;
+            
+            // Check if it's a UI Framework channel
+            if (info.name.startsWith('ui-framework-')) {
+                this.UI_FRAMEWORK_CHANNELS.push(info.channel_id);
+            }
+            
+        } catch (e) {
+            console.error('Failed to parse channel registered notification:', e);
+        }
+    }
+    
+    handleChannelUnregistered(data, payloadSize) {
+        // Extract payload
+        const payload = new Uint8Array(data, 9, payloadSize);
+        const decoder = new TextDecoder();
+        const json = decoder.decode(payload);
+        
+        try {
+            const info = JSON.parse(json);
+            const name = this.channelNames[info.channel_id];
+            console.log(`Channel unregistered: ${name} (${info.channel_id})`);
+            
+            // Update our mappings
+            if (name) {
+                delete this.channelMap[name];
+            }
+            delete this.channelNames[info.channel_id];
+            
+            // Remove from UI Framework channels if needed
+            const index = this.UI_FRAMEWORK_CHANNELS.indexOf(info.channel_id);
+            if (index !== -1) {
+                this.UI_FRAMEWORK_CHANNELS.splice(index, 1);
+            }
+            
+        } catch (e) {
+            console.error('Failed to parse channel unregistered notification:', e);
         }
     }
     
@@ -572,6 +704,12 @@ class UIFrameworkClient {
             return;
         }
         
+        // Check if we have discovered UI Framework channels
+        if (!this.UI_FRAMEWORK_BASE) {
+            console.warn('UI Framework channels not discovered yet, skipping message');
+            return;
+        }
+        
         // Send to UI Framework main channel
         const channel = this.UI_FRAMEWORK_BASE;
         const payload = JSON.stringify(data);
@@ -593,6 +731,40 @@ class UIFrameworkClient {
         bytes.set(payloadBytes);
         
         this.ws.send(packet);
+    }
+    
+    // Send debug log to server on control channel
+    sendLog(level, message) {
+        if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
+            console.log(`[${level}] ${message} (not sent - WebSocket not ready)`);
+            return;
+        }
+        
+        // Create log message payload
+        const logData = JSON.stringify({
+            level: level,
+            message: message,
+            timestamp: new Date().toISOString()
+        });
+        const encoder = new TextEncoder();
+        const payloadBytes = encoder.encode(logData);
+        
+        // Create binary packet for control channel (0) with packet type 200 (browser log)
+        const packet = new ArrayBuffer(9 + payloadBytes.length);
+        const view = new DataView(packet);
+        
+        // Write header (big-endian to match server)
+        view.setUint16(0, 0, false);        // Channel 0 (control)
+        view.setUint16(2, 200, false);      // Packet type 200 (browser log)
+        view.setUint8(4, 1);                // Priority: Normal
+        view.setUint32(5, payloadBytes.length, false);
+        
+        // Write payload
+        const bytes = new Uint8Array(packet, 9);
+        bytes.set(payloadBytes);
+        
+        this.ws.send(packet);
+        console.log(`[${level}] ${message}`);
     }
     
     // Browser doesn't need to register channels - it's a client

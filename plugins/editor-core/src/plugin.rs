@@ -1,21 +1,19 @@
 use async_trait::async_trait;
 use crate::state::{EditorState, OpenFile, CursorPosition};
-use playground_systems_logic::{System, World, LogicResult, SystemsManager};
-use std::sync::Arc;
-use tokio::sync::RwLock;
+use playground_systems_logic::{System, World, LogicResult, SystemsManager, Handle, handle, shared};
 use tracing::{info, debug};
 
 pub struct EditorCorePlugin {
-    state: Arc<RwLock<EditorState>>,
-    base_channel: u16,
-    systems_manager: Arc<SystemsManager>,
+    state: playground_systems_logic::Shared<EditorState>,
+    channel_id: Option<u16>,
+    systems_manager: Handle<SystemsManager>,
 }
 
 impl EditorCorePlugin {
-    pub fn new(systems_manager: Arc<SystemsManager>) -> Self {
+    pub fn new(systems_manager: Handle<SystemsManager>) -> Self {
         Self {
-            state: Arc::new(RwLock::new(EditorState::default())),
-            base_channel: 1000,
+            state: shared(EditorState::default()),
+            channel_id: None,
             systems_manager,
         }
     }
@@ -102,7 +100,7 @@ impl EditorCorePlugin {
     }
 
     pub fn load_state(&mut self, state: EditorState) {
-        self.state = Arc::new(RwLock::new(state));
+        self.state = shared(state);
     }
 }
 
@@ -113,8 +111,10 @@ impl System for EditorCorePlugin {
     }
     
     async fn initialize(&mut self, _world: &World) -> LogicResult<()> {
-        info!("Editor Core Plugin initializing on channel {}", self.base_channel);
+        // Request dynamic channel allocation
+        self.channel_id = Some(self.systems_manager.register_plugin("editor-core").await?);
         
+        info!("Editor Core Plugin initialized on dynamic channel {}", self.channel_id.unwrap());
         
         // Initialize default editor state
         let mut state = self.state.write().await;

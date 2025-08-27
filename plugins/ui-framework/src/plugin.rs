@@ -1,9 +1,8 @@
 use async_trait::async_trait;
 use playground_systems_logic::{System, World, LogicResult, SystemsManager, UiInterface, Component};
 use playground_core_types::{
-    Priority, Shared, shared,
+    Priority, Shared, shared, Handle, handle,
 };
-use std::sync::Arc;
 use std::collections::HashMap;
 use tokio::sync::RwLock;
 use tracing::{info, debug, error};
@@ -18,28 +17,29 @@ use crate::orchestrator::Orchestrator;
 /// The UI Framework Plugin coordinates all UI updates between server plugins and the browser.
 /// It implements systems/logic::System so it can be registered in the World as a System.
 pub struct UiFrameworkPlugin {
-    panel_manager: Arc<RwLock<PanelManager>>,
-    mcp_handler: Arc<McpHandler>,
-    browser_bridge: Arc<BrowserBridge>,
-    ui_state: Arc<RwLock<UiState>>,
-    orchestrator: Arc<RwLock<Orchestrator>>,
+    panel_manager: Shared<PanelManager>,
+    mcp_handler: Handle<McpHandler>,
+    browser_bridge: Handle<BrowserBridge>,
+    ui_state: Shared<UiState>,
+    orchestrator: Shared<Orchestrator>,
     channel_id: Option<u16>,
-    systems_manager: Arc<playground_systems_logic::SystemsManager>,
+    channel_range: Vec<u16>, // Store allocated channels  
+    systems_manager: Handle<playground_systems_logic::SystemsManager>,
 }
 
 impl UiFrameworkPlugin {
-    pub fn new(systems_manager: Arc<playground_systems_logic::SystemsManager>) -> Self {
+    pub fn new(systems_manager: Handle<playground_systems_logic::SystemsManager>) -> Self {
         // Create persistence directory for conversations
         let persistence_path = std::path::PathBuf::from("/data/data/com.termux/files/home/.android-playground/conversations");
         
         // Create UI state with persistence
-        let ui_state = Arc::new(RwLock::new(UiState::with_persistence(persistence_path.clone())));
-        let browser_bridge = Arc::new(BrowserBridge::new());
-        let panel_manager = Arc::new(RwLock::new(PanelManager::new()));
+        let ui_state = shared(UiState::with_persistence(persistence_path.clone()));
+        let browser_bridge = handle(BrowserBridge::new());
+        let panel_manager = shared(PanelManager::new());
         
         // Create orchestrator first
         let ui_state_clone = ui_state.clone();
-        let orchestrator = Arc::new(RwLock::new(Orchestrator::new(
+        let orchestrator = shared(Orchestrator::new(
             tokio::task::block_in_place(|| {
                 tokio::runtime::Handle::current().block_on(async {
                     ui_state_clone.read().await.channel_manager.clone()
@@ -50,7 +50,7 @@ impl UiFrameworkPlugin {
                     ui_state_clone.read().await.message_system.clone()
                 })
             }),
-        )));
+        ));
         
         // Create MCP handler with references to all components
         let mut mcp_handler = McpHandler::new(
@@ -59,7 +59,7 @@ impl UiFrameworkPlugin {
             panel_manager.clone(),
         );
         mcp_handler.set_orchestrator(orchestrator.clone());
-        let mcp_handler = Arc::new(mcp_handler);
+        let mcp_handler = handle(mcp_handler);
         
         Self {
             panel_manager,
@@ -68,6 +68,7 @@ impl UiFrameworkPlugin {
             ui_state,
             orchestrator,
             channel_id: None,
+            channel_range: Vec::new(),
             systems_manager,
         }
     }
@@ -83,25 +84,39 @@ impl System for UiFrameworkPlugin {
         // Log to dashboard
         self.systems_manager.log("info", "[UI-FW] UI Framework Plugin initialize() called".to_string()).await;
         
-        // Register our channel (1200) with the networking system
+        // Request dynamic channels for UI Framework (we need 10 channels)
+        self.systems_manager.log("info", "[UI-FW] Requesting dynamic channel allocation...".to_string()).await;
+        
+        let mut channels = Vec::new();
+        for i in 0..10 {
+            let channel = self.systems_manager.register_plugin(&format!("ui-framework-{}", i)).await?;
+            channels.push(channel);
+            self.systems_manager.log("info", format!("[UI-FW] Allocated channel {} for ui-framework-{}", channel, i)).await;
+        }
+        
+        // Store the base channel and range
+        self.channel_id = Some(channels[0]);
+        self.channel_range = channels.clone();
+        
+        self.systems_manager.log("info", format!("[UI-FW] Dynamic channels allocated: {:?}", channels)).await;
+        
+        // Register with networking system
         let networking = self.systems_manager.networking();
-        self.systems_manager.log("info", "[UI-FW] Getting networking system...".to_string()).await;
         let net = networking.read().await;
         
-        // Register channels 1200-1209 for UI Framework
-        self.systems_manager.log("info", "[UI-FW] Registering channels 1200-1209...".to_string()).await;
-        for i in 0..10 {
-            let channel = 1200 + i;
-            if let Err(e) = net.register_plugin(&format!("ui-framework-{}", i)).await {
+        // Register the allocated channels with networking
+        for (i, &channel) in channels.iter().enumerate() {
+            if let Err(e) = net.register_system_channel(&format!("ui-framework-{}", i), channel).await {
                 self.systems_manager.log("error", format!("[UI-FW] Failed to register channel {}: {}", channel, e)).await;
                 return Err(playground_systems_logic::LogicError::InitializationFailed(
                     format!("Failed to register channel {}: {}", channel, e)
                 ));
             }
         }
-        self.systems_manager.log("info", "[UI-FW] Channels registered successfully".to_string()).await;
         
-        self.channel_id = Some(1200);
+        self.systems_manager.log("info", "[UI-FW] Channels registered with networking successfully".to_string()).await;
+        
+        self.channel_id = Some(channels[0]);
         
         // Register MCP tools for UI manipulation
         self.systems_manager.log("info", "[UI-FW] Registering MCP tools...".to_string()).await;
@@ -135,14 +150,13 @@ impl System for UiFrameworkPlugin {
         let mut orchestrator = self.orchestrator.write().await;
         orchestrator.process_pending_updates(delta_time).await;
         
-        // Check for incoming messages from browser
-        if let Some(channel_id) = self.channel_id {
+        // Check for incoming messages from browser on our dynamic channels
+        if !self.channel_range.is_empty() {
             let networking = self.systems_manager.networking();
             let net = networking.read().await;
             
-            // Check all our channels (1200-1209)
-            for i in 0..10 {
-                let channel = channel_id + i;
+            // Check all our dynamically allocated channels
+            for &channel in &self.channel_range {
                 if let Ok(packets) = net.receive_packets(channel).await {
                     for packet in packets {
                         self.handle_browser_message(packet.data).await;
@@ -202,7 +216,7 @@ impl UiFrameworkPlugin {
                 name.to_string(),
                 description.to_string(),
                 schema,
-                1200, // Our base channel
+                self.channel_id.unwrap_or(1), // Use dynamic base channel
             ).await?;
         }
         

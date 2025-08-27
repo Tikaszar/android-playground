@@ -37,7 +37,7 @@ pub use storage::*;
 pub use system::*;
 pub use system_data::*;
 pub use world::*;
-pub use systems_manager::SystemsManager;
+pub use systems_manager::{SystemsManager, ChannelType, ChannelMetadata, ChannelManifest, ChannelRegistry};
 pub use ui_interface::UiInterface;
 pub use rendering_interface::{RenderingInterface, RendererWrapper};
 pub use messaging::{GameMessageBus, MessageHandlerData, channels};

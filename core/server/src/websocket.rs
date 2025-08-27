@@ -32,6 +32,7 @@ pub struct WebSocketState {
     pub connections: Shared<Vec<Shared<Option<WebSocketConnection>>>>,
     pub mcp_tools: Shared<HashMap<String, McpTool>>, // Dynamic MCP tool registry
     pub dashboard: Handle<Dashboard>,
+    broadcast_task_started: Shared<bool>, // Track if broadcast task is running
 }
 
 pub struct WebSocketConnection {
@@ -56,6 +57,7 @@ impl WebSocketState {
             connections: shared(Vec::new()),
             mcp_tools: shared(HashMap::new()),
             dashboard,
+            broadcast_task_started: shared(false),
         }
     }
     
@@ -66,7 +68,45 @@ impl WebSocketState {
             connections: shared(Vec::new()),
             mcp_tools: shared(HashMap::new()),
             dashboard,
+            broadcast_task_started: shared(false),
         }
+    }
+    
+    /// Start the global broadcast task that prepares packets for all clients
+    async fn start_broadcast_task(&self) {
+        let mut started = self.broadcast_task_started.write().await;
+        if *started {
+            return; // Already started
+        }
+        *started = true;
+        
+        let batcher = self.batcher.clone();
+        let dashboard = self.dashboard.clone();
+        
+        tokio::spawn(async move {
+            let mut interval = time::interval(batcher.frame_duration());
+            
+            loop {
+                interval.tick().await;
+                
+                // Prepare broadcast batches once per frame
+                // This moves packets from the regular queue to broadcast queues
+                batcher.prepare_broadcast_batches().await;
+                
+                // Log if there are packets
+                let batches = batcher.get_all_broadcast_batches().await;
+                if !batches.is_empty() {
+                    dashboard.log(
+                        crate::dashboard::LogLevel::Debug,
+                        format!("Broadcast task: Prepared {} channel batches for broadcast", batches.len()),
+                        None
+                    ).await;
+                }
+                
+                // Don't clear immediately - let client tasks read the batches
+                // The clear will happen at the start of the next frame
+            }
+        });
     }
     
     /// Register an MCP tool that can be called by LLMs
@@ -107,6 +147,9 @@ pub async fn websocket_handler(
 }
 
 async fn handle_websocket(socket: WebSocket, state: Handle<WebSocketState>) {
+    // Start the global broadcast task if not already started
+    state.start_broadcast_task().await;
+    
     let (mut sender, mut receiver) = socket.split();
     
     // Get client IP (placeholder - in real implementation, extract from request headers)
@@ -134,8 +177,8 @@ async fn handle_websocket(socket: WebSocket, state: Handle<WebSocketState>) {
         loop {
             interval.tick().await;
             
-            // Get batched packets from the frame batcher
-            let batches = state_clone.batcher.get_all_batches().await;
+            // Get broadcast batches (same for all clients, not consumed)
+            let batches = state_clone.batcher.get_all_broadcast_batches().await;
             if !batches.is_empty() {
                 // Only log if we have packets to send
                 state_clone.dashboard.log(
@@ -211,43 +254,21 @@ async fn handle_message(data: Bytes, state: &WebSocketState) -> anyhow::Result<(
     let packet = Packet::deserialize(data)?;
     
     if packet.channel_id == 0 {
+        // Control channel messages (includes browser logs with packet_type 200)
         handle_control_message(packet, state).await?;
     } else {
-        // Instead of queuing, broadcast immediately to all OTHER clients
-        // This is a temporary fix for the broadcast issue
-        let connections = state.connections.read().await;
-        let packet_bytes = packet.serialize();
-        
+        // Non-control messages from browser (like UI events, etc.)
+        // These should typically be forwarded to the appropriate system via MessageBus
+        // For now, just log that we received it
         state.dashboard.log(
             crate::dashboard::LogLevel::Debug,
-            format!("Broadcasting packet (channel {}, type {}) to {} clients", 
-                packet.channel_id, packet.packet_type, connections.len()),
+            format!("Received packet from browser (channel {}, type {}, {} bytes)", 
+                packet.channel_id, packet.packet_type, packet.payload.len()),
             None
         ).await;
         
-        for (conn_id, conn_lock) in connections.iter().enumerate() {
-            // Send to ALL clients, including Client #0
-            // We want everyone to receive the broadcast
-            
-            let mut conn = conn_lock.write().await;
-            if let Some(connection) = conn.as_mut() {
-                if let Err(e) = connection.sender.send(Message::Binary(packet_bytes.clone())).await {
-                    state.dashboard.log(
-                        crate::dashboard::LogLevel::Error,
-                        format!("Failed to broadcast to client {}: {}", conn_id, e),
-                        Some(conn_id)
-                    ).await;
-                } else {
-                    state.dashboard.log(
-                        crate::dashboard::LogLevel::Debug,
-                        format!("Sent packet to client {}", conn_id),
-                        Some(conn_id)
-                    ).await;
-                }
-            }
-        }
-        
-        // Also queue it for batching (in case we want to use that later)
+        // Queue it for processing or broadcasting if needed
+        // (Most browser->server messages are control or log messages)
         state.batcher.queue_packet(packet).await;
     }
     

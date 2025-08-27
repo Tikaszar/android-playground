@@ -3,12 +3,111 @@ use crate::error::{LogicResult, LogicError};
 use crate::world::World;
 use crate::ui_interface::UiInterface;
 use crate::rendering_interface::{RendererWrapper, RendererData};
+use std::collections::HashMap;
+use std::time::SystemTime;
 
 // Import other systems
 use playground_systems_networking::NetworkingSystem;
 use playground_systems_ui::UiSystem;
 // use playground_systems_rendering::RenderingSystem; // Browser-side only
 // use playground_systems_physics::PhysicsSystem; // Not yet implemented
+
+/// Type of channel registration
+#[derive(Clone, Debug)]
+pub enum ChannelType {
+    System,   // Core systems (ui, networking, etc.)
+    Plugin,   // Plugin channels
+    Session,  // Dynamic session channels (like MCP sessions)
+}
+
+/// Metadata about a registered channel
+#[derive(Clone, Debug)]
+pub struct ChannelMetadata {
+    pub name: String,
+    pub channel_id: u16,
+    pub registered_at: SystemTime,
+    pub channel_type: ChannelType,
+    pub description: Option<String>,
+}
+
+/// Channel manifest sent to browser for discovery
+#[derive(Clone, Debug)]
+pub struct ChannelManifest {
+    pub version: u32,
+    pub channels: HashMap<String, u16>,
+    pub metadata: HashMap<u16, ChannelMetadata>,
+}
+
+/// Registry for dynamic channel allocation
+pub struct ChannelRegistry {
+    // Map of name -> channel ID
+    channels: HashMap<String, u16>,
+    // Reverse map for lookups
+    channel_names: HashMap<u16, String>,
+    // Next available channel ID (starts at 1, since 0 is control)
+    next_channel_id: u16,
+    // Optional metadata about each channel
+    channel_metadata: HashMap<u16, ChannelMetadata>,
+}
+
+impl ChannelRegistry {
+    /// Create a new channel registry
+    pub fn new() -> Self {
+        Self {
+            channels: HashMap::new(),
+            channel_names: HashMap::new(),
+            next_channel_id: 1, // Start at 1, channel 0 is reserved for control
+            channel_metadata: HashMap::new(),
+        }
+    }
+    
+    /// Allocate a new channel for a system or plugin
+    pub fn allocate_channel(&mut self, name: String, channel_type: ChannelType) -> LogicResult<u16> {
+        // Check if already registered
+        if let Some(&channel_id) = self.channels.get(&name) {
+            return Ok(channel_id);
+        }
+        
+        // Allocate next available channel
+        let channel_id = self.next_channel_id;
+        self.next_channel_id += 1;
+        
+        // Store mapping
+        self.channels.insert(name.clone(), channel_id);
+        self.channel_names.insert(channel_id, name.clone());
+        
+        // Store metadata
+        let metadata = ChannelMetadata {
+            name: name.clone(),
+            channel_id,
+            registered_at: SystemTime::now(),
+            channel_type,
+            description: None,
+        };
+        self.channel_metadata.insert(channel_id, metadata);
+        
+        Ok(channel_id)
+    }
+    
+    /// Get channel ID by name
+    pub fn get_channel(&self, name: &str) -> Option<u16> {
+        self.channels.get(name).copied()
+    }
+    
+    /// Get channel name by ID
+    pub fn get_channel_name(&self, channel_id: u16) -> Option<String> {
+        self.channel_names.get(&channel_id).cloned()
+    }
+    
+    /// Generate channel manifest for discovery
+    pub fn generate_manifest(&self) -> ChannelManifest {
+        ChannelManifest {
+            version: 1,
+            channels: self.channels.clone(),
+            metadata: self.channel_metadata.clone(),
+        }
+    }
+}
 
 /// Manages all system instances for the engine
 pub struct SystemsManager {
@@ -18,6 +117,9 @@ pub struct SystemsManager {
     renderer: Option<RendererWrapper>,
     renderer_data: Option<Shared<RendererData>>,
     // pub physics: Shared<PhysicsSystem>, // Not yet implemented
+    
+    // NEW: Dynamic channel registry
+    channel_registry: Shared<ChannelRegistry>,
 }
 
 impl SystemsManager {
@@ -32,6 +134,7 @@ impl SystemsManager {
             ui: shared(UiSystem::new()),
             renderer: None,
             renderer_data: None,
+            channel_registry: shared(ChannelRegistry::new()),
         })
     }
     
@@ -49,7 +152,7 @@ impl SystemsManager {
             
             dashboard.log(
                 LogLevel::Info,
-                "Initializing all engine systems...".to_string(),
+                "Initializing all engine systems with dynamic channels...".to_string(),
                 None
             ).await;
             
@@ -69,8 +172,14 @@ impl SystemsManager {
         ui.initialize().await
             .map_err(|e| LogicError::InitializationFailed(format!("UiSystem: {}", e)))?;
         
-        // Register UI system with networking and get its channel
-        let _ui_channel = networking.register_system_channel("ui", 10).await
+        // Dynamically allocate channel for UI system
+        let ui_channel = {
+            let mut registry = self.channel_registry.write().await;
+            registry.allocate_channel("ui".to_string(), ChannelType::System)?
+        };
+        
+        // Register UI system with networking using dynamic channel
+        let _ui_channel = networking.register_system_channel("ui", ui_channel).await
             .map_err(|e| LogicError::InitializationFailed(format!("Failed to register UI channel: {}", e)))?;
         
         // Drop the networking write lock before setting it in UI
@@ -85,7 +194,7 @@ impl SystemsManager {
             
             dashboard.log(
                 LogLevel::Info,
-                "✓ UiSystem initialized (headless mode)".to_string(),
+                format!("✓ UiSystem initialized on dynamic channel {}", ui_channel),
                 None
             ).await;
             
@@ -198,6 +307,30 @@ impl SystemsManager {
             };
             dashboard.log(log_level, message, None).await;
         }
+    }
+    
+    /// Register a system and get its dynamically allocated channel
+    pub async fn register_system(&self, name: &str) -> LogicResult<u16> {
+        let mut registry = self.channel_registry.write().await;
+        registry.allocate_channel(name.to_string(), ChannelType::System)
+    }
+    
+    /// Register a plugin and get its dynamically allocated channel
+    pub async fn register_plugin(&self, name: &str) -> LogicResult<u16> {
+        let mut registry = self.channel_registry.write().await;
+        registry.allocate_channel(name.to_string(), ChannelType::Plugin)
+    }
+    
+    /// Get channel manifest for browser discovery
+    pub async fn get_channel_manifest(&self) -> ChannelManifest {
+        let registry = self.channel_registry.read().await;
+        registry.generate_manifest()
+    }
+    
+    /// Get channel ID by name
+    pub async fn get_channel_by_name(&self, name: &str) -> Option<u16> {
+        let registry = self.channel_registry.read().await;
+        registry.get_channel(name)
     }
     
     /// Start the render loop at 60fps

@@ -165,9 +165,8 @@ impl NetworkingSystem {
             return Err(NetworkError::NotConnected);
         }
         
-        // Also queue it locally for tracking (if still needed)
-        let mut queue = self.packet_queue.write().await;
-        queue.enqueue(channel, packet_type, data, _priority).await
+        // No need to queue locally - MessageBus/batcher handles it
+        Ok(())
     }
     
     /// Process incoming packets for a channel

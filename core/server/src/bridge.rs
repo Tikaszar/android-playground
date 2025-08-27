@@ -74,30 +74,15 @@ impl MessageHandlerData for WebSocketForwarder {
             message,
         );
         
-        // Broadcast to all WebSocket clients
-        let connections = self.websocket_state.connections.read().await;
+        // Queue the packet in the batcher for frame-based broadcast
+        self.websocket_state.batcher.queue_packet(packet).await;
         
-        // Log the broadcast
+        // Log that we queued the packet
         self.websocket_state.dashboard.log(
             crate::dashboard::LogLevel::Debug,
-            format!("MessageBridge: Broadcasting to {} WebSocket clients on channel {}", 
-                connections.len(), self.channel),
+            format!("MessageBridge: Queued packet on channel {} for broadcast", self.channel),
             None
         ).await;
-        
-        for (conn_id, conn_lock) in connections.iter().enumerate() {
-            let mut conn = conn_lock.write().await;
-            if let Some(connection) = conn.as_mut() {
-                let packet_bytes = packet.serialize();
-                if let Err(e) = connection.send(Message::Binary(packet_bytes)).await {
-                    self.websocket_state.dashboard.log(
-                        crate::dashboard::LogLevel::Error,
-                        format!("Failed to send to client {}: {}", conn_id, e),
-                        Some(conn_id)
-                    ).await;
-                }
-            }
-        }
         
         Ok(())
     }

@@ -1,8 +1,6 @@
 use anyhow::Result;
-use std::sync::Arc;
-use tokio::sync::RwLock;
 
-use playground_systems_logic::{World, SystemsManager, System, SystemData};
+use playground_systems_logic::{World, SystemsManager, System, SystemData, Handle, handle, shared};
 
 // Import all IDE plugins - each is self-contained
 use playground_plugins_ui_framework::UiFrameworkPlugin;
@@ -21,10 +19,10 @@ async fn main() -> Result<()> {
     tracing_subscriber::fmt::init();
 
     // Create the World from systems/logic
-    let world = Arc::new(RwLock::new(World::new()));
+    let world = shared(World::new());
     
     // Create SystemsManager which initializes all engine systems
-    let systems = Arc::new(SystemsManager::new(world.clone()).await?);
+    let systems = handle(SystemsManager::new(world.clone()).await?);
     eprintln!("[EDITOR] SystemsManager created");
     systems.initialize_all().await?;
     eprintln!("[EDITOR] All engine systems initialized");

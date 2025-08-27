@@ -82,6 +82,10 @@ pub enum ControlMessageType {
     RegisterResponse = 5,
     QueryResponse = 6,
     ListResponse = 7,
+    RequestChannelManifest = 8,  // Browser requests full manifest
+    ChannelManifest = 9,         // Server sends manifest
+    ChannelRegistered = 10,      // Notification of new channel
+    ChannelUnregistered = 11,    // Notification of removed channel
     Error = 255,
 }
 
@@ -97,6 +101,10 @@ impl TryFrom<u16> for ControlMessageType {
             5 => Ok(ControlMessageType::RegisterResponse),
             6 => Ok(ControlMessageType::QueryResponse),
             7 => Ok(ControlMessageType::ListResponse),
+            8 => Ok(ControlMessageType::RequestChannelManifest),
+            9 => Ok(ControlMessageType::ChannelManifest),
+            10 => Ok(ControlMessageType::ChannelRegistered),
+            11 => Ok(ControlMessageType::ChannelUnregistered),
             255 => Ok(ControlMessageType::Error),
             _ => bail!("Invalid control message type: {}", value),
         }

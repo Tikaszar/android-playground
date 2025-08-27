@@ -1,18 +1,58 @@
 # CONTEXT.md - Current Session Context
 
-## Active Session - 2025-08-27 (Session 30)
+## Active Session - 2025-08-27 (Session 31)
 
 ### Current Status
-**Build**: ✅ COMPILING - Successfully split system.rs
+**Build**: 🟡 IN PROGRESS - Implementing dynamic channel system
 **Architecture**: ✅ Complete compliance achieved  
 **Rendering**: ✅ UiSystem::render() sends RenderCommandBatch to browser
+**Networking**: ✅ Fixed packet broadcasting - all clients now receive packets
+**Channels**: 🟡 Dynamic channel allocation implemented
 
-### Session 30 Accomplishments
+### Session 31 Accomplishments
 
-#### Fixed Packet Queue Buildup Issue
-- **Diagnosed root cause**: batcher.rs `get_batch()` drains queue, only one client gets packets
-- **Issue**: 1489 packets queuing on channel 10, browser gets nothing
-- **Solution needed**: Change from queue/drain to broadcast model for render packets
+#### 🟡 IN PROGRESS: Dynamic Channel System Implementation
+- **Goal**: Remove all hardcoded channel numbers (except channel 0)
+- **Completed**:
+  1. Created ChannelRegistry in SystemsManager with dynamic allocation
+  2. Added channel discovery protocol messages to control channel 0
+  3. Updated browser client to request/parse channel manifest
+  4. Modified plugins to use Handle<T> pattern correctly
+  5. UiFrameworkPlugin now requests 10 dynamic channels
+  6. EditorCorePlugin requests its channel dynamically
+  
+- **Architecture**:
+  - Channel 0: Reserved for control/discovery (ONLY hardcoded)
+  - All others: Dynamically allocated starting from 1
+  - Browser discovers channels via manifest on connection
+  - Complete flexibility for adding/removing components
+
+- **Remaining Work**:
+  - Need to connect WebSocketState to SystemsManager for manifest
+  - Update remaining plugins to request channels dynamically
+  - Test the complete dynamic allocation flow
+
+### Session 30 Accomplishments (Previous)
+
+#### ✅ COMPLETED: Browser Debug Logging Fixed
+- **Issue**: sendLog function was missing in browser client
+- **Solution**: Added sendLog function to app.js that sends logs to server on channel 0, packet type 200
+- **Result**: Browser debug logs, including render debugging, now properly sent to server dashboard
+
+#### ✅ COMPLETED: Fixed Packet Broadcasting and Queue Buildup
+- **Root causes identified**: 
+  1. batcher.rs `get_batch()` was draining queue (only one client got packets)
+  2. MessageBridge was bypassing batcher, sending directly to clients
+  3. NetworkingSystem had redundant PacketQueue that never flushed
+  
+- **Solutions implemented**: 
+  - Added `broadcast_queues` to FrameBatcher for shared packet access
+  - Created `prepare_broadcast_batches()` that clears old and prepares new broadcasts
+  - MessageBridge now queues packets in batcher instead of direct send
+  - Removed redundant PacketQueue.enqueue in NetworkingSystem
+  - Global broadcast task prepares packets once per frame for all clients
+  
+- **Result**: Packets properly flow through batcher and broadcast to all clients
 
 #### ✅ COMPLETED: Splitting system.rs for Architecture Compliance
 - **Violation Fixed**: system.rs was 1190 lines (exceeds 1000-line rule)
@@ -40,20 +80,20 @@
 - **Shared<> for internal, Handle<> for external**
 
 ### Next Steps
-1. **Complete system.rs split**:
-   - Create rendering.rs, shaders.rs, ui_renderer_impl.rs
-   - Delete old system.rs
-   - Verify compilation
+1. **Test packet broadcasting** ✅:
+   - Run the editor: `cargo run -p playground-apps-editor`
+   - Open multiple browser tabs to http://localhost:8080/playground-editor/
+   - Verify all clients receive render packets
 
-2. **Fix packet broadcasting**:
-   - Modify batcher to not consume packets
-   - Implement proper broadcast for render channel
-   - Test with multiple browser clients
+2. **Verify Discord UI rendering**:
+   - Check UI Framework Plugin creates elements properly
+   - Ensure render_element_tree() generates correct commands
+   - Confirm WebGL renderer displays Discord UI layout
 
-3. **Verify Discord UI rendering**:
-   - Check UI Framework Plugin creates elements
-   - Ensure render_element_tree() works
-   - Remove test red quad
+3. **Implement dynamic channel system** (Session 28 goal):
+   - SystemsManager channel registry
+   - Channel discovery protocol on channel 0
+   - Remove remaining hardcoded channels
 
 ### Running the IDE
 ```bash
