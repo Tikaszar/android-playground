@@ -1,34 +1,38 @@
 # CONTEXT.md - Current Session Context
 
-## Active Session - 2025-08-27 (Session 32)
+## Active Session - 2025-08-27 (Session 33)
 
 ### Current Status
 **Build**: ✅ COMPLETE - All systems fully functional
 **Architecture**: ✅ Complete compliance achieved  
-**Rendering**: ✅ UiSystem::render() sends RenderCommandBatch to browser
+**Rendering**: 🔴 Black screen - pipeline exists but not rendering
 **Networking**: ✅ Fixed packet broadcasting - all clients receive packets
 **Channels**: ✅ Dynamic channel allocation fully implemented
-**Browser**: ✅ Updated to use dynamic channels with manifest discovery
-**Caching**: ✅ Server forces no-cache headers to ensure fresh files
+**Browser**: 🟡 Partially working - connects but manifest not received
 
-### Session 32 Accomplishments
+### Session 33 Progress
 
-#### ✅ COMPLETED: Browser Dynamic Channel Integration
-- **Goal**: Make browser fully use dynamic channel discovery
-- **Completed**:
-  1. Updated browser to request channel manifest on connection
-  2. Added bincode deserializer for ChannelManifest in browser
-  3. Browser waits for channel discovery before sending any messages
-  4. Fixed handleResize to only trigger after channels discovered
-  5. Removed all hardcoded channel references (was using 1200)
-  6. Added cache-busting headers to server (no-cache, no-store, must-revalidate)
-  7. Browser now:
-     - Connects and waits 100ms for WebSocket stability
-     - Sends RequestChannelManifest on channel 0
-     - Parses bincode manifest response
-     - Discovers all dynamic channels
-     - Only then sends resize and starts communication
-  8. Server forces browser to never cache files - always gets latest version
+#### 🟡 IN PROGRESS: UI Rendering Pipeline Fix
+- **Issue**: Black screen despite complete pipeline
+- **Diagnosed**:
+  1. UiSystem was hardcoded to channel 10, now uses dynamic channel 1 ✅
+  2. Browser logs properly route through sendLog() to server ✅
+  3. Browser waits for channel manifest before initialization ✅
+  4. **PROBLEM**: Server not sending channel manifest (type 9) when browser requests (type 8)
+  5. Browser connects, waits, but never receives manifest
+  6. Without manifest, browser can't discover channels or render
+  
+- **Fixed**:
+  1. Added `set_channel_id()` method to UiSystem
+  2. SystemsManager sets channel ID after dynamic allocation
+  3. Browser initialization sequence waits for manifest
+  4. All console.log replaced with sendLog() for Termux visibility
+  5. WebGL renderer logs through window.uiClient.sendLog()
+  
+- **Still Needed**:
+  - Server must respond to RequestChannelManifest (type 8) with manifest (type 9)
+  - Currently no handler for type 8 in handle_control_message()
+  - Browser disconnects after 2 seconds without receiving manifest
 
 ### Session 31 Accomplishments (Previous)
 

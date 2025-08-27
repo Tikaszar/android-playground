@@ -86,7 +86,15 @@ export class WebGLRenderer {
     }
     
     executeCommandBatch(batch) {
-        if (!this.context.isReady()) return;
+        // Need access to sendLog from parent client
+        if (window.uiClient) {
+            window.uiClient.sendLog('debug', `executeCommandBatch: ${batch.commands ? batch.commands.length : 0} commands, frame ${batch.frame_id}`);
+        }
+        
+        if (!this.context.isReady()) {
+            if (window.uiClient) window.uiClient.sendLog('error', 'WebGL context not ready');
+            return;
+        }
         
         // Reset stats
         this.drawCalls = 0;
@@ -99,10 +107,16 @@ export class WebGLRenderer {
         // Get projection matrix for current viewport
         const projection = this.context.getProjectionMatrix();
         
+        // Make sure we have the quad shader before we try to render
+        if (!this.shaders.programs.has('quad')) {
+            if (window.uiClient) window.uiClient.sendLog('warning', 'Quad shader not initialized, creating default shaders');
+            this.shaders.initializeDefaultShaders();
+        }
+        
         // Use quad shader program for drawing
         const program = this.shaders.useProgram('quad');
         if (!program) {
-            console.error('Quad shader program not found');
+            if (window.uiClient) window.uiClient.sendLog('error', 'Quad shader program not found');
             return;
         }
         
@@ -211,6 +225,10 @@ export class WebGLRenderer {
     }
     
     drawQuad(position, size, color, projection) {
+        if (window.uiClient) {
+            window.uiClient.sendLog('debug', `drawQuad: pos=[${position[0]},${position[1]}] size=[${size[0]},${size[1]}] color=[${color.join(',')}]`);
+        }
+        
         // Apply opacity
         const finalColor = [
             color[0],
@@ -226,7 +244,13 @@ export class WebGLRenderer {
             finalColor
         );
         
+        // Flush immediately for debugging
+        this.buffers.flush();
+        
         this.drawCalls++;
+        if (window.uiClient) {
+            window.uiClient.sendLog('debug', `Draw call completed, total: ${this.drawCalls}`);
+        }
     }
     
     drawText(text, position, size, color, projection) {

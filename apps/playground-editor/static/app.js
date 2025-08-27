@@ -62,6 +62,8 @@ class UIFrameworkClient {
         try {
             this.renderer = new WebGLRenderer(this.canvas);
             console.log('WebGL renderer initialized');
+            // Make client available globally for renderer logging
+            window.uiClient = this;
         } catch (error) {
             console.error('Failed to initialize WebGL renderer:', error);
             this.showError();
@@ -143,12 +145,7 @@ class UIFrameworkClient {
         console.log('Connected to server');
         this.reconnectAttempts = 0;
         
-        // Hide loading, show canvas
-        document.body.classList.add('ui-ready');
-        document.getElementById('loading').style.display = 'none';
-        document.getElementById('error').style.display = 'none';
-        this.canvas.style.display = 'block';
-        
+        // DO NOT show UI yet - wait for channel discovery
         // Small delay to ensure WebSocket is fully ready
         setTimeout(() => {
             console.log('Requesting channel manifest...');
@@ -225,8 +222,10 @@ class UIFrameworkClient {
             
             // Handle UI system packets
             if (packetType === 104) { // RenderBatch
+                this.sendLog('debug', `Calling renderFrame with ${payloadSize} bytes`);
                 this.renderFrame(payload);
             } else if (packetType === 106) { // RendererInit
+                this.sendLog('debug', `Calling initializeRenderer with ${payloadSize} bytes`);
                 this.initializeRenderer(payload);
             } else if (packetType === 107) { // RendererShutdown
                 this.shutdownRenderer();
@@ -283,7 +282,6 @@ class UIFrameworkClient {
             // Parse bincode-serialized ChannelManifest
             const manifest = this.deserializeChannelManifest(payload);
             console.log('Received channel manifest:', manifest);
-            this.sendLog('info', `Received channel manifest with ${Object.keys(manifest.channels || {}).length} channels`);
             
             // Store channel mappings
             this.channelMap = manifest.channels || {};
@@ -305,22 +303,26 @@ class UIFrameworkClient {
             // Set base channel if we found any
             if (this.UI_FRAMEWORK_CHANNELS.length > 0) {
                 this.UI_FRAMEWORK_BASE = Math.min(...this.UI_FRAMEWORK_CHANNELS);
-                this.sendLog('info', `UI Framework channels discovered: ${this.UI_FRAMEWORK_CHANNELS.join(', ')}`);
             }
             
-            // Log all discovered channels
-            console.log('Channel mappings:', this.channelMap);
-            console.log('UI Framework channels:', this.UI_FRAMEWORK_CHANNELS);
+            // Log all discovered channels (using sendLog now that we have channels)
+            this.sendLog('info', `Received channel manifest with ${Object.keys(this.channelMap).length} channels`);
+            this.sendLog('info', `Channels: ${JSON.stringify(this.channelMap)}`);
+            this.sendLog('info', `UI Framework channels: ${this.UI_FRAMEWORK_CHANNELS.join(', ')}`);
             
-            // NOW we can send initial messages since we have discovered channels
-            this.sendLog('info', 'Channels discovered, initializing UI');
+            // NOW we can show the UI
+            document.body.classList.add('ui-ready');
+            document.getElementById('loading').style.display = 'none';
+            document.getElementById('error').style.display = 'none';
+            this.canvas.style.display = 'block';
             
             // Send initial resize event to UI Framework Plugin
+            this.sendLog('info', 'Sending initial resize to UI Framework');
             this.handleResize();
             
         } catch (e) {
             console.error('Failed to parse channel manifest:', e);
-            this.sendLog('error', `Failed to parse channel manifest: ${e.message}`);
+            // Can't use sendLog yet if parsing failed
         }
     }
     
@@ -380,20 +382,21 @@ class UIFrameworkClient {
         // Parse the bincode-serialized render batch message
         try {
             const batch = this.deserializeBincode(payload);
-            console.log('Received render batch:', batch);
-            this.sendLog('debug', `Received render batch: frame ${batch.frame_id}, ${batch.commands.length} commands`);
+            this.sendLog('debug', `Parsed render batch: frame ${batch.frame_id}, ${batch.commands.length} commands`);
             
             if (batch && batch.commands && this.renderer) {
-                console.log(`Executing ${batch.commands.length} render commands`);
-                this.sendLog('debug', `Commands: ${JSON.stringify(batch.commands)}`);
+                // Log command types
+                const commandTypes = batch.commands.map(cmd => Object.keys(cmd)[0]).join(', ');
+                this.sendLog('debug', `Command types: ${commandTypes}`);
+                
                 // Use WebGL renderer to execute commands
                 this.renderer.executeCommandBatch(batch);
             } else if (!this.renderer) {
-                console.error('WebGL renderer not initialized!');
                 this.sendLog('error', 'WebGL renderer not initialized!');
+            } else {
+                this.sendLog('error', `Invalid batch structure: commands=${!!batch.commands}, renderer=${!!this.renderer}`);
             }
         } catch (e) {
-            console.error('Failed to parse render batch:', e);
             this.sendLog('error', `Failed to parse render batch: ${e.message}`);
         }
     }

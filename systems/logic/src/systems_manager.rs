@@ -208,6 +208,9 @@ impl SystemsManager {
         // Drop the networking write lock before setting it in UI
         drop(networking);
         
+        // Set the dynamically allocated channel in UI system
+        ui.set_channel_id(ui_channel);
+        
         // Store networking reference in UI system so it can send render commands
         // UiSystem expects Handle but we have Shared - need to fix UiSystem
         ui.set_networking_system_shared(self.networking.clone());

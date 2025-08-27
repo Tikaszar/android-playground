@@ -101,6 +101,10 @@ impl UiSystem {
         self.set_networking_system(networking);
     }
     
+    pub fn set_channel_id(&mut self, channel_id: u16) {
+        self.channel_id = channel_id;
+    }
+    
     pub(super) async fn log(&self, level: &str, message: String) {
         if let Some(ref networking) = self.networking_system {
             let networking = networking.read().await;
