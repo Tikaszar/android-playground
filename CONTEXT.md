@@ -1,57 +1,54 @@
 # CONTEXT.md - Current Session Context
 
-## Active Session - 2025-08-27 (Session 29)
+## Active Session - 2025-08-27 (Session 30)
 
 ### Current Status
-**Build**: ✅ FULLY COMPILING (warnings only)
+**Build**: 🔴 IN PROGRESS - Splitting system.rs to comply with 1000-line rule
 **Architecture**: ✅ Complete compliance achieved  
-**Rendering**: ✅ UiSystem::render() now sends RenderCommandBatch to browser
+**Rendering**: ✅ UiSystem::render() sends RenderCommandBatch to browser
 
-### Session 29 Accomplishments
+### Session 30 Accomplishments
 
-#### Fixed UI Rendering Pipeline
-- **Discovered existing render() method** in UiSystem (line 691) that was already implemented
-- **Render pipeline working**: Creates batch → Adds test red quad → Sends via channel 10
-- **Browser client ready**: WebGL renderer receives packets on channel 10, deserializes bincode
-- **Test rendering enabled**: Red quad at (100,100) to verify pipeline
+#### Fixed Packet Queue Buildup Issue
+- **Diagnosed root cause**: batcher.rs `get_batch()` drains queue, only one client gets packets
+- **Issue**: 1489 packets queuing on channel 10, browser gets nothing
+- **Solution needed**: Change from queue/drain to broadcast model for render packets
 
-#### Current Rendering Flow
-1. SystemsManager calls `ui.render()` at 60fps (line 226 in systems_manager.rs)
-2. UiSystem::render() creates RenderCommandBatch with Clear + test DrawQuad
-3. Batch serialized with bincode and sent via NetworkingSystem on channel 10
-4. Browser client receives packet type 104 on channel 10
-5. Client deserializes and executes commands via WebGL renderer
+#### Splitting system.rs for Architecture Compliance
+- **Violation**: system.rs was 1190 lines (exceeds 1000-line rule)
+- **Created directory structure**: `/systems/ui/src/system/`
+- **Files created**:
+  - `mod.rs` - Exports only (per rules)
+  - `core.rs` - UiSystem struct and basic methods
+  - `init.rs` - Initialization and setup
+  - `elements.rs` - Element management
+  - `layout.rs` - Layout and dirty tracking
+- **Still need**: rendering.rs, shaders.rs, ui_renderer_impl.rs
+- **Old system.rs**: Needs deletion after split complete
 
-### What's Working
-- Complete rendering pipeline from server to browser
-- WebGL renderer initialized with shaders
-- Clear command with Discord dark background (0.133, 0.137, 0.153)
-- Test red quad rendering for verification
-- 60fps update loop sending frames
-- Browser WebSocket connection stable
-- All 9 IDE plugins load successfully
+### Key Architecture Rules Enforced
+- **NO Search/Grep** - Read files directly only
+- **Read files FULLY** in one pass
+- **mod.rs/lib.rs ONLY export** - No implementation
+- **Files under 1000 lines**
+- **NO dyn, NO any, NO turbofish, NO unsafe**
+- **Shared<> for internal, Handle<> for external**
 
-### Next Session Tasks
+### Next Steps
+1. **Complete system.rs split**:
+   - Create rendering.rs, shaders.rs, ui_renderer_impl.rs
+   - Delete old system.rs
+   - Verify compilation
 
-1. **Verify Discord UI elements are created** by UI Framework Plugin
-   - Check if create_mobile_discord_layout() actually creates entities
-   - Ensure root_entity is set in UiSystem
-   
-2. **Generate render commands from actual UI elements** 
-   - Implement render_element_tree() properly
-   - Remove test red quad once real elements render
-   
-3. **Connect other plugins to UI Framework**
-   - File browser should update UI
-   - Terminal output should display
-   - Editor content should render
-   
-4. **Implement dynamic channel system** 
-   - Still hardcoded at channel 10
-   - Need discovery protocol on channel 0
+2. **Fix packet broadcasting**:
+   - Modify batcher to not consume packets
+   - Implement proper broadcast for render channel
+   - Test with multiple browser clients
 
-### Key Files Modified This Session
-- `/systems/ui/src/system.rs` - Found existing render() method, removed duplicate
+3. **Verify Discord UI rendering**:
+   - Check UI Framework Plugin creates elements
+   - Ensure render_element_tree() works
+   - Remove test red quad
 
 ### Running the IDE
 ```bash
@@ -62,6 +59,5 @@ Then browse to: http://localhost:8080/playground-editor/
 
 ### Expected Behavior
 - Browser should connect via WebSocket
-- Clear to Discord dark color
-- Red test quad should appear at (100, 100)
-- Dashboard should show render packets being sent
+- Currently: Packets queue up, nothing renders
+- Goal: All clients receive render packets via broadcast

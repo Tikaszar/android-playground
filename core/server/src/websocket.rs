@@ -134,50 +134,37 @@ async fn handle_websocket(socket: WebSocket, state: Handle<WebSocketState>) {
         loop {
             interval.tick().await;
             
-            // Only get batches if this is connection 0 (to avoid multiple connections consuming the same packets)
-            // This is a temporary fix - we should implement proper broadcast
-            if connection_id == 0 {
-                let batches = state_clone.batcher.get_all_batches().await;
-                if !batches.is_empty() {
-                    state_clone.dashboard.log(
-                        crate::dashboard::LogLevel::Debug,
-                        format!("Broadcasting {} batches to all clients", batches.len()),
-                        None
-                    ).await;
-                    
-                    // Send to ALL connections, not just this one
-                    let connections = state_clone.connections.read().await;
-                    
-                    state_clone.dashboard.log(
-                        crate::dashboard::LogLevel::Debug,
-                        format!("Total connections: {}", connections.len()),
-                        None
-                    ).await;
-                    
-                    for (conn_id, conn_lock) in connections.iter().enumerate() {
-                        let mut conn = conn_lock.write().await;
-                        if let Some(connection) = conn.as_mut() {
-                            for (_channel_id, batch) in &batches {
-                                let batch_len = batch.len() as u64;
-                                
-                                // Update dashboard with sent message
-                                state_clone.dashboard.update_client_activity(conn_id, false, batch_len).await;
-                                
-                                if let Err(e) = connection.sender.send(Message::Binary(batch.clone())).await {
-                                    state_clone.dashboard.log_error(
-                                        format!("Failed to send batch to client {}: {}", conn_id, e), 
-                                        Some(conn_id)
-                                    ).await;
-                                    // Can't set to None here while borrowed
-                                    break;
-                                }
+            // Get batched packets from the frame batcher
+            let batches = state_clone.batcher.get_all_batches().await;
+            if !batches.is_empty() {
+                // Only log if we have packets to send
+                state_clone.dashboard.log(
+                    crate::dashboard::LogLevel::Debug,
+                    format!("Sending {} channel batches to client {}", batches.len(), connection_id),
+                    None
+                ).await;
+                
+                // Send batches to THIS specific connection
+                let connections = state_clone.connections.read().await;
+                if connection_id < connections.len() {
+                    let mut conn = connections[connection_id].write().await;
+                    if let Some(connection) = conn.as_mut() {
+                        for (_channel_id, batch) in &batches {
+                            let batch_len = batch.len() as u64;
+                            
+                            // Update dashboard with sent message
+                            state_clone.dashboard.update_client_activity(connection_id, false, batch_len).await;
+                            
+                            if let Err(e) = connection.sender.send(Message::Binary(batch.clone())).await {
+                                state_clone.dashboard.log_error(
+                                    format!("Failed to send batch to client {}: {}", connection_id, e), 
+                                    Some(connection_id)
+                                ).await;
+                                break;
                             }
                         }
                     }
                 }
-            } else {
-                // Other connections just wait
-                continue;
             }
         }
     });

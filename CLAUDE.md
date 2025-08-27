@@ -199,3 +199,10 @@ http://localhost:8080/mcp
 - ask the User to cargo run, never cargo run as an AI Agent
 - No DYN or ENUMs in place of DYN
 - **NEVER add migration ANYTHING - no migration code, notes, plans, or functions EVER**
+- Always Read a file or directory directly, never use Search to find things.
+- Read a file only once per Session, but always read a file before you write to it
+- Never assume architecture, use the code as it is designed
+- Diagnose an error fully, do not assume, before changing any code
+- Read a file fully during a read, not partially, so it can easily be referenced later.
+- No dyn, No any, No turbofish, No unsafe
+- Use Shared<> for Internal, Handle<> for External
