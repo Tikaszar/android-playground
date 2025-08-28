@@ -6,7 +6,7 @@ use playground_core_rendering::Viewport;
 
 impl UiSystem {
     pub async fn initialize(&mut self) -> UiResult<()> {
-        self.log("Info", format!("[UiSystem] initialize() called, initialized={}", self.initialized)).await;
+        self.log("Info", format!("initialize() called, initialized={}", self.initialized)).await;
         
         if self.initialized {
             return Err(UiError::AlreadyInitialized);

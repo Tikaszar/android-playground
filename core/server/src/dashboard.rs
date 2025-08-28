@@ -144,7 +144,8 @@ pub struct Dashboard {
     mcp_sessions: Shared<HashMap<String, Instant>>,
     last_update: Shared<Instant>,
     recent_logs: Shared<VecDeque<LogEntry>>,
-    log_file: Shared<Option<tokio::fs::File>>,
+    log_file: Shared<Option<tokio::fs::File>>,  // Main server log
+    component_log_files: Shared<HashMap<String, tokio::fs::File>>,  // Component-specific logs
     max_log_entries: usize,
     channels: Shared<HashMap<u16, DashboardChannelInfo>>,  // Channel registry for display
 }
@@ -173,6 +174,7 @@ impl Dashboard {
             last_update: shared(Instant::now()),
             recent_logs: shared(VecDeque::with_capacity(100)),
             log_file: shared(None),
+            component_log_files: shared(HashMap::new()),
             max_log_entries: 10, // Show last 10 logs in dashboard
             channels: shared(initial_channels),
         }
@@ -204,7 +206,7 @@ impl Dashboard {
         Ok(())
     }
     
-    /// Add a log entry
+    /// Add a log entry (writes to main log file)
     pub async fn log(&self, level: LogLevel, message: String, client_id: Option<usize>) {
         let entry = LogEntry {
             timestamp: SystemTime::now(),
@@ -224,6 +226,72 @@ impl Dashboard {
         // Write to log file
         let mut log_file_lock = self.log_file.write().await;
         if let Some(file) = &mut *log_file_lock {
+            let timestamp = chrono::Local::now().format("%Y-%m-%d %H:%M:%S%.3f");
+            let client_str = client_id.map_or(String::new(), |id| format!(" [Client #{}]", id));
+            let log_line = format!("[{}] {:?}{}: {}\n", timestamp, level, client_str, message);
+            
+            let _ = file.write_all(log_line.as_bytes()).await;
+            let _ = file.flush().await;
+        }
+    }
+    
+    /// Add a log entry with component name (writes to component-specific log file)
+    pub async fn log_component(&self, component: &str, level: LogLevel, message: String, client_id: Option<usize>) {
+        let entry = LogEntry {
+            timestamp: SystemTime::now(),
+            level: level.clone(),
+            message: message.clone(),
+            client_id,
+        };
+        
+        // Add to recent logs (for dashboard display) - prefix with component name
+        let display_message = format!("[{}] {}", component, message);
+        let display_entry = LogEntry {
+            timestamp: entry.timestamp,
+            level: entry.level.clone(),
+            message: display_message,
+            client_id,
+        };
+        
+        let mut logs = self.recent_logs.write().await;
+        if logs.len() >= 100 {
+            logs.pop_front();
+        }
+        logs.push_back(display_entry);
+        drop(logs);
+        
+        // Get or create component log file
+        let mut component_files = self.component_log_files.write().await;
+        if !component_files.contains_key(component) {
+            // Create new log file for this component
+            let timestamp = chrono::Local::now().format("%Y%m%d_%H%M%S");
+            let log_path = format!("logs/playground_editor_{}_{}.log", 
+                component.replace("/", "_").replace("-", "_"), timestamp);
+            
+            match OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(&log_path)
+                .await 
+            {
+                Ok(file) => {
+                    component_files.insert(component.to_string(), file);
+                    // Log to main file that we created a component log
+                    drop(component_files);
+                    self.log(LogLevel::Info, format!("Created component log file: {}", log_path), None).await;
+                    // Re-acquire lock
+                    component_files = self.component_log_files.write().await;
+                }
+                Err(e) => {
+                    drop(component_files);
+                    self.log(LogLevel::Error, format!("Failed to create component log for {}: {}", component, e), None).await;
+                    return;
+                }
+            }
+        }
+        
+        // Write to component log file
+        if let Some(file) = component_files.get_mut(component) {
             let timestamp = chrono::Local::now().format("%Y-%m-%d %H:%M:%S%.3f");
             let client_str = client_id.map_or(String::new(), |id| format!(" [Client #{}]", id));
             let log_line = format!("[{}] {:?}{}: {}\n", timestamp, level, client_str, message);

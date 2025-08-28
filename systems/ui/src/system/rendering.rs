@@ -51,9 +51,10 @@ impl UiSystem {
         if let Some(ref networking) = self.networking_system {
             let networking = networking.read().await;
             if let Some(dashboard) = networking.get_dashboard().await {
-                dashboard.log(
+                dashboard.log_component(
+                    "systems/ui",
                     playground_core_server::dashboard::LogLevel::Debug,
-                    format!("UI: Publishing RenderBatch to MessageBus on channel {} (bincode, {} bytes)", 
+                    format!("Publishing RenderBatch to MessageBus on channel {} (bincode, {} bytes)", 
                         self.channel_id, data.len()),
                     None
                 ).await;
@@ -80,9 +81,10 @@ impl UiSystem {
         if let Some(ref networking) = self.networking_system {
             let networking = networking.read().await;
             if let Some(dashboard) = networking.get_dashboard().await {
-                dashboard.log(
+                dashboard.log_component(
+                    "systems/ui",
                     playground_core_server::dashboard::LogLevel::Debug,
-                    format!("UI: render() called, frame {}", self.frame_id),
+                    format!("render() called, frame {}", self.frame_id),
                     None
                 ).await;
             }
@@ -121,9 +123,10 @@ impl UiSystem {
             if let Some(ref networking) = self.networking_system {
                 let networking = networking.read().await;
                 if let Some(dashboard) = networking.get_dashboard().await {
-                    dashboard.log(
+                    dashboard.log_component(
+                        "systems/ui",
                         playground_core_server::dashboard::LogLevel::Debug,
-                        format!("UI: Rendering root entity {:?}", root),
+                        format!("Rendering root entity {:?}", root),
                         None
                     ).await;
                 }
@@ -134,9 +137,10 @@ impl UiSystem {
             if let Some(ref networking) = self.networking_system {
                 let networking = networking.read().await;
                 if let Some(dashboard) = networking.get_dashboard().await {
-                    dashboard.log(
+                    dashboard.log_component(
+                        "systems/ui",
                         playground_core_server::dashboard::LogLevel::Warning,
-                        "UI: No root entity to render!".to_string(),
+                        "No root entity to render!".to_string(),
                         None
                     ).await;
                 }

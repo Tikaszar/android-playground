@@ -1,6 +1,6 @@
 # CONTEXT.md - Current Session Context
 
-## Active Session - 2025-08-28 (Session 37)
+## Active Session - 2025-08-28 (Session 38)
 
 ### Current Status
 **Build**: ✅ COMPLETE - playground-apps-editor builds successfully
@@ -10,6 +10,27 @@
 **Channels**: ✅ Dynamic channel allocation working correctly
 **Browser**: ✅ Fixed - endianness issue resolved, manifest working
 **Lifecycle**: ✅ Fixed circular dependency in startup
+**Logging**: ✅ Component-specific log files implemented
+
+### Session 38 Accomplishments
+
+#### ✅ IMPLEMENTED: Component-Specific Log Files
+- **Feature**: Added distributed logging system for better debugging
+  - Each component logs to its own file (e.g., `playground_editor_systems_ui_*.log`)
+  - Dashboard displays all logs in unified view
+  - Main server log still exists for overview
+  
+- **Implementation**:
+  1. Added `component_log_files: Shared<HashMap<String, tokio::fs::File>>` to Dashboard
+  2. Created `log_component()` method that routes logs to component-specific files
+  3. Updated UiSystem to use `log_component("systems/ui", ...)` 
+  4. Component logs created on-demand in `logs/` directory
+  
+- **Benefits**:
+  - Much easier to debug specific components
+  - No more massive single log file
+  - Can tail specific component logs during debugging
+  - Dashboard still shows unified view for monitoring
 
 ### Session 37 Accomplishments
 

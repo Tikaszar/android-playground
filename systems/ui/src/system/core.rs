@@ -119,7 +119,7 @@ impl UiSystem {
                     "debug" | "Debug" => LogLevel::Debug,
                     _ => LogLevel::Info,
                 };
-                dashboard.log(log_level, message, None).await;
+                dashboard.log_component("systems/ui", log_level, message, None).await;
             }
         }
     }
