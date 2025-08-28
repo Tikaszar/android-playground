@@ -1,7 +1,7 @@
 use async_trait::async_trait;
 use crate::state::{EditorState, OpenFile, CursorPosition};
 use playground_systems_logic::{System, World, LogicResult, SystemsManager, Handle, handle, shared};
-use tracing::{info, debug};
+// Note: Using SystemsManager logging instead of tracing
 
 pub struct EditorCorePlugin {
     state: playground_systems_logic::Shared<EditorState>,
@@ -57,7 +57,11 @@ impl EditorCorePlugin {
     pub async fn toggle_vim_mode(&self) {
         let mut state = self.state.write().await;
         state.vim_mode = !state.vim_mode;
-        info!("Vim mode: {}", state.vim_mode);
+        let vim_status = state.vim_mode;
+        drop(state);
+        self.systems_manager.log_component("plugins/editor-core", 
+            playground_systems_logic::LogLevel::Info,
+            format!("Vim mode: {}", vim_status)).await;
     }
 
     pub async fn add_cursor(&self, line: usize, column: usize) {
@@ -114,7 +118,9 @@ impl System for EditorCorePlugin {
         // Request dynamic channel allocation
         self.channel_id = Some(self.systems_manager.register_plugin("editor-core").await?);
         
-        info!("Editor Core Plugin initialized on dynamic channel {}", self.channel_id.unwrap());
+        self.systems_manager.log_component("plugins/editor-core",
+            playground_systems_logic::LogLevel::Info,
+            format!("Editor Core Plugin initialized on dynamic channel {}", self.channel_id.unwrap())).await;
         
         // Initialize default editor state
         let mut state = self.state.write().await;
@@ -130,13 +136,17 @@ impl System for EditorCorePlugin {
     }
     
     async fn cleanup(&mut self, _world: &World) -> LogicResult<()> {
-        info!("Editor Core Plugin shutting down");
+        self.systems_manager.log_component("plugins/editor-core",
+            playground_systems_logic::LogLevel::Info,
+            "Editor Core Plugin shutting down".to_string()).await;
         
         // Save any unsaved changes
         let state = self.state.read().await;
         for file in &state.open_files {
             if file.modified {
-                debug!("Warning: Unsaved changes in {}", file.path);
+                self.systems_manager.log_component("plugins/editor-core",
+                    playground_systems_logic::LogLevel::Debug,
+                    format!("Warning: Unsaved changes in {}", file.path)).await;
             }
         }
         

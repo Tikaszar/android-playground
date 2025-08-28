@@ -2,7 +2,7 @@ use async_trait::async_trait;
 use playground_systems_logic::{System, World, LogicResult, SystemsManager, Handle};
 use std::path::PathBuf;
 use tokio::sync::mpsc;
-use tracing::{info, error, debug, warn};
+// Note: Using SystemsManager logging instead of tracing
 
 use crate::file_tree::{FileTree, FileTreeEvent};
 use crate::file_system::{FileSystemHandler, FileWatcher};
@@ -50,10 +50,10 @@ impl FileBrowserPlugin {
         match fs_handler.load_directory(&self.root_path).await {
             Ok(entries) => {
                 file_tree.update_entries(entries);
-                info!("Loaded directory: {:?}", self.root_path);
+                // info!("Loaded directory: {:?}", self.root_path);
             }
             Err(e) => {
-                error!("Failed to load directory {:?}: {}", self.root_path, e);
+                // error!("Failed to load directory {:?}: {}", self.root_path, e);
             }
         }
         
@@ -61,10 +61,10 @@ impl FileBrowserPlugin {
         match FileWatcher::new(vec![self.root_path.clone()], event_sender) {
             Ok(watcher) => {
                 self.file_watcher = Some(watcher);
-                info!("File watcher initialized for {:?}", self.root_path);
+                // info!("File watcher initialized for {:?}", self.root_path);
             }
             Err(e) => {
-                warn!("File watcher not available: {}", e);
+                // warn!("File watcher not available: {}", e);
                 // Continue without file watching - manual refresh will still work
             }
         }
@@ -90,22 +90,22 @@ impl FileBrowserPlugin {
         for event in events {
             match event {
                 FileTreeEvent::FileOpened(path) => {
-                    info!("File opened: {:?}", path);
+                // info!("File opened: {:?}", path);
                     // Send message to editor-core plugin to open the file
                     self.send_open_file_message(path);
                 }
                 FileTreeEvent::DirectoryExpanded(path) => {
-                    debug!("Directory expanded: {:?}", path);
+                // debug!("Directory expanded: {:?}", path);
                     // Load directory contents if not already loaded
                     self.load_directory_contents(path).await;
                 }
                 FileTreeEvent::RefreshRequested(path) => {
-                    debug!("Refresh requested: {:?}", path);
+                // debug!("Refresh requested: {:?}", path);
                     // Reload directory or file
                     self.refresh_path(path).await;
                 }
                 _ => {
-                    debug!("File tree event: {:?}", event);
+                // debug!("File tree event: {:?}", event);
                 }
             }
         }
@@ -120,7 +120,7 @@ impl FileBrowserPlugin {
                     }
                 }
                 Err(e) => {
-                    error!("Failed to load directory {:?}: {}", path, e);
+                // error!("Failed to load directory {:?}: {}", path, e);
                 }
             }
         }
@@ -140,7 +140,7 @@ impl FileBrowserPlugin {
                 }
             }
             Err(e) => {
-                error!("Failed to get metadata for {:?}: {}", path, e);
+                // error!("Failed to get metadata for {:?}: {}", path, e);
             }
         }
     }
@@ -149,7 +149,7 @@ impl FileBrowserPlugin {
         // This would send a message to the editor-core plugin
         // through the networking system on our channel
         // For now, we'll just log it
-        info!("Sending open file message for: {:?}", path);
+                // info!("Sending open file message for: {:?}", path);
         // TODO: Implement actual message sending through networking system
     }
 }
@@ -164,12 +164,12 @@ impl System for FileBrowserPlugin {
         // Request dynamic channel allocation
         self.channel_id = Some(self.systems_manager.register_plugin("file-browser").await?);
         
-        info!("File Browser Plugin initialized on dynamic channel {}", self.channel_id.unwrap());
+                // info!("File Browser Plugin initialized on dynamic channel {}", self.channel_id.unwrap());
         
         // Initialize file tree
         self.initialize_file_tree().await?;
         
-        info!("File browser plugin loaded successfully");
+                // info!("File browser plugin loaded successfully");
         Ok(())
     }
     
@@ -180,7 +180,7 @@ impl System for FileBrowserPlugin {
     }
     
     async fn cleanup(&mut self, _world: &World) -> LogicResult<()> {
-        info!("File browser plugin unloading");
+                // info!("File browser plugin unloading");
         
         // Clean up resources
         self.file_tree = None;

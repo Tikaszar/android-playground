@@ -55,3 +55,6 @@ pub use playground_core_ui::{
     Bounds as UiBounds,
     UiCommand, UiEvent, EventResult as UiEventResult,
 };
+
+// Re-export LogLevel for convenience
+pub use playground_core_server::dashboard::LogLevel;

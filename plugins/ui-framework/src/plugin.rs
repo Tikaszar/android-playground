@@ -5,7 +5,7 @@ use playground_core_types::{
 };
 use std::collections::HashMap;
 use tokio::sync::RwLock;
-use tracing::{info, debug, error};
+// Note: Using SystemsManager logging instead of tracing
 use uuid;
 
 use crate::panel_manager::PanelManager;
@@ -79,11 +79,13 @@ impl System for UiFrameworkPlugin {
     }
     
     async fn initialize(&mut self, _world: &World) -> LogicResult<()> {
-        // Log to dashboard
-        self.systems_manager.log("info", "[UI-FW] UI Framework Plugin initialize() called".to_string()).await;
+        // Log to dashboard using component-specific logging
+        self.systems_manager.log_component("plugins/ui-framework", playground_systems_logic::LogLevel::Info, 
+            "UI Framework Plugin initialize() called".to_string()).await;
         
         // Get our assigned channel from SystemsManager
-        self.systems_manager.log("info", "[UI-FW] Getting assigned channel from SystemsManager...".to_string()).await;
+        self.systems_manager.log_component("plugins/ui-framework", playground_systems_logic::LogLevel::Info,
+            "Getting assigned channel from SystemsManager...".to_string()).await;
         
         let channel = self.systems_manager.get_plugin_channel("ui-framework").await
             .ok_or_else(|| playground_systems_logic::LogicError::InitializationFailed(
@@ -91,7 +93,8 @@ impl System for UiFrameworkPlugin {
             ))?;
         self.channel_id = Some(channel);
         
-        self.systems_manager.log("info", format!("[UI-FW] Using assigned channel: {}", channel)).await;
+        self.systems_manager.log_component("plugins/ui-framework", playground_systems_logic::LogLevel::Info,
+            format!("Using assigned channel: {}", channel)).await;
         
         // Register with networking system
         let networking = self.systems_manager.networking();
@@ -99,37 +102,47 @@ impl System for UiFrameworkPlugin {
         
         // Register the allocated channel with networking
         if let Err(e) = net.register_system_channel("ui-framework", channel).await {
-            self.systems_manager.log("error", format!("[UI-FW] Failed to register channel {}: {}", channel, e)).await;
+            self.systems_manager.log_component("plugins/ui-framework", playground_systems_logic::LogLevel::Error, format!("[UI-FW] Failed to register channel {}: {}", channel, e)).await;
             return Err(playground_systems_logic::LogicError::InitializationFailed(
                 format!("Failed to register channel {}: {}", channel, e)
             ));
         }
         
-        self.systems_manager.log("info", "[UI-FW] Channel registered with networking successfully".to_string()).await;
+        self.systems_manager.log_component("plugins/ui-framework", playground_systems_logic::LogLevel::Info,
+            "Channel registered with networking successfully".to_string()).await;
         
         // Register MCP tools for UI manipulation
-        self.systems_manager.log("info", "[UI-FW] Registering MCP tools...".to_string()).await;
+        self.systems_manager.log_component("plugins/ui-framework", playground_systems_logic::LogLevel::Info,
+            "Registering MCP tools...".to_string()).await;
         self.register_mcp_tools().await?;
-        self.systems_manager.log("info", "[UI-FW] MCP tools registered".to_string()).await;
+        self.systems_manager.log_component("plugins/ui-framework", playground_systems_logic::LogLevel::Info,
+            "MCP tools registered".to_string()).await;
         
         // Start listening for messages on our channels
-        self.systems_manager.log("info", "[UI-FW] Starting message listener...".to_string()).await;
+        self.systems_manager.log_component("plugins/ui-framework", playground_systems_logic::LogLevel::Info,
+            "Starting message listener...".to_string()).await;
         self.start_message_listener().await;
-        self.systems_manager.log("info", "[UI-FW] Message listener started".to_string()).await;
+        self.systems_manager.log_component("plugins/ui-framework", playground_systems_logic::LogLevel::Info,
+            "Message listener started".to_string()).await;
         
         // Initialize panels
-        self.systems_manager.log("info", "[UI-FW] Initializing panels...".to_string()).await;
+        self.systems_manager.log_component("plugins/ui-framework", playground_systems_logic::LogLevel::Info,
+            "Initializing panels...".to_string()).await;
         let mut pm = self.panel_manager.write().await;
         pm.initialize_default_panels().await;
         drop(pm);
-        self.systems_manager.log("info", "[UI-FW] Panels initialized".to_string()).await;
+        self.systems_manager.log_component("plugins/ui-framework", playground_systems_logic::LogLevel::Info,
+            "Panels initialized".to_string()).await;
         
         // Create the Discord-style UI layout
-        self.systems_manager.log("info", "[UI-FW] Creating Discord UI...".to_string()).await;
+        self.systems_manager.log_component("plugins/ui-framework", playground_systems_logic::LogLevel::Info,
+            "Creating Discord UI...".to_string()).await;
         self.create_discord_ui().await?;
-        self.systems_manager.log("info", "[UI-FW] Discord UI created successfully".to_string()).await;
+        self.systems_manager.log_component("plugins/ui-framework", playground_systems_logic::LogLevel::Info,
+            "Discord UI created successfully".to_string()).await;
         
-        self.systems_manager.log("info", "[UI-FW] UI Framework Plugin initialize() completed".to_string()).await;
+        self.systems_manager.log_component("plugins/ui-framework", playground_systems_logic::LogLevel::Info,
+            "UI Framework Plugin initialize() completed".to_string()).await;
         
         Ok(())
     }
@@ -156,7 +169,8 @@ impl System for UiFrameworkPlugin {
     }
     
     async fn cleanup(&mut self, _world: &World) -> LogicResult<()> {
-        info!("UI Framework Plugin shutting down...");
+        self.systems_manager.log_component("plugins/ui-framework", playground_systems_logic::LogLevel::Info,
+            "UI Framework Plugin shutting down...".to_string()).await;
         
         // Save UI state
         let ui_state = self.ui_state.read().await;
@@ -216,7 +230,7 @@ impl UiFrameworkPlugin {
         let orchestrator = self.orchestrator.clone();
         
         tokio::spawn(async move {
-            debug!("UI Framework message listener started");
+            // debug!("UI Framework message listener started");
             // Message handling will be done in the run() method
         });
     }
@@ -229,7 +243,7 @@ impl UiFrameworkPlugin {
             PACKET_TYPE_PANEL_UPDATE => self.handle_panel_update(data).await,
             PACKET_TYPE_CHAT_MESSAGE => self.handle_chat_message(data).await,
             _ => {
-                debug!("Unknown packet type {} received on UI Framework channel", packet_type);
+                // debug!("Unknown packet type {} received on UI Framework channel", packet_type);
             }
         }
     }
@@ -243,18 +257,18 @@ impl UiFrameworkPlugin {
                 ) {
                     match self.mcp_handler.handle_tool_call(tool_name, params.clone()).await {
                         Ok(result) => {
-                            debug!("Tool call succeeded: {:?}", result);
+                            // debug!("Tool call succeeded: {:?}", result);
                         }
                         Err(e) => {
-                            error!("Tool call failed: {}", e);
+                            // error!("Tool call failed: {}", e);
                         }
                     }
                 } else {
-                    error!("Invalid mcp_tool_call message: missing tool_name or params");
+                    // error!("Invalid mcp_tool_call message: missing tool_name or params");
                 }
             }
             Err(e) => {
-                error!("Failed to parse MCP tool call: {}", e);
+                // error!("Failed to parse MCP tool call: {}", e);
             }
         }
     }
@@ -266,7 +280,7 @@ impl UiFrameworkPlugin {
                 pm.handle_panel_update(msg).await;
             }
             Err(e) => {
-                error!("Failed to parse panel update: {}", e);
+                // error!("Failed to parse panel update: {}", e);
             }
         }
     }
@@ -276,11 +290,11 @@ impl UiFrameworkPlugin {
             Ok(msg) => {
                 let mut ui_state = self.ui_state.write().await;
                 if let Err(e) = ui_state.handle_chat_message(msg).await {
-                    error!("Failed to handle chat message: {}", e);
+                    // error!("Failed to handle chat message: {}", e);
                 }
             }
             Err(e) => {
-                error!("Failed to parse chat message: {}", e);
+                // error!("Failed to parse chat message: {}", e);
             }
         }
     }
@@ -289,7 +303,7 @@ impl UiFrameworkPlugin {
         // Parse and handle messages from the browser
         match serde_json::from_slice::<serde_json::Value>(&data) {
             Ok(msg) => {
-                debug!("Received browser message: {:?}", msg);
+                // debug!("Received browser message: {:?}", msg);
                 
                 // Route to appropriate handler
                 if let Some(msg_type) = msg.get("type").and_then(|v| v.as_str()) {
@@ -301,14 +315,14 @@ impl UiFrameworkPlugin {
                             ) {
                                 match self.mcp_handler.handle_tool_call(tool_name, params.clone()).await {
                                     Ok(result) => {
-                                        debug!("Tool call succeeded: {:?}", result);
+                                        // debug!("Tool call succeeded: {:?}", result);
                                     }
                                     Err(e) => {
-                                        error!("Tool call failed: {}", e);
+                                        // error!("Tool call failed: {}", e);
                                     }
                                 }
                             } else {
-                                error!("Invalid mcp_tool_call message: missing tool_name or params");
+                                // error!("Invalid mcp_tool_call message: missing tool_name or params");
                             }
                         }
                         "panel_update" => {
@@ -318,38 +332,38 @@ impl UiFrameworkPlugin {
                         "chat_message" => {
                             let mut ui_state = self.ui_state.write().await;
                             if let Err(e) = ui_state.handle_chat_message(msg).await {
-                                error!("Failed to handle chat message: {}", e);
+                                // error!("Failed to handle chat message: {}", e);
                             }
                         }
                         _ => {
-                            debug!("Unknown message type: {}", msg_type);
+                            // debug!("Unknown message type: {}", msg_type);
                         }
                     }
                 }
             }
             Err(e) => {
-                error!("Failed to parse browser message: {}", e);
+                // error!("Failed to parse browser message: {}", e);
             }
         }
     }
     
     async fn create_discord_ui(&self) -> LogicResult<()> {
-        self.systems_manager.log("info", "[UI-FW] create_discord_ui() called".to_string()).await;
+        self.systems_manager.log_component("plugins/ui-framework", playground_systems_logic::LogLevel::Info, "[UI-FW] create_discord_ui() called".to_string()).await;
         
         // Get the UI interface from SystemsManager
-        self.systems_manager.log("info", "[UI-FW] Getting UI interface...".to_string()).await;
+        self.systems_manager.log_component("plugins/ui-framework", playground_systems_logic::LogLevel::Info, "[UI-FW] Getting UI interface...".to_string()).await;
         let mut ui_interface = self.systems_manager.ui_interface();
-        self.systems_manager.log("info", "[UI-FW] Got UI interface".to_string()).await;
+        self.systems_manager.log_component("plugins/ui-framework", playground_systems_logic::LogLevel::Info, "[UI-FW] Got UI interface".to_string()).await;
         
         // Create mobile Discord layout optimized for phones
-        self.systems_manager.log("info", "[UI-FW] Calling create_mobile_discord_layout()...".to_string()).await;
+        self.systems_manager.log_component("plugins/ui-framework", playground_systems_logic::LogLevel::Info, "[UI-FW] Calling create_mobile_discord_layout()...".to_string()).await;
         let layout = match ui_interface.create_mobile_discord_layout().await {
             Ok(layout) => {
-                self.systems_manager.log("info", "[UI-FW] ✓ Successfully created Discord layout".to_string()).await;
+                self.systems_manager.log_component("plugins/ui-framework", playground_systems_logic::LogLevel::Info, "[UI-FW] ✓ Successfully created Discord layout".to_string()).await;
                 layout
             },
             Err(e) => {
-                self.systems_manager.log("error", format!("[UI-FW] ✗ Failed to create Discord layout: {}", e)).await;
+                self.systems_manager.log_component("plugins/ui-framework", playground_systems_logic::LogLevel::Error, format!("[UI-FW] ✗ Failed to create Discord layout: {}", e)).await;
                 // For now, just return Ok to not block initialization
                 // The UI won't be created but the plugin will still run
                 return Ok(());
@@ -507,7 +521,7 @@ impl UiFrameworkPlugin {
         // In production, you'd store these IDs in components
         drop(ui_state);
         
-        info!("Mobile Discord UI layout created successfully");
+        // info!("Mobile Discord UI layout created successfully");
         Ok(())
     }
 }

@@ -295,6 +295,24 @@ impl SystemsManager {
         Ok(())
     }
     
+    /// Log a message with component name (writes to component-specific log file)
+    pub async fn log_component(&self, component: &str, level: playground_core_server::dashboard::LogLevel, message: String) {
+        // Get dashboard from networking system
+        let networking = self.networking.read().await;
+        if let Some(dashboard) = networking.get_dashboard().await {
+            dashboard.log_component(component, level, message, None).await;
+        }
+    }
+    
+    /// Log a message (writes to main log file)
+    pub async fn log(&self, level: playground_core_server::dashboard::LogLevel, message: String) {
+        // Get dashboard from networking system
+        let networking = self.networking.read().await;
+        if let Some(dashboard) = networking.get_dashboard().await {
+            dashboard.log(level, message, None).await;
+        }
+    }
+    
     /// Get reference to NetworkingSystem
     pub fn networking(&self) -> Shared<NetworkingSystem> {
         self.networking.clone()
@@ -355,21 +373,6 @@ impl SystemsManager {
         self.world.clone()
     }
     
-    /// Log a message to the dashboard
-    pub async fn log(&self, level: &str, message: String) {
-        let networking = self.networking.read().await;
-        if let Some(dashboard) = networking.get_dashboard().await {
-            use playground_core_server::dashboard::LogLevel;
-            let log_level = match level {
-                "error" | "Error" => LogLevel::Error,
-                "warn" | "Warning" => LogLevel::Warning,
-                "info" | "Info" => LogLevel::Info,
-                "debug" | "Debug" => LogLevel::Debug,
-                _ => LogLevel::Info,
-            };
-            dashboard.log(log_level, message, None).await;
-        }
-    }
     
     /// Register a system and get its dynamically allocated channel
     pub async fn register_system(&self, name: &str) -> LogicResult<u16> {

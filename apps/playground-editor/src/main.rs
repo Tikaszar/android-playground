@@ -24,18 +24,21 @@ async fn main() -> Result<()> {
     
     // Create SystemsManager which initializes all engine systems
     let systems = handle(SystemsManager::new(world.clone()).await?);
-    eprintln!("[EDITOR] SystemsManager created");
+    systems.log_component("apps/playground-editor", playground_systems_logic::LogLevel::Info,
+        "SystemsManager created".to_string()).await;
 
     // Verify UI system is ready
     {
         let ui = systems.ui();
         let ui_read = ui.read().await;
-        eprintln!("[EDITOR] UI System ready: {}", ui_read.is_initialized());
+        systems.log_component("apps/playground-editor", playground_systems_logic::LogLevel::Info,
+            format!("UI System ready: {}", ui_read.is_initialized())).await;
     }
 
     // Phase 1: REGISTRATION - Register all IDE plugins and get their channels
     // This ensures all plugins are known before any initialization happens
-    eprintln!("[EDITOR] Phase 1: Registering IDE plugins...");
+    systems.log_component("apps/playground-editor", playground_systems_logic::LogLevel::Info,
+        "Phase 1: Registering IDE plugins...".to_string()).await;
 
     // CRITICAL: Register plugin channels with SystemsManager's ChannelRegistry
     // This must happen BEFORE core initialization so the channel manifest is complete
@@ -43,7 +46,8 @@ async fn main() -> Result<()> {
     // 1. UI Framework - Discord-style mobile UI
     let ui_framework_channel = systems.register_plugin("ui-framework").await?;
     world.write().await.register_plugin_channel("ui-framework".to_string(), ui_framework_channel).await?;
-    eprintln!("[EDITOR] ✓ UiFrameworkPlugin registered with channel {}", ui_framework_channel);
+    systems.log_component("apps/playground-editor", playground_systems_logic::LogLevel::Info,
+        format!("✓ UiFrameworkPlugin registered with channel {}", ui_framework_channel)).await;
 
     // 2. Editor Core - Text editing with vim mode  
     let editor_core_channel = systems.register_plugin("editor-core").await?;
@@ -113,6 +117,7 @@ async fn main() -> Result<()> {
             loop {
                 interval.tick().await;
                 if let Err(e) = plugin.run(&*plugin_world, 0.016).await {
+                    // Note: Can't use systems.log_component here as systems not available in spawned task
                     eprintln!("[UiFrameworkPlugin] Error: {}", e);
                 }
             }

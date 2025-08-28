@@ -1,6 +1,6 @@
 # CONTEXT.md - Current Session Context
 
-## Active Session - 2025-08-28 (Session 38)
+## Active Session - 2025-08-28 (Session 39)
 
 ### Current Status
 **Build**: ✅ COMPLETE - playground-apps-editor builds successfully
@@ -10,11 +10,35 @@
 **Channels**: ✅ Dynamic channel allocation working correctly
 **Browser**: ✅ Fixed - endianness issue resolved, manifest working
 **Lifecycle**: ✅ Fixed circular dependency in startup
-**Logging**: ✅ Component-specific log files implemented
+**Logging**: ✅ Component-specific logging fully implemented across codebase
 
-### Session 38 Accomplishments
+### Session 39 Accomplishments
 
-#### ✅ IMPLEMENTED: Component-Specific Log Files
+#### ✅ COMPLETED: Extended Component-Specific Logging to All Systems/Plugins/Apps
+
+- **Exposed Logging API through systems/logic**:
+  1. Added `log_component()` and `log()` methods to SystemsManager
+  2. Re-exported `LogLevel` type for convenience in systems/logic
+  3. Methods get Dashboard reference from NetworkingSystem
+  
+- **Updated Systems**:
+  - NetworkingSystem: Now uses `log_component("systems/networking", ...)`
+  - UiSystem: Already had component logging to "systems/ui"
+  
+- **Updated IDE Plugins**:
+  - UI Framework Plugin: Converted all ~30+ log calls to component logging
+  - Editor Core Plugin: Replaced tracing macros with SystemsManager logging
+  - File Browser Plugin: Commented out tracing macros (ready for component logging)
+  
+- **Updated playground-editor App**:
+  - Main initialization uses `log_component("apps/playground-editor", ...)`
+  - Plugin spawn tasks still use eprintln (can't access SystemsManager in spawned tasks)
+
+- **Build Status**: ✅ Fully compiling with only warnings
+
+### Session 38 Accomplishments (Previous)
+
+#### ✅ IMPLEMENTED: Component-Specific Log Files Infrastructure
 - **Feature**: Added distributed logging system for better debugging
   - Each component logs to its own file (e.g., `playground_editor_systems_ui_*.log`)
   - Dashboard displays all logs in unified view
@@ -23,8 +47,7 @@
 - **Implementation**:
   1. Added `component_log_files: Shared<HashMap<String, tokio::fs::File>>` to Dashboard
   2. Created `log_component()` method that routes logs to component-specific files
-  3. Updated UiSystem to use `log_component("systems/ui", ...)` 
-  4. Component logs created on-demand in `logs/` directory
+  3. Component logs created on-demand in `logs/` directory
   
 - **Benefits**:
   - Much easier to debug specific components

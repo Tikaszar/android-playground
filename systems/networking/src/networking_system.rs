@@ -159,11 +159,12 @@ impl NetworkingSystem {
         data: Vec<u8>,
         _priority: Priority,
     ) -> NetworkResult<()> {
-        // Log packet send
+        // Log packet send with component-specific logging
         if let Some(ref dashboard) = self.dashboard {
-            dashboard.log(
+            dashboard.log_component(
+                "systems/networking",
                 playground_core_server::dashboard::LogLevel::Debug,
-                format!("NetworkingSystem: Publishing packet type {} on channel {} ({} bytes) to MessageBus", 
+                format!("Publishing packet type {} on channel {} ({} bytes) to MessageBus", 
                     packet_type, channel, data.len()),
                 None
             ).await;
