@@ -82,13 +82,16 @@ impl System for UiFrameworkPlugin {
         // Log to dashboard
         self.systems_manager.log("info", "[UI-FW] UI Framework Plugin initialize() called".to_string()).await;
         
-        // Request dynamic channel for UI Framework
-        self.systems_manager.log("info", "[UI-FW] Requesting dynamic channel allocation...".to_string()).await;
+        // Get our assigned channel from SystemsManager
+        self.systems_manager.log("info", "[UI-FW] Getting assigned channel from SystemsManager...".to_string()).await;
         
-        let channel = self.systems_manager.register_plugin("ui-framework").await?;
+        let channel = self.systems_manager.get_plugin_channel("ui-framework").await
+            .ok_or_else(|| playground_systems_logic::LogicError::InitializationFailed(
+                "Plugin channel not assigned by SystemsManager".to_string()
+            ))?;
         self.channel_id = Some(channel);
         
-        self.systems_manager.log("info", format!("[UI-FW] Dynamic channel allocated: {}", channel)).await;
+        self.systems_manager.log("info", format!("[UI-FW] Using assigned channel: {}", channel)).await;
         
         // Register with networking system
         let networking = self.systems_manager.networking();

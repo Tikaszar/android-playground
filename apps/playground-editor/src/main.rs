@@ -1,6 +1,7 @@
 use anyhow::Result;
 
-use playground_systems_logic::{World, SystemsManager, handle, shared};
+use playground_systems_logic::{World, SystemsManager, System, handle, shared};
+use playground_core_types::Handle;
 
 // Import all IDE plugins - each is self-contained
 use playground_plugins_ui_framework::UiFrameworkPlugin;
@@ -32,7 +33,7 @@ async fn main() -> Result<()> {
         eprintln!("[EDITOR] UI System ready: {}", ui_read.is_initialized());
     }
 
-    // Phase 1: REGISTRATION - Register all IDE plugins WITHOUT initializing them
+    // Phase 1: REGISTRATION - Register all IDE plugins and get their channels
     // This ensures all plugins are known before any initialization happens
     eprintln!("[EDITOR] Phase 1: Registering IDE plugins...");
 
@@ -40,75 +41,49 @@ async fn main() -> Result<()> {
     // This must happen BEFORE core initialization so the channel manifest is complete
     
     // 1. UI Framework - Discord-style mobile UI
-    {
-        let plugin = UiFrameworkPlugin::new(systems.clone());
-        world.write().await.register_plugin_system(Box::new(plugin)).await?;
-        eprintln!("[EDITOR] ✓ UiFrameworkPlugin registered (channel will be allocated on initialization)");
-    }
+    let ui_framework_channel = systems.register_plugin("ui-framework").await?;
+    world.write().await.register_plugin_channel("ui-framework".to_string(), ui_framework_channel).await?;
+    eprintln!("[EDITOR] ✓ UiFrameworkPlugin registered with channel {}", ui_framework_channel);
 
-    // 2. Editor Core - Text editing with vim mode
-    {
-        let channel = systems.register_plugin("editor-core").await?;
-        let plugin = EditorCorePlugin::new(systems.clone());
-        world.write().await.register_plugin_system(Box::new(plugin)).await?;
-        eprintln!("[EDITOR] ✓ EditorCorePlugin registered with channel {} (not initialized)", channel);
-    }
+    // 2. Editor Core - Text editing with vim mode  
+    let editor_core_channel = systems.register_plugin("editor-core").await?;
+    world.write().await.register_plugin_channel("editor-core".to_string(), editor_core_channel).await?;
+    eprintln!("[EDITOR] ✓ EditorCorePlugin registered with channel {}", editor_core_channel);
 
     // 3. File Browser - File navigation
-    {
-        let channel = systems.register_plugin("file-browser").await?;
-        let plugin = FileBrowserPlugin::new(systems.clone());
-        world.write().await.register_plugin_system(Box::new(plugin)).await?;
-        eprintln!("[EDITOR] ✓ FileBrowserPlugin registered with channel {} (not initialized)", channel);
-    }
+    let file_browser_channel = systems.register_plugin("file-browser").await?;
+    world.write().await.register_plugin_channel("file-browser".to_string(), file_browser_channel).await?;
+    eprintln!("[EDITOR] ✓ FileBrowserPlugin registered with channel {}", file_browser_channel);
 
     // 4. Terminal - Termux integration
-    {
-        let channel = systems.register_plugin("terminal").await?;
-        let plugin = TerminalPlugin::new(systems.clone());
-        world.write().await.register_plugin_system(Box::new(plugin)).await?;
-        eprintln!("[EDITOR] ✓ TerminalPlugin registered with channel {} (not initialized)", channel);
-    }
+    let terminal_channel = systems.register_plugin("terminal").await?;
+    world.write().await.register_plugin_channel("terminal".to_string(), terminal_channel).await?;
+    eprintln!("[EDITOR] ✓ TerminalPlugin registered with channel {}", terminal_channel);
 
     // 5. LSP Client - Language server protocol
-    {
-        let channel = systems.register_plugin("lsp-client").await?;
-        let plugin = LspClientPlugin::new(systems.clone());
-        world.write().await.register_plugin_system(Box::new(plugin)).await?;
-        eprintln!("[EDITOR] ✓ LspClientPlugin registered with channel {} (not initialized)", channel);
-    }
+    let lsp_client_channel = systems.register_plugin("lsp-client").await?;
+    world.write().await.register_plugin_channel("lsp-client".to_string(), lsp_client_channel).await?;
+    eprintln!("[EDITOR] ✓ LspClientPlugin registered with channel {}", lsp_client_channel);
 
     // 6. Debugger - Debug support
-    {
-        let channel = systems.register_plugin("debugger").await?;
-        let plugin = DebuggerPlugin::new(systems.clone());
-        world.write().await.register_plugin_system(Box::new(plugin)).await?;
-        eprintln!("[EDITOR] ✓ DebuggerPlugin registered with channel {} (not initialized)", channel);
-    }
+    let debugger_channel = systems.register_plugin("debugger").await?;
+    world.write().await.register_plugin_channel("debugger".to_string(), debugger_channel).await?;
+    eprintln!("[EDITOR] ✓ DebuggerPlugin registered with channel {}", debugger_channel);
 
     // 7. Chat Assistant - MCP/LLM integration
-    {
-        let channel = systems.register_plugin("chat-assistant").await?;
-        let plugin = ChatAssistantPlugin::new(systems.clone());
-        world.write().await.register_plugin_system(Box::new(plugin)).await?;
-        eprintln!("[EDITOR] ✓ ChatAssistantPlugin registered with channel {} (not initialized)", channel);
-    }
+    let chat_assistant_channel = systems.register_plugin("chat-assistant").await?;
+    world.write().await.register_plugin_channel("chat-assistant".to_string(), chat_assistant_channel).await?;
+    eprintln!("[EDITOR] ✓ ChatAssistantPlugin registered with channel {}", chat_assistant_channel);
 
     // 8. Version Control - Git integration
-    {
-        let channel = systems.register_plugin("version-control").await?;
-        let plugin = VersionControlPlugin::new(systems.clone());
-        world.write().await.register_plugin_system(Box::new(plugin)).await?;
-        eprintln!("[EDITOR] ✓ VersionControlPlugin registered with channel {} (not initialized)", channel);
-    }
+    let version_control_channel = systems.register_plugin("version-control").await?;
+    world.write().await.register_plugin_channel("version-control".to_string(), version_control_channel).await?;
+    eprintln!("[EDITOR] ✓ VersionControlPlugin registered with channel {}", version_control_channel);
 
     // 9. Theme Manager - UI theming
-    {
-        let channel = systems.register_plugin("theme-manager").await?;
-        let plugin = ThemeManagerPlugin::new(systems.clone());
-        world.write().await.register_plugin_system(Box::new(plugin)).await?;
-        eprintln!("[EDITOR] ✓ ThemeManagerPlugin registered with channel {} (not initialized)", channel);
-    }
+    let theme_manager_channel = systems.register_plugin("theme-manager").await?;
+    world.write().await.register_plugin_channel("theme-manager".to_string(), theme_manager_channel).await?;
+    eprintln!("[EDITOR] ✓ ThemeManagerPlugin registered with channel {}", theme_manager_channel);
 
     eprintln!("[EDITOR] Phase 1 complete: All IDE plugins registered with dynamic channels!");
 
@@ -119,11 +94,176 @@ async fn main() -> Result<()> {
     systems.initialize_all().await?;
     eprintln!("[EDITOR] Phase 2 complete: Core engine systems initialized!");
 
-    // Phase 3: PLUGIN INITIALIZATION - Initialize all registered plugins
+    // Phase 3: PLUGIN INITIALIZATION - Start plugins as independent tasks
     // Now that NetworkingSystem is ready, plugins can perform network operations
-    eprintln!("[EDITOR] Phase 3: Initializing all plugins...");
-    world.write().await.initialize_all_plugins().await?;
-    eprintln!("[EDITOR] Phase 3 complete: All plugins initialized!");
+    eprintln!("[EDITOR] Phase 3: Starting plugin tasks...");
+    
+    // Convert Shared<World> to Handle<World> for plugins (external reference)
+    let world_handle: Handle<World> = handle(world.read().await.clone());
+    
+    // 1. UI Framework Plugin
+    {
+        let mut plugin = UiFrameworkPlugin::new(systems.clone());
+        plugin.initialize(&*world_handle).await?;
+        eprintln!("[EDITOR] ✓ UiFrameworkPlugin initialized");
+        
+        let plugin_world = world_handle.clone();
+        tokio::spawn(async move {
+            let mut interval = tokio::time::interval(tokio::time::Duration::from_millis(16));
+            loop {
+                interval.tick().await;
+                if let Err(e) = plugin.run(&*plugin_world, 0.016).await {
+                    eprintln!("[UiFrameworkPlugin] Error: {}", e);
+                }
+            }
+        });
+    }
+    
+    // 2. Editor Core Plugin
+    {
+        let plugin_world = world_handle.clone();
+        let mut plugin = EditorCorePlugin::new(systems.clone());
+        plugin.initialize(&*world_handle).await?;
+        eprintln!("[EDITOR] ✓ EditorCorePlugin initialized");
+        
+        tokio::spawn(async move {
+            let mut interval = tokio::time::interval(tokio::time::Duration::from_millis(16));
+            loop {
+                interval.tick().await;
+                if let Err(e) = plugin.run(&*plugin_world, 0.016).await {
+                    eprintln!("[EditorCorePlugin] Error: {}", e);
+                }
+            }
+        });
+    }
+    
+    // 3. File Browser Plugin
+    {
+        let plugin_world = world_handle.clone();
+        let mut plugin = FileBrowserPlugin::new(systems.clone());
+        plugin.initialize(&*world_handle).await?;
+        eprintln!("[EDITOR] ✓ FileBrowserPlugin initialized");
+        
+        tokio::spawn(async move {
+            let mut interval = tokio::time::interval(tokio::time::Duration::from_millis(16));
+            loop {
+                interval.tick().await;
+                if let Err(e) = plugin.run(&*plugin_world, 0.016).await {
+                    eprintln!("[FileBrowserPlugin] Error: {}", e);
+                }
+            }
+        });
+    }
+    
+    // 4. Terminal Plugin
+    {
+        let plugin_world = world_handle.clone();
+        let mut plugin = TerminalPlugin::new(systems.clone());
+        plugin.initialize(&*world_handle).await?;
+        eprintln!("[EDITOR] ✓ TerminalPlugin initialized");
+        
+        tokio::spawn(async move {
+            let mut interval = tokio::time::interval(tokio::time::Duration::from_millis(16));
+            loop {
+                interval.tick().await;
+                if let Err(e) = plugin.run(&*plugin_world, 0.016).await {
+                    eprintln!("[TerminalPlugin] Error: {}", e);
+                }
+            }
+        });
+    }
+    
+    // 5. LSP Client Plugin
+    {
+        let plugin_world = world_handle.clone();
+        let mut plugin = LspClientPlugin::new(systems.clone());
+        plugin.initialize(&*world_handle).await?;
+        eprintln!("[EDITOR] ✓ LspClientPlugin initialized");
+        
+        tokio::spawn(async move {
+            let mut interval = tokio::time::interval(tokio::time::Duration::from_millis(16));
+            loop {
+                interval.tick().await;
+                if let Err(e) = plugin.run(&*plugin_world, 0.016).await {
+                    eprintln!("[LspClientPlugin] Error: {}", e);
+                }
+            }
+        });
+    }
+    
+    // 6. Debugger Plugin
+    {
+        let plugin_world = world_handle.clone();
+        let mut plugin = DebuggerPlugin::new(systems.clone());
+        plugin.initialize(&*world_handle).await?;
+        eprintln!("[EDITOR] ✓ DebuggerPlugin initialized");
+        
+        tokio::spawn(async move {
+            let mut interval = tokio::time::interval(tokio::time::Duration::from_millis(16));
+            loop {
+                interval.tick().await;
+                if let Err(e) = plugin.run(&*plugin_world, 0.016).await {
+                    eprintln!("[DebuggerPlugin] Error: {}", e);
+                }
+            }
+        });
+    }
+    
+    // 7. Chat Assistant Plugin
+    {
+        let plugin_world = world_handle.clone();
+        let mut plugin = ChatAssistantPlugin::new(systems.clone());
+        plugin.initialize(&*world_handle).await?;
+        eprintln!("[EDITOR] ✓ ChatAssistantPlugin initialized");
+        
+        tokio::spawn(async move {
+            let mut interval = tokio::time::interval(tokio::time::Duration::from_millis(16));
+            loop {
+                interval.tick().await;
+                if let Err(e) = plugin.run(&*plugin_world, 0.016).await {
+                    eprintln!("[ChatAssistantPlugin] Error: {}", e);
+                }
+            }
+        });
+    }
+    
+    // 8. Version Control Plugin
+    {
+        let plugin_world = world_handle.clone();
+        let mut plugin = VersionControlPlugin::new(systems.clone());
+        plugin.initialize(&*world_handle).await?;
+        eprintln!("[EDITOR] ✓ VersionControlPlugin initialized");
+        
+        tokio::spawn(async move {
+            let mut interval = tokio::time::interval(tokio::time::Duration::from_millis(16));
+            loop {
+                interval.tick().await;
+                if let Err(e) = plugin.run(&*plugin_world, 0.016).await {
+                    eprintln!("[VersionControlPlugin] Error: {}", e);
+                }
+            }
+        });
+    }
+    
+    // 9. Theme Manager Plugin
+    {
+        let plugin_world = world_handle.clone();
+        let mut plugin = ThemeManagerPlugin::new(systems.clone());
+        plugin.initialize(&*world_handle).await?;
+        eprintln!("[EDITOR] ✓ ThemeManagerPlugin initialized");
+        
+        tokio::spawn(async move {
+            let mut interval = tokio::time::interval(tokio::time::Duration::from_millis(16));
+            loop {
+                interval.tick().await;
+                if let Err(e) = plugin.run(&*plugin_world, 0.016).await {
+                    eprintln!("[ThemeManagerPlugin] Error: {}", e);
+                }
+            }
+        });
+    }
+    
+    eprintln!("[EDITOR] Phase 3 complete: All plugin tasks started!");
     
     // Display the dynamically allocated channels
     eprintln!("[EDITOR] Dynamic channel allocations:");

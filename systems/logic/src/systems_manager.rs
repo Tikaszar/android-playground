@@ -121,6 +121,9 @@ pub struct SystemsManager {
     
     // NEW: Dynamic channel registry
     channel_registry: Shared<ChannelRegistry>,
+    
+    // Plugin registry - tracks registered plugins and their channels (no dyn!)
+    plugin_registry: Shared<Vec<(String, u16)>>, // (name, channel_id)
 }
 
 impl SystemsManager {
@@ -136,6 +139,7 @@ impl SystemsManager {
             renderer: None,
             renderer_data: None,
             channel_registry: shared(ChannelRegistry::new()),
+            plugin_registry: shared(Vec::new()),
         })
     }
     
@@ -229,6 +233,32 @@ impl SystemsManager {
                 format!("✓ UiSystem initialized on dynamic channel {}", ui_channel),
                 None
             ).await;
+            
+            // Now register all plugins that were registered in Phase 1
+            dashboard.log(
+                LogLevel::Info,
+                "Registering plugin channels with dashboard...".to_string(),
+                None
+            ).await;
+            
+            {
+                let plugins = self.plugin_registry.read().await;
+                use playground_core_server::dashboard::ChannelType as DashChannelType;
+                
+                for (name, channel_id) in plugins.iter() {
+                    dashboard.register_channel(
+                        *channel_id,
+                        name.clone(),
+                        DashChannelType::Plugin
+                    ).await;
+                    
+                    dashboard.log(
+                        LogLevel::Info,
+                        format!("✓ Plugin '{}' registered with channel {}", name, channel_id),
+                        None
+                    ).await;
+                }
+            }
             
             // RenderingSystem initialization skipped for now
             dashboard.log(
@@ -360,24 +390,6 @@ impl SystemsManager {
         Ok(channel_id)
     }
     
-    /// Register a plugin and get its dynamically allocated channel
-    pub async fn register_plugin(&self, name: &str) -> LogicResult<u16> {
-        let mut registry = self.channel_registry.write().await;
-        let channel_id = registry.allocate_channel(name.to_string(), ChannelType::Plugin)?;
-        
-        // Report to dashboard if available
-        let networking = self.networking.read().await;
-        if let Some(dashboard) = networking.get_dashboard().await {
-            use playground_core_server::dashboard::ChannelType as DashChannelType;
-            dashboard.register_channel(
-                channel_id,
-                name.to_string(), 
-                DashChannelType::Plugin
-            ).await;
-        }
-        
-        Ok(channel_id)
-    }
     
     /// Get channel manifest for browser discovery
     pub async fn get_channel_manifest(&self) -> ChannelManifest {
@@ -396,6 +408,35 @@ impl SystemsManager {
     pub async fn get_channel_by_name(&self, name: &str) -> Option<u16> {
         let registry = self.channel_registry.read().await;
         registry.get_channel(name)
+    }
+    
+    /// Register a plugin and allocate its channel
+    /// This is called during Phase 1 before core systems are initialized
+    pub async fn register_plugin(&self, name: &str) -> LogicResult<u16> {
+        // Allocate a channel for this plugin
+        let channel_id = {
+            let mut registry = self.channel_registry.write().await;
+            registry.allocate_channel(name.to_string(), ChannelType::Plugin)?
+        };
+        
+        // Store the plugin registration for later
+        {
+            let mut plugins = self.plugin_registry.write().await;
+            plugins.push((name.to_string(), channel_id));
+        }
+        
+        // Don't register with dashboard yet - it doesn't exist in Phase 1
+        // This will be done in initialize_all() after core systems are up
+        
+        Ok(channel_id)
+    }
+    
+    /// Get the channel ID assigned to a plugin
+    pub async fn get_plugin_channel(&self, name: &str) -> Option<u16> {
+        let plugins = self.plugin_registry.read().await;
+        plugins.iter()
+            .find(|(n, _)| n == name)
+            .map(|(_, channel_id)| *channel_id)
     }
     
     /// Start the render loop at 60fps

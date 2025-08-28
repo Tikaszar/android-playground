@@ -22,8 +22,8 @@ pub struct World {
     scheduler: Handle<Scheduler>,
     dirty_tracker: Handle<DirtyTracker>,
     resources: Handle<ResourceStorage>,
-    // Plugin systems that need lifecycle management
-    plugin_systems: playground_core_types::Shared<Vec<Box<dyn crate::system::System>>>,
+    // Plugin channel IDs for lifecycle management (no dyn!)
+    plugin_channels: playground_core_types::Shared<Vec<(String, u16)>>, // (name, channel_id)
 }
 
 impl World {
@@ -36,7 +36,7 @@ impl World {
             scheduler: handle(Scheduler::new()),
             dirty_tracker: handle(DirtyTracker::new()),
             resources: handle(ResourceStorage::new()),
-            plugin_systems: shared(Vec::new()),
+            plugin_channels: shared(Vec::new()),
         }
     }
     
@@ -224,22 +224,18 @@ impl World {
         Ok(())
     }
     
-    /// Register a plugin system WITHOUT initializing it
-    /// This allows all plugins to be registered before any are initialized
-    pub async fn register_plugin_system(&mut self, system: Box<dyn crate::system::System>) -> LogicResult<()> {
-        let mut systems = self.plugin_systems.write().await;
-        systems.push(system);
+    /// Register a plugin channel for lifecycle tracking
+    /// Plugins themselves run as independent tasks
+    pub async fn register_plugin_channel(&mut self, name: String, channel_id: u16) -> LogicResult<()> {
+        let mut channels = self.plugin_channels.write().await;
+        channels.push((name, channel_id));
         Ok(())
     }
     
-    /// Initialize all registered plugin systems
-    /// This should be called AFTER all plugins are registered and AFTER core systems are initialized
-    pub async fn initialize_all_plugins(&mut self) -> LogicResult<()> {
-        let mut systems = self.plugin_systems.write().await;
-        for system in systems.iter_mut() {
-            system.initialize(self).await?;
-        }
-        Ok(())
+    /// Get all registered plugin channels
+    pub async fn get_plugin_channels(&self) -> Vec<(String, u16)> {
+        let channels = self.plugin_channels.read().await;
+        channels.clone()
     }
     
     /// Run all registered systems for one frame
@@ -247,23 +243,18 @@ impl World {
         // Run scheduler systems
         self.scheduler.run_frame(self, delta_time).await?;
         
-        // Run plugin systems
-        let mut systems = self.plugin_systems.write().await;
-        for system in systems.iter_mut() {
-            system.run(self, delta_time).await?;
-        }
+        // Plugins run independently in their own tasks, not called from here
+        // They communicate via channels
         
         Ok(())
     }
     
     /// Cleanup all systems on shutdown
     pub async fn shutdown(&mut self) -> LogicResult<()> {
-        // Cleanup plugin systems
-        let mut systems = self.plugin_systems.write().await;
-        for system in systems.iter_mut() {
-            system.cleanup(self).await?;
-        }
-        systems.clear();
+        // Send shutdown messages to plugin channels
+        // This would be implemented via the networking system
+        let mut channels = self.plugin_channels.write().await;
+        channels.clear();
         
         // Clear other resources
         self.clear().await;

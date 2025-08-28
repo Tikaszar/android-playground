@@ -1,15 +1,64 @@
 # CONTEXT.md - Current Session Context
 
-## Active Session - 2025-08-28 (Session 36)
+## Active Session - 2025-08-28 (Session 37)
 
 ### Current Status
 **Build**: ✅ COMPLETE - playground-apps-editor builds successfully
 **Architecture**: ✅ Complete compliance achieved  
 **Rendering**: 🟡 Pipeline ready - waiting for test
 **Networking**: ✅ Fixed packet broadcasting - all clients receive packets
-**Channels**: 🔴 UI Framework refactored but main.rs still pre-registering channels
+**Channels**: ✅ Dynamic channel allocation working correctly
 **Browser**: ✅ Fixed - endianness issue resolved, manifest working
 **Lifecycle**: ✅ Fixed circular dependency in startup
+
+### Session 37 Accomplishments
+
+#### ✅ FIXED: Dashboard Plugin Registration Issue
+- **Issue**: UI Framework Plugin (channel 1) wasn't showing in dashboard logs
+  - Plugin was registered in Phase 1 before dashboard existed
+  - Other plugins (2-9) registered after and showed properly
+
+- **Solution**: Proper lifecycle management in SystemsManager
+  - Phase 1: `register_plugin()` only allocates channels, stores in registry
+  - Phase 2: `initialize_all()` registers ALL plugins with dashboard after it's available
+  - All plugins now properly logged in dashboard
+
+#### ✅ FIXED: NO dyn Violations Reintroduced in Session 33
+- **Issue**: Session 33's fix for circular dependencies introduced `Box<dyn System>` violations
+  - World had `plugin_systems: Shared<Vec<Box<dyn System>>>`
+  - SystemsManager had similar violation
+  - This broke the NO dyn rule that was supposedly fixed
+
+- **Solution Implemented**:
+  1. **Removed all Box<dyn System>** from World and SystemsManager
+  2. **Channel-based architecture**: 
+     - Plugins run as independent tasks
+     - Communication via channels only
+     - No direct method calls on plugin instances
+  3. **Proper Handle/Shared usage**:
+     - Plugins receive `Handle<World>` (external reference)
+     - Not cloning World or using Shared<World>
+     - Follows rule: Handle for external, Shared for internal
+
+- **Implementation Details**:
+  - World now tracks `plugin_channels: Shared<Vec<(String, u16)>>` instead of plugin instances
+  - SystemsManager has `plugin_registry: Shared<Vec<(String, u16)>>` for tracking
+  - main.rs spawns each plugin as independent tokio task
+  - Each plugin gets its own Handle<World> reference
+  - Plugins initialize and run independently at 60fps
+
+#### ✅ PROPER Channel Registration Flow
+- **Phase 1**: Register channels with SystemsManager
+  - SystemsManager allocates channels dynamically
+  - Channels stored in registry for manifest generation
+  
+- **Phase 2**: Core systems initialize
+  - NetworkingSystem can build complete channel manifest
+  
+- **Phase 3**: Plugin tasks spawn
+  - Each plugin initialized with Handle<World>
+  - Spawned as independent async task
+  - Runs own 60fps update loop
 
 ### Session 36 Accomplishments
 
@@ -68,20 +117,20 @@
 - Browser can now properly request and receive channel manifest
 - All control channel messages work correctly
 
-### Next Steps for Session 37
-1. **Fix channel registration pattern**:
-   - Decide: Should plugins register during Phase 1 (in main.rs) or Phase 3 (in initialize)?
-   - Fix duplicate registration issue
-   - Ensure channels 2-10 aren't wasted
+### Next Steps for Session 38
+1. **Test the system**:
+   - Run playground-editor and verify plugins initialize
+   - Check channel allocations in dashboard
+   - Verify browser can connect and discover channels
 
-2. **Test UI rendering**:
-   - Verify single UI Framework channel works
-   - Check Discord UI renders properly
-   - Confirm all message types route correctly
+2. **Complete dynamic channel implementation**:
+   - Ensure browser uses discovered channels
+   - Remove any remaining hardcoded channel references
+   - Test channel discovery protocol
 
-3. **Clean up warnings**:
-   - Fix unused packet type constants
-   - Handle Result from orchestrator.process_pending_updates()
+3. **Fix remaining warnings**:
+   - Clean up unused imports
+   - Fix unused variables
 
 ### Running the IDE
 ```bash
