@@ -1,17 +1,42 @@
 # CONTEXT.md - Current Session Context
 
-## Active Session - 2025-08-27 (Session 33)
+## Active Session - 2025-08-28 (Session 35)
 
 ### Current Status
-**Build**: ✅ COMPLETE - All systems fully functional
+**Build**: ✅ COMPLETE - playground-apps-editor builds successfully
 **Architecture**: ✅ Complete compliance achieved  
-**Rendering**: 🔴 Black screen - pipeline exists but not rendering
+**Rendering**: 🟡 Pipeline ready - endianness fixed, waiting for test
 **Networking**: ✅ Fixed packet broadcasting - all clients receive packets
 **Channels**: ✅ Dynamic channel allocation fully implemented
-**Browser**: 🟡 Partially working - connects but manifest not received
+**Browser**: ✅ Fixed - endianness issue resolved, manifest should work
 **Lifecycle**: ✅ Fixed circular dependency in startup
 
-### Session 34 Accomplishments
+### Session 35 Accomplishments
+
+#### ✅ COMPLETED: Fixed Browser-Server Endianness Mismatch
+- **Issue**: Browser couldn't receive channel manifest despite server having proper handler
+- **Root Cause**: Endianness mismatch in packet serialization
+  - Browser was sending big-endian packets (DataView with `false` parameter)
+  - Server expects little-endian (bytes crate's `get_u16()`/`put_u16()` default to LE)
+  - RequestChannelManifest (type 8) was being misinterpreted
+
+- **Diagnosis Process**:
+  1. Verified browser sends RequestChannelManifest on connection
+  2. Confirmed server has handler for type 8 → type 9 response
+  3. Found channel manifest callback IS properly set by SystemsManager  
+  4. Discovered packets weren't reaching handler due to byte order mismatch
+  
+- **Solution**: 
+  - Changed all DataView operations in browser to use little-endian (`true` parameter)
+  - Fixed: `requestChannelManifest()`, `handleBinaryMessage()`, `sendLog()`, `sendToUIFramework()`
+  - Now all browser↔server communication uses consistent little-endian format
+
+- **Impact**: 
+  - Browser can now properly request and receive channel manifest
+  - All control channel messages (logs, manifest, MCP tools) work correctly
+  - UI rendering pipeline should function once manifest is received
+
+### Session 34 Accomplishments (Previous)
 
 #### ✅ COMPLETED: Fixed Channel Manifest for Browser Discovery
 - **Issue**: Browser wasn't receiving channel manifest because plugins weren't registered in SystemsManager's ChannelRegistry

@@ -163,11 +163,11 @@ class UIFrameworkClient {
         const packet = new ArrayBuffer(9); // No payload needed
         const view = new DataView(packet);
 
-        // Header (big-endian to match server)
-        view.setUint16(0, 0, false);        // Channel 0 (control)
-        view.setUint16(2, 8, false);        // Type 8 (RequestChannelManifest)
+        // Header (little-endian to match server)
+        view.setUint16(0, 0, true);         // Channel 0 (control)
+        view.setUint16(2, 8, true);         // Type 8 (RequestChannelManifest)
         view.setUint8(4, 2);                // Priority high
-        view.setUint32(5, 0, false);        // No payload
+        view.setUint32(5, 0, true);         // No payload
 
         try {
             this.ws.send(packet);
@@ -196,11 +196,11 @@ class UIFrameworkClient {
     handleBinaryMessage(data) {
         const view = new DataView(data);
 
-        // Parse packet header (big-endian to match server)
-        const channelId = view.getUint16(0, false);
-        const packetType = view.getUint16(2, false);
+        // Parse packet header (little-endian to match server)
+        const channelId = view.getUint16(0, true);
+        const packetType = view.getUint16(2, true);
         const priority = view.getUint8(4);
-        const payloadSize = view.getUint32(5, false);
+        const payloadSize = view.getUint32(5, true);
 
         // Check if this is a control channel message
         if (channelId === 0) {
@@ -411,11 +411,11 @@ class UIFrameworkClient {
         const packet = new ArrayBuffer(9 + payload.length);
         const view = new DataView(packet);
         
-        // Header (big-endian to match server)
-        view.setUint16(0, 0, false);        // Channel 0 (control)
-        view.setUint16(2, 200, false);      // Type 200 (browser log)
+        // Header (little-endian to match server)
+        view.setUint16(0, 0, true);         // Channel 0 (control)
+        view.setUint16(2, 200, true);       // Type 200 (browser log)
         view.setUint8(4, 1);                // Priority medium
-        view.setUint32(5, payload.length, false); // Payload size
+        view.setUint32(5, payload.length, true); // Payload size
         
         // Payload
         const uint8View = new Uint8Array(packet);
@@ -763,11 +763,11 @@ class UIFrameworkClient {
         const packet = new ArrayBuffer(9 + payloadBytes.length);
         const view = new DataView(packet);
         
-        // Write header (big-endian to match server)
-        view.setUint16(0, channel, false);
-        view.setUint16(2, msgType, false);
+        // Write header (little-endian to match server)
+        view.setUint16(0, channel, true);
+        view.setUint16(2, msgType, true);
         view.setUint8(4, 2); // Priority: High
-        view.setUint32(5, payloadBytes.length, false);
+        view.setUint32(5, payloadBytes.length, true);
         
         // Write payload
         const bytes = new Uint8Array(packet, 9);
@@ -796,11 +796,11 @@ class UIFrameworkClient {
         const packet = new ArrayBuffer(9 + payloadBytes.length);
         const view = new DataView(packet);
         
-        // Write header (big-endian to match server)
-        view.setUint16(0, 0, false);        // Channel 0 (control)
-        view.setUint16(2, 200, false);      // Packet type 200 (browser log)
+        // Write header (little-endian to match server)
+        view.setUint16(0, 0, true);         // Channel 0 (control)
+        view.setUint16(2, 200, true);       // Packet type 200 (browser log)
         view.setUint8(4, 1);                // Priority: Normal
-        view.setUint32(5, payloadBytes.length, false);
+        view.setUint32(5, payloadBytes.length, true);
         
         // Write payload
         const bytes = new Uint8Array(packet, 9);
