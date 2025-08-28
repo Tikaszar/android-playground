@@ -9,6 +9,7 @@ license.workspace = true
 playground-core-types = { path = "../../core/types" }
 playground-core-rendering = { path = "../../core/rendering" }
 playground-core-ecs = { path = "../../core/ecs" }
+playground-core-server = { path = "../../core/server" }
 serde = { workspace = true }
 serde_json = { workspace = true }
 bytes = { workspace = true }
@@ -17,3 +18,4 @@ thiserror = { workspace = true }
 async-trait = { workspace = true }
 tracing = { workspace = true }
 nalgebra = { workspace = true }
+axum = { workspace = true }

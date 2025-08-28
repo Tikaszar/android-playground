@@ -373,6 +373,12 @@ impl SystemsManager {
         self.world.clone()
     }
     
+    /// Get Dashboard reference for logging (used by renderers and other systems)
+    pub async fn get_dashboard(&self) -> Option<playground_core_types::Handle<playground_core_server::dashboard::Dashboard>> {
+        let networking = self.networking.read().await;
+        networking.get_dashboard().await
+    }
+    
     
     /// Register a system and get its dynamically allocated channel
     pub async fn register_system(&self, name: &str) -> LogicResult<u16> {

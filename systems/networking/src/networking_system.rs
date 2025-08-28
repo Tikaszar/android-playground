@@ -329,7 +329,6 @@ impl NetworkingSystem {
         use axum::{Router, routing::{get, post}};
         use std::net::SocketAddr;
         use tower_http::cors::CorsLayer;
-        use tower_http::services::ServeDir;
         use tower_http::trace::TraceLayer;
         use playground_core_types::handle;
         
@@ -396,7 +395,6 @@ impl NetworkingSystem {
             .route("/ws", get(websocket_handler))
             .route("/api/plugins", get(list_plugins))
             .route("/api/reload", post(reload_plugin))
-            .nest_service("/playground-editor", ServeDir::new("apps/playground-editor/static"))
             .nest("/mcp", mcp_router)
             .layer(CorsLayer::permissive())
             .layer(TraceLayer::new_for_http())

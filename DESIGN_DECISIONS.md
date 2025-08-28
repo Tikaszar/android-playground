@@ -782,6 +782,82 @@ RenderCommand::DrawQuad {
 3. Cached with ID for reuse
 4. Uniforms set per batch, not per command
 
+## System Self-Registration Architecture (Session 40)
+
+### Decision: Concrete System Types in core/ecs
+
+**Problem**: How to manage system loading without violating NO dyn rule or creating circular dependencies.
+
+**Solution**: core/ecs defines concrete system types with no implementation.
+
+**Implementation**:
+```rust
+// core/ecs/src/render_system.rs
+pub struct RenderSystem {
+    pub name: String,
+    pub channel_id: u16,
+    // Fields but NO implementation
+}
+
+// systems/webgl/src/lib.rs
+impl RenderSystem {
+    pub fn new() -> Self { ... }
+    pub fn render(&mut self) -> Result<()> { ... }
+    // Implementation lives here
+}
+```
+
+**Why**:
+- No trait objects needed (NO dyn compliance)
+- core/ecs can manage concrete types
+- Implementations stay in systems/* packages
+- Clean separation of interface from implementation
+
+### Decision: Self-Registration Pattern
+
+**Problem**: Systems need to register themselves without manual wiring.
+
+**Solution**: Static initialization with ctor crate.
+
+**Implementation**:
+```rust
+// systems/webgl/src/lib.rs
+#[ctor::ctor]
+fn auto_register() {
+    let system = RenderSystem { ... };
+    core::ecs::register_render_system(system);
+}
+
+// core/ecs maintains registry
+static REGISTRY: Mutex<SystemRegistry> = Mutex::new(SystemRegistry {
+    render_system: None,
+    network_system: None,
+    // ...
+});
+```
+
+**Why**:
+- Systems self-register at program startup
+- No manual registration needed
+- core/ecs discovers all available systems
+- Maintains hot-swappability goals
+
+### Decision: Initialization Flow
+
+**Flow**: User → App → SystemsManager → core/ecs → Systems → Plugins
+
+**Responsibilities**:
+1. **core/ecs**: Loads all systems EXCEPT systems/logic
+2. **systems/logic**: Special - manages plugins, not loaded by core/ecs
+3. **Systems**: Self-register with core/ecs at startup
+4. **Plugins**: Managed by systems/logic, not core/ecs
+
+**Why**:
+- Clear separation between systems and plugins
+- systems/logic remains special orchestrator
+- core/ecs handles fundamental systems
+- App stays simple - just uses SystemsManager
+
 ## Future Architectural Decisions (Planned)
 
 ### APK Packaging

@@ -1,6 +1,6 @@
 # CONTEXT.md - Current Session Context
 
-## Active Session - 2025-08-28 (Session 39)
+## Active Session - 2025-08-28 (Session 40)
 
 ### Current Status
 **Build**: ✅ COMPLETE - playground-apps-editor builds successfully
@@ -12,7 +12,69 @@
 **Lifecycle**: ✅ Fixed circular dependency in startup
 **Logging**: ✅ Component-specific logging fully implemented across codebase
 
-### Session 39 Accomplishments
+### Session 40 Accomplishments
+
+#### ✅ IMPLEMENTED: Robust WebGL Renderer Logging
+
+- **Added component-specific logging to WebGL renderer**:
+  1. WebGLRenderer now logs through core/server Dashboard directly
+  2. Tracks frame count, command count, and operations
+  3. Logs initialization, frame lifecycle, buffer operations, and resize events
+  
+- **Created browser page construction in systems/webgl**:
+  1. Added `BrowserBuilder` module for generating HTML/JS
+  2. Created `WebGLServerIntegration` for Axum route integration
+  3. Generates complete WebGL client with WebSocket connection
+  4. Client handles channel discovery and render command reception
+  
+- **Maintained architectural compliance**:
+  - Systems/webgl only depends on core/* packages (NOT other systems)
+  - Uses Dashboard from core/server for logging
+  - Implements generic core/rendering interface
+  - systems/logic exposes renderer through generic API
+
+#### 🎯 DESIGNED: System Self-Registration Architecture
+
+- **Clarified initialization flow**:
+  1. User → App → SystemsManager → core/ecs → Systems → Plugins
+  2. core/ecs loads ALL systems EXCEPT systems/logic
+  3. systems/logic manages plugins (not systems)
+  
+- **Designed concrete type pattern for systems**:
+  1. core/ecs defines concrete system types (RenderSystem, NetworkSystem, etc.)
+  2. NO implementation in core/ecs - just type definitions
+  3. systems/* packages provide the actual implementations
+  
+- **Self-registration mechanism**:
+  1. Systems use static initialization (ctor crate) to auto-register
+  2. core/ecs maintains concrete registry (no dyn!)
+  3. Each system type has dedicated registration function
+  
+### Next Session Plan
+
+#### System Registration Implementation
+1. **Add concrete system types to core/ecs**:
+   - RenderSystem struct (no impl)
+   - NetworkSystem struct (no impl)
+   - UiSystem struct (no impl)
+   - PhysicsSystem struct (no impl)
+   
+2. **Create SystemRegistry in core/ecs**:
+   - Static registry with Option<ConcreteType> for each system
+   - Registration functions for each system type
+   - initialize_all_systems() to init all registered systems
+   
+3. **Implement self-registration in systems/**:
+   - Add ctor dependency to each system
+   - Use #[ctor] for auto-registration
+   - Move implementations to impl blocks on core types
+   
+4. **Update SystemsManager**:
+   - Remove direct system creation
+   - Call core/ecs::initialize_all_systems()
+   - Access systems through core/ecs registry
+
+### Session 39 Accomplishments (Previous)
 
 #### ✅ COMPLETED: Extended Component-Specific Logging to All Systems/Plugins/Apps
 

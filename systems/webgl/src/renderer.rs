@@ -2,8 +2,7 @@ use playground_core_rendering::{
     Renderer, RenderTarget, RenderCommand, RenderCommandBatch, 
     RendererCapabilities, RenderResult, RenderError
 };
-use playground_core_types::Shared;
-use playground_core_types::shared;
+use playground_core_types::{Shared, shared, Handle};
 use crate::context::WebGLContext;
 use crate::shader::ShaderProgram;
 use crate::buffer::{VertexBuffer, IndexBuffer};
@@ -11,6 +10,7 @@ use crate::texture::Texture2D;
 use std::collections::HashMap;
 use async_trait::async_trait;
 use nalgebra::{Matrix3, Vector2};
+use playground_core_server::dashboard::{Dashboard, LogLevel};
 
 pub struct WebGLRenderer {
     context: Shared<WebGLContext>,
@@ -23,6 +23,9 @@ pub struct WebGLRenderer {
     clip_stack: Shared<Vec<ClipRect>>,
     state_stack: Shared<Vec<RenderState>>,
     initialized: bool,
+    dashboard: Option<Handle<Dashboard>>,
+    frame_count: u64,
+    command_count: u64,
 }
 
 #[derive(Clone, Copy)]
@@ -61,10 +64,27 @@ impl WebGLRenderer {
             clip_stack: shared(Vec::new()),
             state_stack: shared(Vec::new()),
             initialized: false,
+            dashboard: None,
+            frame_count: 0,
+            command_count: 0,
+        }
+    }
+    
+    /// Set the Dashboard for logging
+    pub fn set_dashboard(&mut self, dashboard: Handle<Dashboard>) {
+        self.dashboard = Some(dashboard);
+    }
+    
+    /// Log a message with component-specific logging
+    async fn log(&self, level: LogLevel, message: String) {
+        if let Some(ref dashboard) = self.dashboard {
+            dashboard.log_component("systems/webgl", level, message, None).await;
         }
     }
 
     async fn execute_command(&mut self, command: &RenderCommand) -> RenderResult<()> {
+        self.command_count += 1;
+        
         match command {
             RenderCommand::Clear { color } => {
                 self.clear(*color).await?;
@@ -343,10 +363,18 @@ impl WebGLRenderer {
         let vertex_buffer = self.vertex_buffer.read().await;
         let index_buffer = self.index_buffer.read().await;
         
-        if vertex_buffer.vertex_count() > 0 && index_buffer.index_count() > 0 {
+        let vertex_count = vertex_buffer.vertex_count();
+        let index_count = index_buffer.index_count();
+        
+        if vertex_count > 0 && index_count > 0 {
+            self.log(
+                LogLevel::Debug,
+                format!("Flushing {} vertices and {} indices to GPU", vertex_count, index_count)
+            ).await;
+            
             context.upload_vertices(&vertex_buffer);
             context.upload_indices(&index_buffer);
-            context.draw_indexed(index_buffer.index_count());
+            context.draw_indexed(index_count);
             
             self.vertex_buffer.write().await.clear();
             self.index_buffer.write().await.clear();
@@ -359,20 +387,54 @@ impl WebGLRenderer {
 #[async_trait]
 impl Renderer for WebGLRenderer {
     async fn initialize(&mut self) -> RenderResult<()> {
+        self.log(LogLevel::Info, "Initializing WebGL renderer".to_string()).await;
+        
         self.context.write().await.initialize()
-            .map_err(|e| RenderError::InitializationFailed(e.to_string()))?;
+            .map_err(|e| {
+                let err_msg = format!("WebGL initialization failed: {}", e);
+                // Can't use async in closure, so we'll log after
+                RenderError::InitializationFailed(err_msg.clone())
+            })?;
+        
         self.initialized = true;
+        
+        self.log(LogLevel::Info, "WebGL renderer initialized successfully".to_string()).await;
         Ok(())
     }
     
     async fn begin_frame(&mut self) -> RenderResult<()> {
+        self.frame_count += 1;
+        self.command_count = 0;
+        
+        if self.frame_count % 60 == 0 {
+            self.log(
+                LogLevel::Debug,
+                format!("Frame {} started", self.frame_count)
+            ).await;
+        }
+        
         self.vertex_buffer.write().await.clear();
         self.index_buffer.write().await.clear();
         Ok(())
     }
     
     async fn execute_commands(&mut self, batch: &RenderCommandBatch) -> RenderResult<()> {
+        let command_count = batch.commands().len();
+        
+        if command_count > 0 {
+            self.log(
+                LogLevel::Debug,
+                format!("Executing {} render commands", command_count)
+            ).await;
+        }
+        
         if let Some(viewport) = batch.viewport() {
+            self.log(
+                LogLevel::Debug,
+                format!("Setting viewport: {}x{} at ({}, {})", 
+                    viewport.width, viewport.height, viewport.x, viewport.y)
+            ).await;
+            
             *self.viewport.write().await = Viewport {
                 x: viewport.x,
                 y: viewport.y,
@@ -388,6 +450,10 @@ impl Renderer for WebGLRenderer {
         }
         
         if batch.commands().len() > 100 {
+            self.log(
+                LogLevel::Debug,
+                format!("Flushing buffers after {} commands", batch.commands().len())
+            ).await;
             self.flush_buffers().await?;
         }
         
@@ -396,6 +462,14 @@ impl Renderer for WebGLRenderer {
     
     async fn end_frame(&mut self) -> RenderResult<()> {
         self.flush_buffers().await?;
+        
+        if self.frame_count % 60 == 0 {
+            self.log(
+                LogLevel::Debug,
+                format!("Frame {} completed with {} commands", self.frame_count, self.command_count)
+            ).await;
+        }
+        
         Ok(())
     }
     
@@ -405,6 +479,11 @@ impl Renderer for WebGLRenderer {
     }
     
     async fn resize(&mut self, width: u32, height: u32) -> RenderResult<()> {
+        self.log(
+            LogLevel::Info,
+            format!("Resizing renderer to {}x{}", width, height)
+        ).await;
+        
         *self.viewport.write().await = Viewport { x: 0, y: 0, width, height };
         let context = self.context.read().await;
         context.set_viewport(0, 0, width as i32, height as i32);
@@ -416,7 +495,15 @@ impl Renderer for WebGLRenderer {
     }
     
     async fn shutdown(&mut self) -> RenderResult<()> {
+        self.log(LogLevel::Info, "Shutting down WebGL renderer".to_string()).await;
+        
         self.initialized = false;
+        
+        self.log(
+            LogLevel::Info,
+            format!("WebGL renderer shutdown complete. Total frames rendered: {}", self.frame_count)
+        ).await;
+        
         Ok(())
     }
     
