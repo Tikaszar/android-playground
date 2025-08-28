@@ -9,6 +9,7 @@ mod message_system;
 mod websocket_handler;
 mod orchestrator;
 mod render_bridge;
+mod packet_types;
 
 pub use plugin::UiFrameworkPlugin;
 pub use components::*;

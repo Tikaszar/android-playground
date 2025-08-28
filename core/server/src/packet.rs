@@ -31,6 +31,7 @@ impl Packet {
             self.payload.len()
         );
         
+        // Use native endianness (little-endian on x86/ARM)
         buf.put_u16(self.channel_id);
         buf.put_u16(self.packet_type);
         buf.put_u8(self.priority as u8);
@@ -45,11 +46,13 @@ impl Packet {
             bail!("Packet too small: {} bytes", data.len());
         }
         
-        let channel_id = data.get_u16();
-        let packet_type = data.get_u16();
+        // Note: get_u16() uses native endianness (little-endian on x86/ARM)
+        // The browser is now sending little-endian after the fix
+        let channel_id = data.get_u16();  // Native endianness (LE on our platform)
+        let packet_type = data.get_u16(); // Native endianness (LE on our platform)
         let priority = Priority::try_from(data.get_u8())
             .map_err(|e| anyhow::anyhow!(e))?;
-        let payload_size = data.get_u32() as usize;
+        let payload_size = data.get_u32() as usize; // Native endianness (LE on our platform)
         
         if data.len() < payload_size {
             bail!("Payload size mismatch: expected {} bytes, got {}", 

@@ -39,17 +39,11 @@ async fn main() -> Result<()> {
     // CRITICAL: Register plugin channels with SystemsManager's ChannelRegistry
     // This must happen BEFORE core initialization so the channel manifest is complete
     
-    // 1. UI Framework - Discord-style mobile UI (gets multiple channels)
+    // 1. UI Framework - Discord-style mobile UI
     {
-        // Register main UI Framework channel and sub-channels
-        let ui_framework_base = systems.register_plugin("ui-framework").await?;
-        for i in 1..10 {
-            let _sub_channel = systems.register_plugin(&format!("ui-framework-{}", i)).await?;
-        }
-        
         let plugin = UiFrameworkPlugin::new(systems.clone());
         world.write().await.register_plugin_system(Box::new(plugin)).await?;
-        eprintln!("[EDITOR] ✓ UiFrameworkPlugin registered with channel {} (not initialized)", ui_framework_base);
+        eprintln!("[EDITOR] ✓ UiFrameworkPlugin registered (channel will be allocated on initialization)");
     }
 
     // 2. Editor Core - Text editing with vim mode

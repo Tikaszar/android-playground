@@ -23,7 +23,6 @@ pub struct UiFrameworkPlugin {
     ui_state: Shared<UiState>,
     orchestrator: Shared<Orchestrator>,
     channel_id: Option<u16>,
-    channel_range: Vec<u16>, // Store allocated channels  
     systems_manager: Handle<playground_systems_logic::SystemsManager>,
 }
 
@@ -68,7 +67,6 @@ impl UiFrameworkPlugin {
             ui_state,
             orchestrator,
             channel_id: None,
-            channel_range: Vec::new(),
             systems_manager,
         }
     }
@@ -84,39 +82,27 @@ impl System for UiFrameworkPlugin {
         // Log to dashboard
         self.systems_manager.log("info", "[UI-FW] UI Framework Plugin initialize() called".to_string()).await;
         
-        // Request dynamic channels for UI Framework (we need 10 channels)
+        // Request dynamic channel for UI Framework
         self.systems_manager.log("info", "[UI-FW] Requesting dynamic channel allocation...".to_string()).await;
         
-        let mut channels = Vec::new();
-        for i in 0..10 {
-            let channel = self.systems_manager.register_plugin(&format!("ui-framework-{}", i)).await?;
-            channels.push(channel);
-            self.systems_manager.log("info", format!("[UI-FW] Allocated channel {} for ui-framework-{}", channel, i)).await;
-        }
+        let channel = self.systems_manager.register_plugin("ui-framework").await?;
+        self.channel_id = Some(channel);
         
-        // Store the base channel and range
-        self.channel_id = Some(channels[0]);
-        self.channel_range = channels.clone();
-        
-        self.systems_manager.log("info", format!("[UI-FW] Dynamic channels allocated: {:?}", channels)).await;
+        self.systems_manager.log("info", format!("[UI-FW] Dynamic channel allocated: {}", channel)).await;
         
         // Register with networking system
         let networking = self.systems_manager.networking();
         let net = networking.read().await;
         
-        // Register the allocated channels with networking
-        for (i, &channel) in channels.iter().enumerate() {
-            if let Err(e) = net.register_system_channel(&format!("ui-framework-{}", i), channel).await {
-                self.systems_manager.log("error", format!("[UI-FW] Failed to register channel {}: {}", channel, e)).await;
-                return Err(playground_systems_logic::LogicError::InitializationFailed(
-                    format!("Failed to register channel {}: {}", channel, e)
-                ));
-            }
+        // Register the allocated channel with networking
+        if let Err(e) = net.register_system_channel("ui-framework", channel).await {
+            self.systems_manager.log("error", format!("[UI-FW] Failed to register channel {}: {}", channel, e)).await;
+            return Err(playground_systems_logic::LogicError::InitializationFailed(
+                format!("Failed to register channel {}: {}", channel, e)
+            ));
         }
         
-        self.systems_manager.log("info", "[UI-FW] Channels registered with networking successfully".to_string()).await;
-        
-        self.channel_id = Some(channels[0]);
+        self.systems_manager.log("info", "[UI-FW] Channel registered with networking successfully".to_string()).await;
         
         // Register MCP tools for UI manipulation
         self.systems_manager.log("info", "[UI-FW] Registering MCP tools...".to_string()).await;
@@ -150,17 +136,15 @@ impl System for UiFrameworkPlugin {
         let mut orchestrator = self.orchestrator.write().await;
         orchestrator.process_pending_updates(delta_time).await;
         
-        // Check for incoming messages from browser on our dynamic channels
-        if !self.channel_range.is_empty() {
+        // Check for incoming messages from browser on our dynamic channel
+        if let Some(channel_id) = self.channel_id {
             let networking = self.systems_manager.networking();
             let net = networking.read().await;
             
-            // Check all our dynamically allocated channels
-            for &channel in &self.channel_range {
-                if let Ok(packets) = net.receive_packets(channel).await {
-                    for packet in packets {
-                        self.handle_browser_message(packet.data).await;
-                    }
+            // Check our dynamically allocated channel
+            if let Ok(packets) = net.receive_packets(channel_id).await {
+                for packet in packets {
+                    self.handle_packet(packet.packet_type, packet.data).await;
                 }
             }
         }
@@ -232,6 +216,70 @@ impl UiFrameworkPlugin {
             debug!("UI Framework message listener started");
             // Message handling will be done in the run() method
         });
+    }
+    
+    async fn handle_packet(&self, packet_type: u16, data: Vec<u8>) {
+        use crate::packet_types::*;
+        
+        match packet_type {
+            PACKET_TYPE_MCP_TOOL_CALL => self.handle_mcp_tool_call(data).await,
+            PACKET_TYPE_PANEL_UPDATE => self.handle_panel_update(data).await,
+            PACKET_TYPE_CHAT_MESSAGE => self.handle_chat_message(data).await,
+            _ => {
+                debug!("Unknown packet type {} received on UI Framework channel", packet_type);
+            }
+        }
+    }
+    
+    async fn handle_mcp_tool_call(&self, data: Vec<u8>) {
+        match serde_json::from_slice::<serde_json::Value>(&data) {
+            Ok(msg) => {
+                if let (Some(tool_name), Some(params)) = (
+                    msg.get("tool_name").and_then(|v| v.as_str()),
+                    msg.get("params")
+                ) {
+                    match self.mcp_handler.handle_tool_call(tool_name, params.clone()).await {
+                        Ok(result) => {
+                            debug!("Tool call succeeded: {:?}", result);
+                        }
+                        Err(e) => {
+                            error!("Tool call failed: {}", e);
+                        }
+                    }
+                } else {
+                    error!("Invalid mcp_tool_call message: missing tool_name or params");
+                }
+            }
+            Err(e) => {
+                error!("Failed to parse MCP tool call: {}", e);
+            }
+        }
+    }
+    
+    async fn handle_panel_update(&self, data: Vec<u8>) {
+        match serde_json::from_slice::<serde_json::Value>(&data) {
+            Ok(msg) => {
+                let mut pm = self.panel_manager.write().await;
+                pm.handle_panel_update(msg).await;
+            }
+            Err(e) => {
+                error!("Failed to parse panel update: {}", e);
+            }
+        }
+    }
+    
+    async fn handle_chat_message(&self, data: Vec<u8>) {
+        match serde_json::from_slice::<serde_json::Value>(&data) {
+            Ok(msg) => {
+                let mut ui_state = self.ui_state.write().await;
+                if let Err(e) = ui_state.handle_chat_message(msg).await {
+                    error!("Failed to handle chat message: {}", e);
+                }
+            }
+            Err(e) => {
+                error!("Failed to parse chat message: {}", e);
+            }
+        }
     }
     
     async fn handle_browser_message(&self, data: Vec<u8>) {

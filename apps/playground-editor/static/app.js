@@ -24,8 +24,7 @@ class UIFrameworkClient {
         this.channelNames = {}; // channel ID -> name
         
         // Will be set dynamically from manifest
-        this.UI_FRAMEWORK_BASE = null;
-        this.UI_FRAMEWORK_CHANNELS = [];
+        this.UI_FRAMEWORK_CHANNEL = null;
         
         // Message types for UI Framework
         this.MSG_TYPES = {
@@ -143,22 +142,37 @@ class UIFrameworkClient {
     
     onConnect() {
         this.reconnectAttempts = 0;
+        console.log('WebSocket onConnect fired, readyState:', this.ws.readyState);
         this.sendLog('info', 'WebSocket connection established.');
 
         // DO NOT show UI yet - wait for channel discovery
         // Small delay to ensure WebSocket is fully ready
-        setTimeout(() => {
+        console.log('Setting up setTimeout for channel manifest request...');
+        const timeoutId = setTimeout(() => {
+            console.log('In setTimeout callback, WebSocket readyState:', this.ws?.readyState);
+            console.log('About to send channel manifest request log...');
             this.sendLog('info', 'Requesting channel manifest from server...');
+            console.log('About to call requestChannelManifest...');
             // Request channel manifest to discover available channels
             // IMPORTANT: Do NOT send any other messages until channels are discovered
             this.requestChannelManifest();
+            console.log('requestChannelManifest call completed');
         }, 100);
+        console.log('setTimeout scheduled with ID:', timeoutId);
 
         // DO NOT send any messages until we have discovered channels
         // The handleChannelManifest function will trigger the initial setup
     }
 
     requestChannelManifest() {
+        console.log('requestChannelManifest called, WebSocket readyState:', this.ws?.readyState);
+        
+        if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
+            console.error('Cannot request manifest - WebSocket not ready!', this.ws?.readyState);
+            this.sendLog('error', 'Cannot request manifest - WebSocket not ready!');
+            return;
+        }
+        
         // Send RequestChannelManifest message on control channel (0)
         const packet = new ArrayBuffer(9); // No payload needed
         const view = new DataView(packet);
@@ -169,8 +183,11 @@ class UIFrameworkClient {
         view.setUint8(4, 2);                // Priority high
         view.setUint32(5, 0, true);         // No payload
 
+        console.log('Sending RequestChannelManifest packet (type 8)...');
+        
         try {
             this.ws.send(packet);
+            console.log('RequestChannelManifest packet sent successfully');
             // Use sendLog for visibility on the server dashboard
             this.sendLog('debug', 'Channel manifest packet sent.');
         } catch (e) {
@@ -201,6 +218,8 @@ class UIFrameworkClient {
         const packetType = view.getUint16(2, true);
         const priority = view.getUint8(4);
         const payloadSize = view.getUint32(5, true);
+        
+        console.log(`Received binary message: channel=${channelId}, type=${packetType}, size=${payloadSize}`);
 
         // Check if this is a control channel message
         if (channelId === 0) {
@@ -283,33 +302,33 @@ class UIFrameworkClient {
                 this.channelNames[id] = name;
             }
 
-            // Find UI Framework channels
-            this.UI_FRAMEWORK_CHANNELS = [];
-            for (const [name, id] of Object.entries(this.channelMap)) {
-                if (name.startsWith('ui-framework-')) {
-                    this.UI_FRAMEWORK_CHANNELS.push(id);
-                }
-            }
-
-            // Set base channel if we found any
-            if (this.UI_FRAMEWORK_CHANNELS.length > 0) {
-                this.UI_FRAMEWORK_BASE = Math.min(...this.UI_FRAMEWORK_CHANNELS);
+            // Find UI Framework channel
+            const uiFrameworkChannel = this.channelMap['ui-framework'];
+            if (uiFrameworkChannel) {
+                this.UI_FRAMEWORK_CHANNEL = uiFrameworkChannel;
+                this.sendLog('info', `UI Framework channel discovered: ${uiFrameworkChannel}`);
+            } else {
+                this.sendLog('error', 'UI Framework channel not found in manifest!');
             }
 
             // Log all discovered channels
             this.sendLog('info', `Processed manifest with ${Object.keys(this.channelMap).length} channels.`);
             this.sendLog('info', `Discovered channels: ${JSON.stringify(this.channelMap)}`);
-            this.sendLog('info', `UI Framework channels: ${this.UI_FRAMEWORK_CHANNELS.join(', ')}`);
 
-            // NOW we can show the UI
-            document.body.classList.add('ui-ready');
-            document.getElementById('loading').style.display = 'none';
-            document.getElementById('error').style.display = 'none';
-            this.canvas.style.display = 'block';
+            // NOW we can show the UI if we have the UI Framework channel
+            if (this.UI_FRAMEWORK_CHANNEL) {
+                document.body.classList.add('ui-ready');
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('error').style.display = 'none';
+                this.canvas.style.display = 'block';
 
-            // Send initial resize event to UI Framework Plugin
-            this.sendLog('info', 'Client initialized. Sending initial resize event.');
-            this.handleResize();
+                // Send initial resize event to UI Framework Plugin
+                this.sendLog('info', 'Client initialized. Sending initial resize event.');
+                this.handleResize();
+            } else {
+                this.sendLog('error', 'Cannot proceed without UI Framework channel');
+                this.showError();
+            }
 
         } catch (e) {
             this.sendLog('error', `Failed to parse channel manifest: ${e.message}`);
@@ -331,9 +350,10 @@ class UIFrameworkClient {
             this.channelMap[info.name] = info.channel_id;
             this.channelNames[info.channel_id] = info.name;
             
-            // Check if it's a UI Framework channel
-            if (info.name.startsWith('ui-framework-')) {
-                this.UI_FRAMEWORK_CHANNELS.push(info.channel_id);
+            // Check if it's the UI Framework channel
+            if (info.name === 'ui-framework') {
+                this.UI_FRAMEWORK_CHANNEL = info.channel_id;
+                this.sendLog('info', `UI Framework channel registered: ${info.channel_id}`);
             }
             
         } catch (e) {
@@ -358,10 +378,10 @@ class UIFrameworkClient {
             }
             delete this.channelNames[info.channel_id];
             
-            // Remove from UI Framework channels if needed
-            const index = this.UI_FRAMEWORK_CHANNELS.indexOf(info.channel_id);
-            if (index !== -1) {
-                this.UI_FRAMEWORK_CHANNELS.splice(index, 1);
+            // Check if UI Framework channel was unregistered
+            if (name === 'ui-framework') {
+                this.UI_FRAMEWORK_CHANNEL = null;
+                this.sendLog('warn', 'UI Framework channel unregistered!');
             }
             
         } catch (e) {
@@ -389,42 +409,6 @@ class UIFrameworkClient {
             }
         } catch (e) {
             this.sendLog('error', `Failed to parse render batch: ${e.message}`);
-        }
-    }
-    
-    // Send log message to server on control channel
-    sendLog(level, message) {
-        if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return;
-        
-        // Send log message on control channel (0) with a special packet type
-        const logData = JSON.stringify({
-            type: 'browser_log',
-            level: level,
-            message: message,
-            timestamp: Date.now()
-        });
-        
-        const encoder = new TextEncoder();
-        const payload = encoder.encode(logData);
-        
-        // Create packet (channel 0, type 200 for browser logs)
-        const packet = new ArrayBuffer(9 + payload.length);
-        const view = new DataView(packet);
-        
-        // Header (little-endian to match server)
-        view.setUint16(0, 0, true);         // Channel 0 (control)
-        view.setUint16(2, 200, true);       // Type 200 (browser log)
-        view.setUint8(4, 1);                // Priority medium
-        view.setUint32(5, payload.length, true); // Payload size
-        
-        // Payload
-        const uint8View = new Uint8Array(packet);
-        uint8View.set(payload, 9);
-        
-        try {
-            this.ws.send(packet);
-        } catch (e) {
-            console.error('Failed to send log to server:', e);
         }
     }
     
@@ -747,14 +731,14 @@ class UIFrameworkClient {
             return;
         }
         
-        // Check if we have discovered UI Framework channels
-        if (!this.UI_FRAMEWORK_BASE) {
-            console.warn('UI Framework channels not discovered yet, skipping message');
+        // Check if we have discovered UI Framework channel
+        if (!this.UI_FRAMEWORK_CHANNEL) {
+            console.warn('UI Framework channel not discovered yet, skipping message');
             return;
         }
         
-        // Send to UI Framework main channel
-        const channel = this.UI_FRAMEWORK_BASE;
+        // Send to UI Framework channel
+        const channel = this.UI_FRAMEWORK_CHANNEL;
         const payload = JSON.stringify(data);
         const encoder = new TextEncoder();
         const payloadBytes = encoder.encode(payload);

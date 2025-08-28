@@ -18,7 +18,7 @@ playground-core-types = { path = "../../core/types" }
 playground-core-ecs = { path = "../../core/ecs" }
 axum = { workspace = true, features = ["ws", "macros"] }
 tower = { workspace = true }
-tower-http = { workspace = true, features = ["fs", "cors", "trace"] }
+tower-http = { workspace = true, features = ["fs", "cors", "trace", "set-header"] }
 tokio = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }

@@ -289,6 +289,14 @@ async fn handle_message(data: Bytes, state: &WebSocketState) -> anyhow::Result<(
 }
 
 async fn handle_control_message(packet: Packet, state: &WebSocketState) -> anyhow::Result<()> {
+    // Log all control channel messages for debugging
+    state.dashboard.log(
+        crate::dashboard::LogLevel::Debug,
+        format!("Control channel message received: type {}, {} bytes", 
+            packet.packet_type, packet.payload.len()),
+        None
+    ).await;
+    
     // Check for browser log messages (packet_type 200)
     if packet.packet_type == 200 {
         // Browser log message
@@ -355,7 +363,25 @@ async fn handle_control_message(packet: Packet, state: &WebSocketState) -> anyho
         return Ok(());
     }
     
-    let msg_type = ControlMessageType::try_from(packet.packet_type)?;
+    // Try to parse the control message type
+    let msg_type = match ControlMessageType::try_from(packet.packet_type) {
+        Ok(msg_type) => msg_type,
+        Err(e) => {
+            // Unknown control message type - send error response
+            state.dashboard.log(
+                crate::dashboard::LogLevel::Warning,
+                format!("Unknown control message type {}: {}", packet.packet_type, e),
+                None
+            ).await;
+            
+            // Send error response on channel 0
+            let error_msg = format!("Unknown control message type: {}. This may indicate a protocol mismatch between browser and server.", packet.packet_type);
+            let error_response = create_error_response(error_msg);
+            state.batcher.queue_packet(error_response).await;
+            
+            return Ok(());
+        }
+    };
     
     match msg_type {
         ControlMessageType::RegisterSystem => {
@@ -419,12 +445,31 @@ async fn handle_control_message(packet: Packet, state: &WebSocketState) -> anyho
             state.batcher.queue_packet(response).await;
         }
         ControlMessageType::RequestChannelManifest => {
+            state.dashboard.log(
+                crate::dashboard::LogLevel::Info,
+                "Browser requested channel manifest".to_string(),
+                None
+            ).await;
+            
             // Get the channel manifest callback and call it
             let callback_opt = state.channel_manifest_callback.read().await;
             if let Some(ref callback) = *callback_opt {
+                state.dashboard.log(
+                    crate::dashboard::LogLevel::Debug,
+                    "Channel manifest callback is set, invoking...".to_string(),
+                    None
+                ).await;
+                
                 // Call the callback to get the manifest bytes
                 match callback().await {
                     Ok(manifest_bytes) => {
+                        let manifest_size = manifest_bytes.len();
+                        state.dashboard.log(
+                            crate::dashboard::LogLevel::Debug,
+                            format!("Channel manifest generated: {} bytes", manifest_size),
+                            None
+                        ).await;
+                        
                         // Send the manifest back to the client
                         let response = Packet::new(
                             0,
@@ -435,27 +480,27 @@ async fn handle_control_message(packet: Packet, state: &WebSocketState) -> anyho
                         state.batcher.queue_packet(response).await;
                         state.dashboard.log(
                             crate::dashboard::LogLevel::Info,
-                            "Sent channel manifest to browser".to_string(),
+                            format!("Channel manifest queued for sending to browser ({} bytes)", manifest_size),
                             None
                         ).await;
                     }
                     Err(e) => {
-                        let error = create_error_response(format!("Failed to get channel manifest: {}", e));
-                        state.batcher.queue_packet(error).await;
                         state.dashboard.log_error(
-                            format!("Failed to get channel manifest: {}", e),
+                            format!("Failed to generate channel manifest: {}", e),
                             None
                         ).await;
+                        let error = create_error_response(format!("Failed to get channel manifest: {}", e));
+                        state.batcher.queue_packet(error).await;
                     }
                 }
             } else {
                 // No manifest callback set, return empty manifest
                 state.dashboard.log(
                     crate::dashboard::LogLevel::Warning,
-                    "Channel manifest requested but no callback set".to_string(),
+                    "Channel manifest requested but no callback set - SystemsManager may not have initialized yet".to_string(),
                     None
                 ).await;
-                let error = create_error_response("Channel manifest not available".to_string());
+                let error = create_error_response("Channel manifest not available - server may still be initializing".to_string());
                 state.batcher.queue_packet(error).await;
             }
         }
