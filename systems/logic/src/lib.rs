@@ -20,6 +20,7 @@ pub mod system;
 pub mod system_data;
 pub mod world;
 pub mod systems_manager;
+pub mod system_loader;
 pub mod ui_interface;
 pub mod rendering_interface;
 pub mod messaging;

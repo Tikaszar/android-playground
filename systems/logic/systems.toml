@@ -1,0 +1,34 @@
+# Configuration for system loading
+# This file controls which systems are loaded by the SystemsManager
+
+[[systems]]
+name = "networking"
+type = "network"
+package = "playground_systems_networking"
+always = true  # Always load this system - needed for all apps
+
+[[systems]]
+name = "ui"
+type = "ui"
+package = "playground_systems_ui"
+always = true  # Always load - needed for rendering UI
+
+[[systems]]
+name = "webgl"
+type = "render"
+package = "playground_systems_webgl"
+feature = "webgl_renderer"  # Only load when webgl_renderer feature is enabled
+
+# Future renderer - not implemented yet
+# [[systems]]
+# name = "vulkan"
+# type = "render"
+# package = "playground_systems_vulkan"
+# feature = "vulkan_renderer"  # Alternative renderer
+
+# Physics system - only needed for games
+[[systems]]
+name = "physics"
+type = "physics"
+package = "playground_systems_physics"
+feature = "physics"  # Only load for games, not needed for IDE

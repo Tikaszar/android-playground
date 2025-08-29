@@ -1,10 +1,11 @@
 # CONTEXT.md - Current Session Context
 
-## Active Session - 2025-08-28 (Session 40)
+## Active Session - 2025-08-29 (Session 41)
 
 ### Current Status
 **Build**: ✅ COMPLETE - playground-apps-editor builds successfully
 **Architecture**: ✅ Complete compliance achieved  
+**System Loading**: ✅ Config-based loader implemented
 **Rendering**: 🟡 Pipeline ready - waiting for test
 **Networking**: ✅ Fixed packet broadcasting - all clients receive packets
 **Channels**: ✅ Dynamic channel allocation working correctly
@@ -12,7 +13,35 @@
 **Lifecycle**: ✅ Fixed circular dependency in startup
 **Logging**: ✅ Component-specific logging fully implemented across codebase
 
-### Session 40 Accomplishments
+### Session 41 Accomplishments
+
+#### ✅ IMPLEMENTED: Config-Based System Loading Architecture
+
+- **Created configuration-driven system loader**:
+  1. Added `systems.toml` configuration file to control which systems load
+  2. Systems can be marked as "always" load or feature-gated
+  3. Supports multiple renderer implementations (WebGL, Vulkan future)
+  4. IDE doesn't load physics, games don't load IDE-specific systems
+  
+- **Build-time code generation**:
+  1. Created `build.rs` that reads systems.toml at compile time
+  2. Generates `system_loader_impl.rs` with conditional loading logic
+  3. Uses template string replacement for clean code generation
+  4. No hardcoded system lists - fully configuration driven
+  
+- **Static loader API**:
+  1. Created `system_loader.rs` with stable public API
+  2. Includes generated implementation via `include!` macro
+  3. Provides functions for loading, initializing, and accessing systems
+  4. Clean separation between API and implementation
+  
+- **Architectural compliance maintained**:
+  - Core doesn't know about Systems (no layer violation)
+  - SystemsManager uses loader to initialize systems
+  - Concrete types only (NO dyn compliance)
+  - Handle/Shared pattern properly used throughout
+
+### Session 40 Accomplishments (Previous)
 
 #### ✅ IMPLEMENTED: Robust WebGL Renderer Logging
 
@@ -26,29 +55,6 @@
   2. Created `WebGLServerIntegration` for Axum route integration
   3. Generates complete WebGL client with WebSocket connection
   4. Client handles channel discovery and render command reception
-  
-- **Maintained architectural compliance**:
-  - Systems/webgl only depends on core/* packages (NOT other systems)
-  - Uses Dashboard from core/server for logging
-  - Implements generic core/rendering interface
-  - systems/logic exposes renderer through generic API
-
-#### 🎯 DESIGNED: System Self-Registration Architecture
-
-- **Clarified initialization flow**:
-  1. User → App → SystemsManager → core/ecs → Systems → Plugins
-  2. core/ecs loads ALL systems EXCEPT systems/logic
-  3. systems/logic manages plugins (not systems)
-  
-- **Designed concrete type pattern for systems**:
-  1. core/ecs defines concrete system types (RenderSystem, NetworkSystem, etc.)
-  2. NO implementation in core/ecs - just type definitions
-  3. systems/* packages provide the actual implementations
-  
-- **Self-registration mechanism**:
-  1. Systems use static initialization (ctor crate) to auto-register
-  2. core/ecs maintains concrete registry (no dyn!)
-  3. Each system type has dedicated registration function
   
 ### Next Session Plan
 
