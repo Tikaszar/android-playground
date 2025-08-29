@@ -10,6 +10,7 @@ pub mod mobile;
 pub mod rendering;
 pub mod messages;
 pub mod types;
+mod register;
 
 pub use error::{UiError, UiResult};
 pub use system::UiSystem;
@@ -19,3 +20,4 @@ pub use types::{
     LayoutType, FlexboxLayout, FlexDirection, JustifyContent, AlignItems,
     DiscordLayout, UiEvent
 };
+pub use register::register;

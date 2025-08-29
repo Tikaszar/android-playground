@@ -1,11 +1,11 @@
 # CONTEXT.md - Current Session Context
 
-## Active Session - 2025-08-29 (Session 41)
+## Active Session - 2025-08-29 (Session 42)
 
 ### Current Status
-**Build**: ✅ COMPLETE - playground-apps-editor builds successfully
+**Build**: ✅ COMPLETE - playground-apps-editor builds successfully with 0 errors
 **Architecture**: ✅ Complete compliance achieved  
-**System Loading**: ✅ Config-based loader implemented
+**System Registration**: ✅ Proper system registration via core/ecs
 **Rendering**: 🟡 Pipeline ready - waiting for test
 **Networking**: ✅ Fixed packet broadcasting - all clients receive packets
 **Channels**: ✅ Dynamic channel allocation working correctly
@@ -13,33 +13,33 @@
 **Lifecycle**: ✅ Fixed circular dependency in startup
 **Logging**: ✅ Component-specific logging fully implemented across codebase
 
-### Session 41 Accomplishments
+### Session 42 Accomplishments
 
-#### ✅ IMPLEMENTED: Config-Based System Loading Architecture
+#### ✅ FIXED: Proper System Registration Architecture
 
-- **Created configuration-driven system loader**:
-  1. Added `systems.toml` configuration file to control which systems load
-  2. Systems can be marked as "always" load or feature-gated
-  3. Supports multiple renderer implementations (WebGL, Vulkan future)
-  4. IDE doesn't load physics, games don't load IDE-specific systems
+- **Removed incorrect system loader from systems/logic**:
+  1. Deleted system_loader.rs, build.rs, and systems.toml from systems/logic
+  2. Systems/logic should ONLY load plugins as Systems, not manage system registration
+  3. Removed build dependencies from systems/logic Cargo.toml
   
-- **Build-time code generation**:
-  1. Created `build.rs` that reads systems.toml at compile time
-  2. Generates `system_loader_impl.rs` with conditional loading logic
-  3. Uses template string replacement for clean code generation
-  4. No hardcoded system lists - fully configuration driven
+- **Implemented proper system registration in core/ecs**:
+  1. Created `SystemRegistry` in core/ecs/src/system_registry.rs
+  2. Uses thread-safe Lazy static with once_cell (no unsafe code)
+  3. Provides registration functions for each system type
+  4. Maintains NO dyn rule - stores SystemHandle structs, not trait objects
   
-- **Static loader API**:
-  1. Created `system_loader.rs` with stable public API
-  2. Includes generated implementation via `include!` macro
-  3. Provides functions for loading, initializing, and accessing systems
-  4. Clean separation between API and implementation
+- **Added self-registration to each system**:
+  1. systems/networking has register() function
+  2. systems/ui has register() function  
+  3. Each system registers itself with core/ecs
+  4. SystemsManager calls these registration functions
   
-- **Architectural compliance maintained**:
-  - Core doesn't know about Systems (no layer violation)
-  - SystemsManager uses loader to initialize systems
-  - Concrete types only (NO dyn compliance)
-  - Handle/Shared pattern properly used throughout
+- **Architecture compliance verified**:
+  - Systems can ONLY use core, never other systems
+  - Core/ecs manages system registry
+  - NO dyn, NO unsafe, NO violations
+  - lib.rs files contain exports only
+  - Full build with 0 errors, only warnings
 
 ### Session 40 Accomplishments (Previous)
 

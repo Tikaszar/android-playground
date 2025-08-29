@@ -34,6 +34,8 @@ This file contains critical memory for Claude Code when working with this reposi
 - **App and Browser are ONE application** - distributed across network
 - **Browser is the App's frontend** - not a separate entity
 - **Channel 0 is control** - only hardcoded channel for discovery
+- **Systems can ONLY use Core** - never import other systems
+- **Core/ecs manages system registry** - systems self-register with core
 
 ## #package-naming
 - Core: `playground-core-*` (e.g., playground-core-ecs)

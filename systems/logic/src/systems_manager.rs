@@ -129,6 +129,13 @@ pub struct SystemsManager {
 impl SystemsManager {
     /// Create a new SystemsManager with reference to the World
     pub async fn new(world: Shared<World>) -> LogicResult<Self> {
+        // Register systems with core/ecs first
+        playground_systems_networking::register().await
+            .map_err(|e| LogicError::InitializationFailed(format!("Failed to register networking: {}", e)))?;
+        playground_systems_ui::register().await
+            .map_err(|e| LogicError::InitializationFailed(format!("Failed to register ui: {}", e)))?;
+        
+        // Now create the actual system instances
         let networking = NetworkingSystem::new().await
             .map_err(|e| LogicError::InitializationFailed(format!("NetworkingSystem: {}", e)))?;
         

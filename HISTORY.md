@@ -2,6 +2,64 @@
 
 This file tracks the detailed history of development sessions, including achievements, bug fixes, and implementation progress.
 
+## Session: 2025-08-29 - Proper System Registration Architecture (Session 42)
+
+### Major Achievement: Fixed System Registration Architecture
+
+#### Problem Identified
+The system loader implementation from Session 41 was fundamentally wrong:
+- systems/logic was trying to load and register systems (architecture violation)
+- build.rs was generating code that called non-existent functions in core/ecs
+- Systems were trying to use other systems (violation of layering rules)
+
+#### Solution Implemented: Proper Registration in core/ecs
+
+**1. Created SystemRegistry in core/ecs**:
+```rust
+// core/ecs/src/system_registry.rs
+pub struct SystemRegistry {
+    systems: Shared<HashMap<String, SystemHandle>>,
+}
+
+pub struct SystemHandle {
+    pub name: String,
+    pub system_type: String,
+    pub initialized: bool,
+}
+```
+
+**2. Each System Self-Registers**:
+```rust
+// systems/networking/src/register.rs
+pub async fn register() -> Result<(), playground_core_ecs::EcsError> {
+    playground_core_ecs::register_network_system("networking".to_string()).await
+}
+```
+
+**3. SystemsManager Calls Registration**:
+```rust
+// In SystemsManager::new()
+playground_systems_networking::register().await?;
+playground_systems_ui::register().await?;
+```
+
+#### Key Architecture Rules Reinforced
+- **Systems can ONLY use core**, never other systems
+- **systems/logic manages plugins as Systems**, not system registration
+- **core/ecs manages the system registry**
+- **NO dyn** - SystemHandle is a concrete struct, not a trait object
+- **NO unsafe** - Used once_cell::Lazy instead of unsafe static
+
+### Build Status
+✅ **FULLY COMPILING** - 0 errors, 161 warnings (all minor/unused code)
+
+### Key Learning
+**Strict layering is critical** - Systems must never know about other systems. Only core provides shared functionality. The architecture is:
+- Apps use systems/logic
+- systems/logic creates SystemsManager which creates system instances
+- Each system registers itself with core/ecs
+- Systems only import from core/*, never from other systems
+
 ## Session: 2025-08-27 - System Lifecycle Formalization (Session 33)
 
 ### Major Achievement: Fixed Circular Dependency in Startup

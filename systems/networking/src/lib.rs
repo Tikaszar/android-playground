@@ -12,6 +12,7 @@ mod network_system;
 mod websocket_client;
 mod networking_system;
 mod types;
+mod register;
 
 pub use components::*;
 pub use connection::*;
@@ -20,6 +21,7 @@ pub use channel_manager::*;
 pub use network_system::*;
 pub use networking_system::*;
 pub use types::*;
+pub use register::register;
 
 use thiserror::Error;
 
