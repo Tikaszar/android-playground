@@ -1,10 +1,16 @@
 # playground-systems-networking
 
-WebSocket-based networking system with channel management, packet batching, and MCP tool registration.
+Complete implementation of core/server contracts, providing WebSocket networking, server infrastructure, and unified messaging integration.
 
 ## Overview
 
-The Networking System manages all network communication between server and clients. It **internally starts and manages core/server**, providing a clean API for Plugins and Apps to send/receive data without knowing about the underlying WebSocket implementation.
+The Networking System **implements all core/server contracts** and provides the actual server functionality for the engine. Since core/server is now contracts-only (following the stateless core design), this package contains:
+
+- All server implementations (Dashboard, WebSocket, ChannelManager, etc.)
+- HTTP/WebSocket server using Axum
+- Integration with ECS messaging system (no bridge needed)
+- MCP server for LLM integration
+- Network state management via ECS components
 
 ### Key Features
 - WebSocket multiplexing with binary protocol
@@ -18,19 +24,30 @@ The Networking System manages all network communication between server and clien
 
 ## Architecture
 
-### Internal Server Management
-**IMPORTANT**: NetworkingSystem starts core/server internally - Apps should NOT start it directly!
+### Implementation of core/server Contracts
+
+NetworkingSystem now implements all contracts from core/server:
 
 ```rust
-use playground_systems_networking::NetworkingSystem;
+use playground_core_server::{ServerContract, DashboardContract, WebSocketContract};
+use playground_core_ecs::MessageHandlerData;
 
-// NetworkingSystem handles server startup internally
-let mut networking = NetworkingSystem::new().await?;
-networking.initialize(None).await?; // Starts server on ws://localhost:8080/ws
+// Server implementation
+impl ServerContract for Server {
+    async fn start(&self, port: u16) -> Result<()> { /* ... */ }
+    async fn connect_to_message_bus(&self, bus: Arc<dyn MessageBusContract>) -> Result<()> { /* ... */ }
+}
 
-// Apps should NEVER do this:
-// ❌ let server = Server::new(); // WRONG - violates architecture
+// WebSocket is now a MessageHandler - participates in unified messaging
+impl MessageHandlerData for WebSocketHandler {
+    async fn handle(&self, channel: ChannelId, message: Bytes) -> EcsResult<()> {
+        // Receives from MessageBus, forwards to WebSocket clients
+    }
+}
 ```
+
+### No More Bridge! 
+The MessageBridge is eliminated. WebSocket handlers subscribe directly to the MessageBus channels they care about, creating a unified messaging system.
 
 ### Channel Allocation
 ```
@@ -361,26 +378,29 @@ tokio::spawn(async move {
 
 ## Architecture Rules
 
-- **Manages core/server internally** - Apps must NOT start server
-- Uses core/ecs for internal state management
+- **Implements core/server contracts** - All server functionality lives here
+- **NO importing other systems** - Systems are isolated (no WebGL imports!)
+- **WebSocket IS a MessageHandler** - Unified messaging, no bridge needed
+- Uses core/ecs for internal state management and messaging contracts
 - Thread-safe with Arc<RwLock<>> throughout
 - All operations are async
-- Batch operations preferred
 - NO unsafe code
 - Result<T, NetworkError> for all fallible operations
 
 ## Dependencies
 
-- `playground-core-ecs`: Internal state management
-- `playground-core-types`: Shared types (ChannelId, Priority)
-- `playground-core-server`: WebSocket server (managed internally)
+- `playground-core-ecs`: Messaging contracts (MessageHandlerData)
+- `playground-core-types`: Shared types (Handle, Shared)
+- `playground-core-server`: Contracts we implement (ServerContract, etc.)
+- `axum`: Web framework for actual server
 - `tokio`: Async runtime
+- `tokio-tungstenite`: WebSocket implementation
 - `bytes`: Efficient byte handling
 - `serde`/`bincode`: Serialization
 - `async-trait`: Async trait implementations
 
 ## See Also
 
-- [core/server](../../core/server/README.md) - WebSocket server (internal)
-- [systems/logic](../logic/README.md) - Creates and manages this system
-- [plugins/ui-framework](../../plugins/ui-framework/README.md) - Example channel usage
+- [core/server](../../core/server/README.md) - Contracts we implement
+- [systems/logic](../logic/README.md) - Orchestrates this system via registry
+- [core/ecs](../../core/ecs/README.md) - Messaging contracts we use
