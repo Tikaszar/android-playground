@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>WebSocket Test</title>
+</head>
+<body>
+    <h1>WebSocket Connection Test</h1>
+    <div id="status">Connecting...</div>
+    <div id="log"></div>
+    <script>
+        const ws = new WebSocket('ws://localhost:8080/ws');
+        const status = document.getElementById('status');
+        const log = document.getElementById('log');
+        
+        function addLog(msg) {
+            const entry = document.createElement('div');
+            entry.textContent = new Date().toISOString() + ': ' + msg;
+            log.appendChild(entry);
+            console.log(msg);
+        }
+        
+        ws.onopen = () => {
+            status.textContent = 'Connected!';
+            status.style.color = 'green';
+            addLog('WebSocket connected');
+            
+            // Send a test message on control channel
+            const message = new ArrayBuffer(11);
+            const view = new DataView(message);
+            view.setUint16(0, 0, true); // channel_id = 0
+            view.setUint16(2, 8, true); // packet_type = 8 (request manifest)
+            view.setUint8(4, 0); // priority = 0
+            view.setUint32(5, 0, true); // payload_size = 0
+            ws.send(message);
+            addLog('Sent channel manifest request');
+        };
+        
+        ws.onmessage = (event) => {
+            addLog('Message received: ' + event.data.byteLength + ' bytes');
+        };
+        
+        ws.onerror = (error) => {
+            status.textContent = 'Error!';
+            status.style.color = 'red';
+            addLog('WebSocket error: ' + error);
+        };
+        
+        ws.onclose = () => {
+            status.textContent = 'Disconnected';
+            status.style.color = 'orange';
+            addLog('WebSocket closed');
+        };
+    </script>
+</body>
+</html>

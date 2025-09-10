@@ -36,7 +36,10 @@ impl WebGLServerIntegration {
     }
     
     /// Create Axum routes for WebGL pages
-    pub fn create_routes(&self) -> Router {
+    pub fn create_routes<S>(&self) -> Router<S> 
+    where
+        S: Clone + Send + Sync + 'static
+    {
         let builder = self.browser_builder.clone();
         
         Router::new()

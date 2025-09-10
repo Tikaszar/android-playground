@@ -9,6 +9,7 @@ license.workspace = true
 playground-core-types = { path = "../../core/types" }
 playground-core-ecs = { path = "../../core/ecs" }
 playground-core-server = { path = "../../core/server" }  # For packet types and channel definitions
+playground-systems-webgl = { path = "../webgl" }  # For WebGL browser pages
 serde = { workspace = true }
 serde_json = { workspace = true }
 bytes = { workspace = true }

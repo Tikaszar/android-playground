@@ -57,11 +57,10 @@ impl NetworkingSystem {
         self.dashboard.clone()
     }
     
-    /// Initialize and start core/server
+    /// Initialize and start core/server with WebGL support
     pub async fn initialize(&mut self, _server_url: Option<String>) -> NetworkResult<()> {
-        // Start the core server internally 
-        // Note: We no longer connect via WebSocket - systems use MessageBus
-        match Self::start_core_server(self.channel_manifest_callback.clone()).await {
+        // Start the core server internally with WebGL routes
+        match Self::start_core_server_with_webgl(self.channel_manifest_callback.clone()).await {
             Ok((dashboard, message_bus, websocket_state)) => {
                 self.dashboard = Some(dashboard);
                 self.message_bus = Some(message_bus);
@@ -316,9 +315,8 @@ impl NetworkingSystem {
         Ok(total_stats)
     }
     
-    /// Start the core server internally (called by initialize)
-    /// This version starts the server and returns immediately with the dashboard and message bus references
-    async fn start_core_server(
+    /// Start the core server internally with WebGL routes
+    async fn start_core_server_with_webgl(
         channel_manifest_callback: Option<Handle<ChannelManifestCallback>>
     ) -> Result<(Handle<playground_core_server::Dashboard>, Handle<playground_core_ecs::MessageBus>, Handle<playground_core_server::WebSocketState>), Box<dyn std::error::Error>> {
         use playground_core_server::{
@@ -358,7 +356,7 @@ impl NetworkingSystem {
         let message_bus = handle(MessageBus::new());
         let message_bridge = MessageBridge::new(message_bus.clone(), ws_state.clone());
         
-        // Setup standard channel bridges (UI on channel 10, etc.)
+        // Setup standard channel bridges
         message_bridge.setup_standard_bridges().await;
         
         dashboard.log(
@@ -370,6 +368,12 @@ impl NetworkingSystem {
         // Create MCP server
         let mcp_server = McpServer::new();
         let mcp_router = mcp_server.router();
+        
+        // Create WebGL server integration for browser pages
+        use playground_systems_webgl::WebGLServerIntegration;
+        let mut webgl_integration = WebGLServerIntegration::new();
+        webgl_integration.set_dashboard(dashboard.clone());
+        let webgl_routes = webgl_integration.create_routes();
         
         let addr = SocketAddr::from(([127, 0, 0, 1], 8080));
         
@@ -389,6 +393,11 @@ impl NetworkingSystem {
             format!("MCP endpoint: http://localhost:8080/mcp"),
             None
         ).await;
+        dashboard.log(
+            LogLevel::Info,
+            format!("WebGL renderer: http://localhost:8080/playground-editor/"),
+            None
+        ).await;
         
         let app = Router::new()
             .route("/", get(root))
@@ -396,16 +405,15 @@ impl NetworkingSystem {
             .route("/api/plugins", get(list_plugins))
             .route("/api/reload", post(reload_plugin))
             .nest("/mcp", mcp_router)
+            // Add WebGL routes under /playground-editor
+            .nest("/playground-editor", webgl_routes)
             .layer(CorsLayer::permissive())
             .layer(TraceLayer::new_for_http())
             .with_state(ws_state.clone());
         
-        // Return the dashboard reference before starting the server
-        let dashboard_clone = dashboard.clone();
-        
         let listener = tokio::net::TcpListener::bind(addr).await?;
         
-        // Start server in background - MUST spawn or it blocks
+        // Start server in background
         tokio::spawn(async move {
             if let Err(e) = axum::serve(listener, app).await {
                 eprintln!("Server error: {}", e);
@@ -415,6 +423,6 @@ impl NetworkingSystem {
         // Give server a moment to fully start
         tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
         
-        Ok((dashboard_clone, message_bus, ws_state))
+        Ok((dashboard, message_bus, ws_state))
     }
 }

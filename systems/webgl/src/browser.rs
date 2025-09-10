@@ -131,8 +131,16 @@ class PlaygroundRenderer {{
         const wsUrl = `${{protocol}}//${{window.location.host}}/ws`;
         
         console.log('[WebGL] Connecting to WebSocket:', wsUrl);
-        this.ws = new WebSocket(wsUrl);
-        this.ws.binaryType = 'arraybuffer';
+        this.updateStatus('Connecting to ' + wsUrl, 'connecting');
+        
+        try {{
+            this.ws = new WebSocket(wsUrl);
+            this.ws.binaryType = 'arraybuffer';
+        }} catch (e) {{
+            console.error('[WebGL] Failed to create WebSocket:', e);
+            this.updateStatus('Failed to create WebSocket: ' + e.message, 'disconnected');
+            return;
+        }}
         
         this.ws.onopen = () => {{
             console.log('[WebGL] WebSocket connected');
