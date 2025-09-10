@@ -9,14 +9,9 @@ license.workspace = true
 name = "playground_core_server"
 path = "src/lib.rs"
 
-[[bin]]
-name = "playground-core-server"
-path = "src/main.rs"
-
 [dependencies]
 playground-core-types = { path = "../../core/types" }
 playground-core-ecs = { path = "../../core/ecs" }
-playground-systems-ecs = { path = "../../systems/ecs" }
 axum = { workspace = true, features = ["ws", "macros"] }
 tower = { workspace = true }
 tower-http = { workspace = true, features = ["fs", "cors", "trace", "set-header"] }

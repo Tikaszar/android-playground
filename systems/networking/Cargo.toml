@@ -8,8 +8,7 @@ license.workspace = true
 [dependencies]
 playground-core-types = { path = "../../core/types" }
 playground-core-ecs = { path = "../../core/ecs" }
-playground-core-server = { path = "../../core/server" }  # For packet types and channel definitions
-playground-systems-webgl = { path = "../webgl" }  # For WebGL browser pages
+playground-core-server = { path = "../../core/server" }  # For contracts and types
 serde = { workspace = true }
 serde_json = { workspace = true }
 bytes = { workspace = true }
@@ -21,6 +20,8 @@ tracing = { workspace = true }
 bincode = { workspace = true }
 async-trait = { workspace = true }
 tokio-tungstenite = "0.20"  # For native WebSocket client
-axum = { workspace = true }
+axum = { workspace = true, features = ["ws"] }
 tower = { workspace = true }
 tower-http = { workspace = true }
+chrono = { version = "0.4", features = ["serde"] }
+tokio-stream = "0.1"

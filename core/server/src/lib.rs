@@ -1,17 +1,51 @@
-pub mod channel;
-pub mod packet;
-pub mod batcher;
-pub mod websocket;
-pub mod handlers;
-pub mod mcp;
-pub mod dashboard;
-pub mod bridge;
+//! Core server contracts and types
+//!
+//! This package defines ONLY contracts (traits) and types for server infrastructure.
+//! All implementations live in systems/networking.
 
-pub use channel::{ChannelManager, ChannelInfo};
-pub use packet::{Packet, Priority};
-pub use batcher::FrameBatcher;
-pub use websocket::{WebSocketState, websocket_handler};
-pub use mcp::McpServer;
-pub use handlers::{list_plugins, reload_plugin, root};
-pub use dashboard::{Dashboard, ChannelType as DashboardChannelType};
-pub use bridge::{MessageBridge, WebSocketBroadcaster};
+// Contract modules
+pub mod server;
+pub mod dashboard;
+pub mod websocket;
+pub mod channel_manager;
+pub mod batcher;
+pub mod mcp;
+pub mod types;
+
+// Re-export all contracts
+pub use server::ServerContract;
+pub use dashboard::DashboardContract;
+pub use websocket::WebSocketContract;
+pub use channel_manager::ChannelManagerContract;
+pub use batcher::BatcherContract;
+pub use mcp::McpServerContract;
+
+// Re-export all types
+pub use types::{
+    // Packet types
+    Packet,
+    Priority,
+    
+    // Logging types
+    LogLevel,
+    
+    // Channel types
+    ChannelType,
+    ChannelManifest,
+    DashboardChannelInfo,
+    
+    // Client types
+    ClientInfo,
+    ClientStatus,
+    ConnectionHandle,
+    
+    // MCP types
+    McpTool,
+    McpRequest,
+    McpResponse,
+    McpError,
+    
+    // Statistics and config
+    NetworkStats,
+    ServerConfig,
+};
