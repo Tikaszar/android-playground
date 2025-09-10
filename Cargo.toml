@@ -15,7 +15,6 @@ members = [
     "systems/networking",
     "systems/physics",
     "systems/logic",
-    "systems/rendering",
     "systems/webgl",
     
     # Apps layer
