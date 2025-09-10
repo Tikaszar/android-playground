@@ -1,7 +1,8 @@
 use playground_core_types::{Handle, handle};
 use bytes::Bytes;
 use async_trait::async_trait;
-use playground_core_ecs::{MessageBus, MessageHandler, MessageHandlerData, BroadcasterData, ChannelId, EcsResult};
+use playground_core_ecs::{MessageHandlerData, BroadcasterData, ChannelId, EcsResult};
+use playground_systems_ecs::{MessageBus, MessageHandler};
 use crate::websocket::WebSocketState;
 use crate::packet::Packet;
 use futures_util::SinkExt;
@@ -37,7 +38,7 @@ impl MessageBridge {
             .expect("Failed to create handler");
         
         // Subscribe to the internal channel
-        self.ecs_bus.subscribe(internal_channel, handler).await
+        self.ecs_bus.subscribe_with_handler(internal_channel, handler).await
             .expect("Failed to subscribe to channel");
     }
     
@@ -142,9 +143,16 @@ impl BroadcasterData for WebSocketBroadcaster {
         Ok(())
     }
     
-    async fn send_to(&self, _target: playground_core_ecs::EntityId, _message: Bytes) -> EcsResult<()> {
-        // Not implemented for WebSocket broadcast
-        // Could be used for sending to specific clients in the future
-        Ok(())
+    async fn serialize(&self) -> EcsResult<Bytes> {
+        // Simple serialization - just return the broadcaster ID
+        Ok(Bytes::from(self.broadcaster_id()))
+    }
+    
+    async fn deserialize(_bytes: &Bytes) -> EcsResult<Self> where Self: Sized {
+        // For now, we can't deserialize a WebSocketBroadcaster
+        // as it requires a WebSocketState reference
+        Err(playground_core_ecs::EcsError::DeserializationFailed(
+            "WebSocketBroadcaster cannot be deserialized".to_string()
+        ))
     }
 }

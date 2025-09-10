@@ -1,0 +1,36 @@
+[package]
+name = "playground-systems-ecs"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+# Core dependencies
+playground-core-ecs = { path = "../../core/ecs" }
+playground-core-types = { path = "../../core/types" }
+
+# Async runtime
+tokio = { workspace = true }
+async-trait = { workspace = true }
+
+# Error handling
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+
+# Serialization
+serde = { workspace = true }
+bincode = { workspace = true }
+bytes = { workspace = true }
+
+# Logging
+tracing = { workspace = true }
+
+# Collections (NO DashMap - use Shared<HashMap> instead)
+indexmap = "2.0"
+
+# Performance
+rayon = "1.7"
+crossbeam = "0.8"
+
+[dev-dependencies]
+tokio-test = "0.4"
+criterion = "0.5"

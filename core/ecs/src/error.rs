@@ -1,30 +1,28 @@
+//! Error types for the ECS
+
 use thiserror::Error;
 use crate::entity::EntityId;
 
+/// Result type for ECS operations
 pub type EcsResult<T> = Result<T, EcsError>;
 
+/// Error types for ECS operations
 #[derive(Error, Debug)]
 pub enum EcsError {
-    #[error("Entity {0} not found")]
-    EntityNotFound(EntityId),
-    
-    #[error("Entity {0} is dead")]
-    EntityDead(EntityId),
-    
-    #[error("Component type {0} not registered")]
+    #[error("Component {0} not registered")]
     ComponentNotRegistered(String),
     
-    #[error("Component {component} not found on entity {entity}")]
+    #[error("Component not found for entity {entity}: {component}")]
     ComponentNotFound {
         entity: EntityId,
         component: String,
     },
     
+    #[error("Entity {0} not found")]
+    EntityNotFound(EntityId),
+    
     #[error("Storage error: {0}")]
     StorageError(String),
-    
-    #[error("Query error: {0}")]
-    QueryError(String),
     
     #[error("Serialization failed: {0}")]
     SerializationFailed(String),
@@ -32,20 +30,8 @@ pub enum EcsError {
     #[error("Deserialization failed: {0}")]
     DeserializationFailed(String),
     
-    #[error("Component is still in use and cannot be removed")]
-    ComponentInUse,
-    
-    #[error("Memory limit exceeded: {current}/{limit} bytes")]
-    MemoryLimitExceeded {
-        current: usize,
-        limit: usize,
-    },
-    
-    #[error("Pool exhausted for component type {0}")]
-    PoolExhausted(String),
-    
-    #[error("Migration failed: {0}")]
-    MigrationError(String),
+    #[error("Query failed: {0}")]
+    QueryFailed(String),
     
     #[error("System error: {0}")]
     SystemError(String),
@@ -53,34 +39,27 @@ pub enum EcsError {
     #[error("Message error: {0}")]
     MessageError(String),
     
-    #[error("Lock poisoned: {0}")]
-    LockPoisoned(String),
+    #[error("Pool exhausted: {0}")]
+    PoolExhausted(String),
     
-    #[error("IO error: {0}")]
-    IoError(#[from] std::io::Error),
-    
-    #[error("Other error: {0}")]
-    Other(String),
+    #[error("Generic error: {0}")]
+    Generic(String),
 }
 
-impl EcsError {
-    pub fn is_recoverable(&self) -> bool {
-        match self {
-            Self::EntityNotFound(_) | 
-            Self::EntityDead(_) |
-            Self::ComponentNotFound { .. } => true,
-            Self::LockPoisoned(_) |
-            Self::MemoryLimitExceeded { .. } |
-            Self::PoolExhausted(_) => false,
-            _ => true,
-        }
+impl From<anyhow::Error> for EcsError {
+    fn from(err: anyhow::Error) -> Self {
+        Self::Generic(err.to_string())
     }
-    
-    pub fn should_retry(&self) -> bool {
-        match self {
-            Self::LockPoisoned(_) => true,
-            Self::SystemError(_) => true,
-            _ => false,
-        }
+}
+
+impl From<std::io::Error> for EcsError {
+    fn from(err: std::io::Error) -> Self {
+        Self::Generic(err.to_string())
+    }
+}
+
+impl From<bincode::Error> for EcsError {
+    fn from(err: bincode::Error) -> Self {
+        Self::SerializationFailed(err.to_string())
     }
 }
