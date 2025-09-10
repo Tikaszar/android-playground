@@ -1,68 +1,81 @@
 # Core Infrastructure
 
-Foundation crates providing essential functionality for the Android Playground engine.
+Foundation layer providing contracts, traits, and essential infrastructure for the Android Playground engine.
 
 ## Overview
 
-The core layer provides the fundamental infrastructure that all other components build upon. These crates have minimal dependencies and define the core abstractions used throughout the engine.
+The core layer is **entirely stateless**, providing only contracts (traits), type definitions, and essential infrastructure. Core packages define WHAT components must do, not HOW they do it. All stateful implementations live in the systems layer.
+
+## Architecture Principle: Stateless Contracts Only
+
+**CRITICAL**: Core packages contain NO implementation of business logic. They provide:
+- **Traits and Contracts**: Interfaces that define behavior
+- **Type Definitions**: Shared types used across layers
+- **Infrastructure**: Essential services like networking and client support
+- **NO State Management**: All state lives in systems layer
+- **NO Business Logic**: All logic lives in systems or plugins
 
 ## Crates
 
-### [core/server](./server/README.md)
-WebSocket multiplexer with channel management and integrated MCP server for universal LLM support.
-- Binary packet protocol with priority queuing
-- Frame-based batching at 60fps
-- Dynamic channel registration
-- MCP (Model Context Protocol) integration
-- Static file serving for browser clients
+### [core/ecs](./ecs/README.md) - ECS Contracts
+**Pure contracts and traits** for the Entity Component System.
+- `WorldContract` trait - defines what a World must do
+- `ComponentData` trait - defines component behavior
+- `Storage` trait - defines storage interfaces
+- `System` trait - defines system interfaces
+- Type definitions (EntityId, ComponentId, ChannelId)
+- **NO implementation** - see systems/ecs for the actual ECS
 
-### [core/client](./client/README.md)
-WASM browser client with WebSocket connectivity and automatic reconnection.
-- WebSocket connection management
-- Exponential backoff reconnection
-- Channel registration and discovery
-- JavaScript/TypeScript bindings
-- Binary size optimized (431KB)
+### [core/ui](./ui/README.md) - UI Contracts
+**Pure contracts and traits** for UI systems.
+- `UiRenderer` trait - defines rendering interface
+- `UiElement` trait - defines element behavior
+- `LayoutEngine` trait - defines layout calculations
+- Common UI types and enums
+- **NO implementation** - see systems/ui for actual UI
 
-### [core/types](./types/README.md)
-Shared type definitions used across all crates.
+### [core/types](./types/README.md) - Shared Types
+Fundamental type definitions used across all layers.
+- `Handle<T>` and `Shared<T>` concurrency types
 - Network protocol types (Priority, Packet, ChannelId)
-- Plugin system types (PluginId, PluginMetadata, Version)
-- Context and state management
+- Error types and results
+- Common enums and constants
 - Zero dependencies for fast compilation
 
-### [core/plugin](./plugin/README.md)
-Dynamic plugin system with hot-reload support.
-- Load plugins from .so files
-- State preservation across reloads
-- Async lifecycle management
-- Safe FFI boundaries
-- Inter-plugin communication via Context
+### [core/server](./server/README.md) - Infrastructure Service
+WebSocket server infrastructure (NOT business logic).
+- Binary packet protocol with priority queuing
+- Frame-based batching at 60fps
+- Channel multiplexing
+- MCP (Model Context Protocol) server
+- Dashboard and logging infrastructure
+- **Note**: This is infrastructure, not business logic
 
-### [core/ecs](./ecs/README.md)
-Minimal Entity Component System for Systems' internal state management.
-- Generational entity IDs
-- Async/concurrent operations
-- Component versioning and migration
-- Memory pool management
-- Thread-safe with parking_lot
+### [core/client](./client/README.md) - Browser Infrastructure
+WASM browser client infrastructure.
+- WebSocket connection management
+- Exponential backoff reconnection
+- Binary protocol handling
+- JavaScript/TypeScript bindings
+- Binary size optimized (431KB)
+- **Note**: This is infrastructure, not business logic
 
-### [core/math](./math/README.md)
-Mathematical primitives and utilities.
-- Built on nalgebra
-- GPU buffer compatibility (optional)
-- Math library interoperability (optional)
-- 🚧 Under construction
+### Deprecated/To Be Removed
 
-### [core/android](./android/README.md)
-Android platform integration.
-- JNI bindings for Android APIs
-- Logcat integration
-- Asset management
-- Activity lifecycle handling
-- Touch input processing
+The following packages violate the stateless principle and should be removed or refactored:
+
+- **core/plugin** - Plugin loading belongs in systems layer
+- **core/math** - Should be in systems or a separate utility crate
+- **core/android** - Platform integration belongs in systems layer
 
 ## Architecture Principles
+
+### Stateless Design Rules
+- **NO implementation** of business logic in core
+- **NO state management** - only type definitions
+- **ONLY contracts** - traits that define behavior
+- **ONLY infrastructure** - essential services like networking
+- Core defines WHAT, Systems define HOW
 
 ### Layering Rules
 - Core crates cannot depend on Systems
@@ -72,69 +85,84 @@ Android platform integration.
 
 ### Dependency Guidelines
 - Minimize external dependencies
-- Prefer async operations
-- Use Arc<RwLock<>> for thread safety
-- All operations return Result<T, Error>
+- All traits must use `async_trait`
+- Use `Handle<T>` for external references
+- Use `Shared<T>` for internal state (in systems layer)
+- All operations return `Result<T, Error>`
 - Batch operations for performance
 
 ### Common Patterns
 
-#### Thread Safety
+#### Contract Definition (core layer)
 ```rust
-use std::sync::Arc;
-use tokio::sync::RwLock;
+use async_trait::async_trait;
+use playground_core_types::{Handle, EcsResult};
 
-let shared_state = Arc::new(RwLock::new(State::new()));
-```
-
-#### Error Handling
-```rust
-use thiserror::Error;
-
-#[derive(Error, Debug)]
-pub enum CoreError {
-    #[error("Network error: {0}")]
-    Network(String),
-    #[error("Serialization failed: {0}")]
-    Serialization(String),
+#[async_trait]
+pub trait WorldContract: Send + Sync {
+    async fn spawn_entity(&self) -> EcsResult<EntityId>;
+    async fn despawn_batch(&self, entities: Vec<EntityId>) -> EcsResult<()>;
+    // Define WHAT, not HOW
 }
 ```
 
-#### Async Operations
+#### Implementation (systems layer)
 ```rust
-use async_trait::async_trait;
+// This goes in systems/ecs, NOT in core!
+pub struct World {
+    // Actual implementation with state
+}
 
 #[async_trait]
-pub trait AsyncComponent {
-    async fn initialize(&mut self) -> Result<(), Error>;
-    async fn update(&mut self, delta: f32) -> Result<(), Error>;
+impl WorldContract for World {
+    async fn spawn_entity(&self) -> EcsResult<EntityId> {
+        // HOW it's done
+    }
+}
+```
+
+#### Handle/Shared Pattern
+```rust
+use playground_core_types::{Handle, handle, Shared, shared};
+
+// External reference (no locking needed)
+let world: Handle<World> = handle(World::new());
+world.some_method().await;
+
+// Internal state (requires locking) - ONLY in systems layer
+struct MySystem {
+    data: Shared<HashMap<String, Value>>, // Private field
 }
 ```
 
 ## Building
 
-### All Core Crates
+### Active Core Crates
 ```bash
-# Build all core crates
-cargo build -p playground-core-server \
-           -p playground-core-client \
+# Build all active core crates
+cargo build -p playground-core-ecs \
+           -p playground-core-ui \
            -p playground-core-types \
-           -p playground-core-plugin \
-           -p playground-core-ecs \
-           -p playground-core-math \
-           -p playground-core-android
+           -p playground-core-server \
+           -p playground-core-client
 ```
 
 ### Individual Crates
 ```bash
-# Server (native binary)
+# ECS contracts
+cargo build -p playground-core-ecs
+
+# UI contracts
+cargo build -p playground-core-ui
+
+# Types
+cargo build -p playground-core-types
+
+# Server infrastructure
 cargo build -p playground-core-server --release
 
 # Client (WASM)
 cargo build -p playground-core-client --target wasm32-unknown-unknown
-
-# Plugin support
-cargo build -p playground-core-plugin --release
 ```
 
 ## Testing
@@ -162,15 +190,17 @@ cargo test --test '*' --workspace
 | math | N/A (library) | Minimal | N/A |
 | android | ~2MB | ~20MB | <200ms |
 
-## Channel Allocation
+## Channel System
 
-The core infrastructure defines standard channel ranges:
+The engine uses a dynamic channel allocation system:
 
-- **0**: Control channel (system messages)
-- **1-999**: Systems (UI=10, Networking=20, etc.)
-- **1000-1999**: Plugins (dynamic allocation)
-- **2000-2999**: LLM sessions via MCP
-- **3000+**: Reserved for future use
+- **Channel 0**: Control channel (ONLY hardcoded channel)
+  - Used for discovery and channel manifest
+  - Browser connects here first to learn about other channels
+- **All other channels**: Dynamically allocated
+  - Systems and plugins register with SystemsManager
+  - Channels assigned sequentially as needed
+  - Browser discovers mappings via channel 0 manifest
 
 ## Common Issues
 
@@ -193,13 +223,18 @@ The core infrastructure defines standard channel ranges:
 
 Core crates use minimal, well-maintained dependencies:
 
-- `tokio`: Async runtime
-- `async-trait`: Async traits
-- `serde`: Serialization
-- `bytes`: Efficient byte handling
+**For Contracts (core/ecs, core/ui)**:
+- `async-trait`: Async trait support
+- `bytes`: Byte buffer types
+- `serde`: Serialization traits
 - `thiserror`: Error definitions
-- `parking_lot`: Fast synchronization
-- `nalgebra`: Math operations
+
+**For Infrastructure (core/server, core/client)**:
+- `tokio`: Async runtime
+- `axum`: Web server framework (server only)
+- `wasm-bindgen`: WASM bindings (client only)
+
+**Note**: NO `parking_lot` - use `tokio::sync::RwLock` only
 
 ## See Also
 

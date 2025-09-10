@@ -78,14 +78,50 @@ core/           # Foundation layer (contracts only)
 └── ui          # UI contracts/traits
 ```
 
+### Unified ECS Architecture (Session 43)
+
+The engine uses a single, unified ECS with clean separation of concerns:
+
+#### **core/ecs** - Contracts Only (Stateless)
+Defines WHAT the ECS must do through traits and interfaces:
+- `WorldContract` - Interface for World implementations
+- `ComponentData` - Trait for component types
+- `Storage` - Trait for storage backends
+- `System` - Trait for all systems
+- `Query` - Trait for query operations
+- `MessageBusContract` - Interface for messaging
+- Type definitions (EntityId, ComponentId, ChannelId)
+- NO implementation code whatsoever
+
+#### **systems/ecs** - Unified Implementation (Stateful)
+The ONLY ECS implementation in the entire engine:
+- Single authoritative World for all entities/components
+- Generational entity IDs prevent use-after-free
+- Component storage using Sparse/Dense enum pattern (NO dyn)
+- Query system without turbofish (`.with_component(ComponentId)`)
+- Three-stage execution pipeline: Update → Layout → Render
+- Messaging as core ECS functionality (not a separate system)
+- Incremental garbage collection with frame budget
+- Implements ALL contracts from core/ecs
+
+#### **systems/logic** - Public API Gateway (Stateless)
+The ONLY interface plugins/apps can use:
+- Provides public types (e.g., `UiElementComponent`)
+- Translates public API calls to internal ECS operations
+- Hides all implementation details
+- Stateless design for clean boundaries
+- All other packages are hidden from plugins/apps
+
 ### Key Design Principles
 - **Stateless Core**: core/* defines contracts only, no implementation
 - **Unified ECS**: Single systems/ecs World for entire engine
 - **API Gateway**: systems/logic is the ONLY public API for plugins/apps
+- **Clean Separation**: Contracts (core) → Implementation (systems) → API (logic)
 - **Mobile-First**: Designed for touch, optimized for battery
 - **Server Authority**: Browser is pure view, logic on server
 - **NO unsafe code**: 100% safe Rust
-- **NO dyn**: Concrete types with wrapper pattern
+- **NO dyn**: Concrete types with enum wrapper pattern
+- **NO turbofish**: Use `.with_component(ComponentId)` instead of `::<T>`
 - **Handle vs Shared**: Handle<T> for external refs, Shared<T> for internal state
 - **Async Everything**: Built on tokio
 - **Self-Contained Plugins**: No inter-plugin dependencies, App coordinates all
@@ -101,10 +137,10 @@ core/           # Foundation layer (contracts only)
 
 ### Engine Capabilities
 - **WebSocket Networking**: Binary protocol, 60fps batching
-- **Channel System**: 1-999 for Systems, 1000+ for Plugins
-- **ECS Framework**: Hybrid storage, parallel execution
+- **Dynamic Channel System**: Channel 0 for control, all others dynamically allocated
+- **Unified ECS Framework**: Single World, staged execution, NO dyn patterns
 - **WebGL Renderer**: Single draw call batching
-- **Plugin System**: Dynamic loading with hot-reload
+- **Plugin System**: Plugins are high-level systems scheduled by ECS
 - **WASM Support**: Browser client with reconnection
 
 ### Development Tools
@@ -120,18 +156,15 @@ core/           # Foundation layer (contracts only)
 - **Lines of Code**: ~46,000+
 - **Packages**: 22 active (1 app, 8 IDE plugins, 7 systems, 6 core)
 - **Zero Unsafe Code**: 100% safe Rust
+- **Zero dyn Usage**: Enum patterns instead of trait objects
 - **WASM Size**: 431KB optimized
 - **Compilation**: < 30s on modern Android
 - **Memory**: < 50MB baseline
 - **Build Status**: ✅ **FULLY COMPILING**
+- **Architecture**: ✅ **Unified ECS Implemented (Session 43)**
 - **Dashboard**: Real-time terminal monitoring
-- **Logging**: File + dashboard display
-- **WebSocket Channels**: 
-  - UI: 10
-  - IDE Plugins: 1000-1079
-  - Game Plugins: 1100-1199
-  - UI Framework: 1200-1209
-  - LLM Sessions: 2000-2999
+- **Logging**: Component-specific log files + dashboard
+- **Channel System**: Dynamic allocation (only channel 0 hardcoded)
 
 ## 🛠️ Development
 
@@ -158,13 +191,15 @@ cargo test --workspace
   - Apps: `playground-apps-*`
 
 ### Architecture Rules
-1. Apps → Plugins → Systems → Core (strict layering)
-2. Core/* provides contracts only (no implementation)
-3. Systems/ecs is the unified ECS implementation
-4. Plugins/Apps use ONLY systems/logic API
-5. No turbofish syntax - use `.with_component(ComponentId)`
-6. **ONLY tokio::sync::RwLock** - Never use parking_lot (Send issues)
-7. All async functions must properly propagate with .await
+1. **Strict Layering**: Apps → Plugins → Systems → Core
+2. **Stateless Core**: core/* provides contracts only (NO implementation)
+3. **Unified ECS**: systems/ecs is the ONLY World implementation
+4. **API Gateway**: Plugins/Apps use ONLY systems/logic API
+5. **NO turbofish**: Use `.with_component(ComponentId)` instead
+6. **NO dyn**: Use enum patterns for type erasure
+7. **Handle/Shared Pattern**: Handle<T> for external, Shared<T> for internal
+8. **Async Everywhere**: All I/O operations must be async
+9. **ONLY tokio::sync::RwLock**: Never use parking_lot (Send issues)
 
 ## 🤝 Contributing
 
