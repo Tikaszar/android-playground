@@ -16,8 +16,14 @@ This file documents key architectural decisions, why they were made, and how the
 **Evolution**:
 1. Started with Apps directly using Core (wrong)
 2. Discovered Apps were creating systems directly (violation)
-3. Realized systems/logic should initialize ALL other systems
-4. Final: Apps create logic, logic creates everything else
+3. Realized systems/logic should coordinate initialization
+4. Session 43: Refined to stateless core, unified ECS, API gateway pattern
+
+**Current Design (Session 43)**:
+- **Core**: Stateless contracts only
+- **Systems**: Stateful implementations (including unified systems/ecs)
+- **Plugins**: High-level features as systems
+- **Apps**: Orchestrators using only systems/logic API
 
 ### NO Unsafe Code
 **Decision**: Zero `unsafe` blocks anywhere in codebase
@@ -162,27 +168,32 @@ let component = Component::new(MyComponentData { ... }).await?;
 
 ## ECS Architecture
 
-### Two-Layer ECS Design
-**Decision**: core/ecs (minimal) + systems/logic (full-featured)
+### Unified ECS Design (Session 43)
+**Decision**: Single unified ECS in systems/ecs replacing dual-layer design
 
 **Why**:
-- Systems need simple ECS for internal state
-- Plugins/Apps need rich game development features
-- Separation prevents feature creep in core
-- Each layer optimized for its use case
+- Eliminates confusion between two ECS systems
+- Single source of truth for all entity/component data
+- Cleaner architectural boundaries
+- Simpler mental model for developers
+- Better performance with single scheduler
 
-**core/ecs Features**:
-- Generational IDs
-- Async operations
-- Binary serialization
-- Basic queries
+**Architecture**:
+- **core/ecs**: Contracts and traits only (stateless)
+- **systems/ecs**: Unified World implementation (stateful)
+- **systems/logic**: Pure API gateway (stateless)
 
-**systems/logic Features**:
-- Hybrid archetype storage
-- Parallel execution
-- NetworkedComponent
-- Query caching
-- Event system
+**Previous Design (Deprecated)**:
+- Had two ECS layers: core/ecs for systems, systems/logic for games
+- Caused confusion about which to use where
+- Mixed concerns between API and implementation
+
+**New Design Benefits**:
+- Single World manages all entities/components
+- Staged execution pipeline (Update → Layout → Render)
+- Clean separation: contracts (core) → implementation (systems/ecs) → API (systems/logic)
+- Plugins interact ONLY through systems/logic API
+- Engine systems isolated from each other
 
 ### Batch-Only API
 **Decision**: All ECS operations work on collections
@@ -470,26 +481,26 @@ impl System for PluginName {
 }
 ```
 
-### Plugins MUST Use systems/logic ECS
-**Decision**: Plugins cannot use core/ecs directly
+### Plugins Use Only systems/logic API
+**Decision**: Plugins can ONLY interact through systems/logic
 
 **Why**:
-- core/ecs is for Systems' internal state management only
-- Mixing ECS layers causes confusion and violations
-- systems/logic provides the game ECS for plugins/apps
-- Clean separation of concerns
+- systems/logic is the sole public API gateway
+- Hides all internal implementation details
+- Provides stable API surface for hot-reload
+- Clean separation of public vs internal
 
 **Implementation**:
-- UiSystem uses core/ecs internally (private)
-- Plugins use systems/logic World for their state
-- UiInterface provides clean API for UI interaction
-- No direct component manipulation across layers
+- systems/logic provides public types (e.g., UiElementComponent)
+- Translates public types to internal representations
+- Engine systems query internal data from systems/ecs
+- No direct access to core/* or other systems/*
 
 **Evolution**:
-1. UI Framework Plugin was using core/ecs::Component (WRONG)
-2. Was trying to manipulate UiSystem's internal components
-3. Created UiInterface in systems/logic for proper abstraction
-4. Plugins now use high-level APIs like create_discord_layout()
+1. Previously plugins could access multiple layers (WRONG)
+2. Created confusion about which APIs to use
+3. Now systems/logic is the ONLY entry point
+4. All other packages hidden from plugins/apps
 
 ### Plugin Loading by Apps
 **Decision**: Apps load plugins and register them as Systems

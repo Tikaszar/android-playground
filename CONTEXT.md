@@ -1,11 +1,12 @@
 # CONTEXT.md - Current Session Context
 
-## Active Session - 2025-08-29 (Session 42)
+## Active Session - 2025-09-10 (Session 43)
 
 ### Current Status
 **Build**: ✅ COMPLETE - playground-apps-editor builds successfully with 0 errors
-**Architecture**: ✅ Complete compliance achieved  
-**System Registration**: ✅ Proper system registration via core/ecs
+**Architecture**: 🔄 REFACTORING - Implementing new unified ECS design  
+**Unified ECS**: 🔴 NOT STARTED - Need to create systems/ecs package
+**API Gateway**: 🔴 NOT STARTED - systems/logic needs refactoring to API-only
 **Rendering**: 🟡 Pipeline ready - waiting for test
 **Networking**: ✅ Fixed packet broadcasting - all clients receive packets
 **Channels**: ✅ Dynamic channel allocation working correctly
@@ -13,33 +14,34 @@
 **Lifecycle**: ✅ Fixed circular dependency in startup
 **Logging**: ✅ Component-specific logging fully implemented across codebase
 
-### Session 42 Accomplishments
+### Session 43 Goals - New Architecture Implementation
 
-#### ✅ FIXED: Proper System Registration Architecture
+#### 🔄 IN PROGRESS: Unified ECS Architecture Refactor
 
-- **Removed incorrect system loader from systems/logic**:
-  1. Deleted system_loader.rs, build.rs, and systems.toml from systems/logic
-  2. Systems/logic should ONLY load plugins as Systems, not manage system registration
-  3. Removed build dependencies from systems/logic Cargo.toml
+Based on DESIGN_CLARIFICATION.md, implementing major architectural changes:
+
+- **Core Layer Changes**:
+  1. core/ecs becomes contract-only (traits, no implementation)
+  2. Remove all stateful code from core/*
+  3. Define only interfaces and contracts
   
-- **Implemented proper system registration in core/ecs**:
-  1. Created `SystemRegistry` in core/ecs/src/system_registry.rs
-  2. Uses thread-safe Lazy static with once_cell (no unsafe code)
-  3. Provides registration functions for each system type
-  4. Maintains NO dyn rule - stores SystemHandle structs, not trait objects
+- **New Unified ECS System**:
+  1. Create systems/ecs package with unified World implementation
+  2. Single ECS for entire engine (replaces dual ECS design)
+  3. Implements core/ecs contracts
+  4. Manages all system scheduling and execution
   
-- **Added self-registration to each system**:
-  1. systems/networking has register() function
-  2. systems/ui has register() function  
-  3. Each system registers itself with core/ecs
-  4. SystemsManager calls these registration functions
+- **Systems/Logic Refactor**:
+  1. Convert to pure API gateway (stateless)
+  2. Remove ECS implementation (moves to systems/ecs)
+  3. Provide only public-facing types and functions
+  4. Hide all core/* and systems/* from plugins/apps
   
-- **Architecture compliance verified**:
-  - Systems can ONLY use core, never other systems
-  - Core/ecs manages system registry
-  - NO dyn, NO unsafe, NO violations
-  - lib.rs files contain exports only
-  - Full build with 0 errors, only warnings
+- **System Registration Flow**:
+  1. Engine systems auto-register with systems/ecs
+  2. Apps explicitly register plugins via systems/logic API
+  3. Compile-time manifest for engine system discovery
+  4. Two-stage setup: engine systems then plugins
 
 ### Session 40 Accomplishments (Previous)
 
@@ -56,29 +58,51 @@
   3. Generates complete WebGL client with WebSocket connection
   4. Client handles channel discovery and render command reception
   
-### Next Session Plan
+### Implementation Steps for New Architecture
 
-#### System Registration Implementation
-1. **Add concrete system types to core/ecs**:
-   - RenderSystem struct (no impl)
-   - NetworkSystem struct (no impl)
-   - UiSystem struct (no impl)
-   - PhysicsSystem struct (no impl)
+#### Phase 1: Core Layer Refactoring
+1. **Refactor core/ecs to contracts only**:
+   - Extract all implementation to systems/ecs
+   - Keep only traits and interfaces
+   - Define ECS contract without implementation
    
-2. **Create SystemRegistry in core/ecs**:
-   - Static registry with Option<ConcreteType> for each system
-   - Registration functions for each system type
-   - initialize_all_systems() to init all registered systems
+2. **Verify all core/* packages are stateless**:
+   - Review each core package for state
+   - Move implementations to systems/*
+   - Ensure only contracts remain
+
+#### Phase 2: Create Unified ECS
+1. **Create systems/ecs package**:
+   - Implement unified World
+   - Single ECS for entire engine
+   - Scheduler for staged execution
+   - Implements core/ecs contracts
    
-3. **Implement self-registration in systems/**:
-   - Add ctor dependency to each system
-   - Use #[ctor] for auto-registration
-   - Move implementations to impl blocks on core types
+2. **Migrate existing ECS functionality**:
+   - Move from core/ecs implementation
+   - Merge with systems/logic ECS features
+   - Ensure all features preserved
+
+#### Phase 3: Refactor systems/logic
+1. **Convert to API gateway**:
+   - Remove ECS implementation
+   - Create public API surface
+   - Hide internal packages
+   - Stateless design
    
-4. **Update SystemsManager**:
-   - Remove direct system creation
-   - Call core/ecs::initialize_all_systems()
-   - Access systems through core/ecs registry
+2. **Define public types**:
+   - UiElementComponent and other public types
+   - API functions for plugin/app use
+   - Translation layer to internal types
+
+#### Phase 4: Update System Registration
+1. **Engine system auto-registration**:
+   - Compile-time manifest generation
+   - Automatic discovery of systems
+   
+2. **Plugin registration API**:
+   - Explicit registration through systems/logic
+   - App-controlled plugin loading
 
 ### Session 39 Accomplishments (Previous)
 

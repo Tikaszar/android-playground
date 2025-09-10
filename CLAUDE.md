@@ -26,16 +26,17 @@ This file contains critical memory for Claude Code when working with this reposi
 ## #architecture-rules
 - Apps → Plugins → Systems → Core (STRICT LAYERING)
 - Apps are THE AUTHORITY - control flow, state, and timing
-- Apps create systems/logic which initializes ALL other systems
-- Plugins provide reusable features using Systems APIs
-- Systems provide generic engine capabilities
-- Core provides foundation (server, ecs, types)
-- Plugins customize Systems for specific use cases (e.g., Discord UI)
+- **Core is stateless** - defines contracts/traits only, NO implementation
+- **systems/ecs is the unified ECS** - single World for entire engine
+- **systems/logic is the ONLY public API** - plugins/apps use nothing else
+- Systems provide engine implementations
+- Core provides contracts and interfaces only
+- Plugins are high-level systems run by systems/ecs scheduler
 - **App and Browser are ONE application** - distributed across network
 - **Browser is the App's frontend** - not a separate entity
 - **Channel 0 is control** - only hardcoded channel for discovery
-- **Systems can ONLY use Core** - never import other systems
-- **Core/ecs manages system registry** - systems self-register with core
+- **System isolation** - systems cannot depend on each other
+- **Two-stage setup** - engine systems auto-register, then apps register plugins
 
 ## #package-naming
 - Core: `playground-core-*` (e.g., playground-core-ecs)
@@ -44,45 +45,47 @@ This file contains critical memory for Claude Code when working with this reposi
 - Apps: `playground-apps-*` (e.g., playground-apps-editor)
 
 ## #ecs-rules
-- Systems use `core/ecs` for internal state management
-- Plugins/Apps use `systems/logic` for game logic
+- **systems/ecs** is the unified ECS implementation for entire engine
+- **core/ecs** defines contracts only (traits, no implementation)
+- **systems/logic** is the ONLY public API gateway (stateless)
+- Plugins/Apps can ONLY use systems/logic, nothing else
 - NO playground_ecs (doesn't exist)
 - Query API: `.with_component(ComponentId)` - NO TURBOFISH!
-- systems/logic is SPECIAL - initializes all other systems
-- Plugins ARE systems/logic Systems (NOT core/ecs) - implement systems/logic::System trait
-- **Plugins MUST NOT use core/ecs directly** - only through systems/logic
-- UiSystem internal ECS is private - plugins use UiInterface from systems/logic
+- Plugins are high-level systems scheduled by systems/ecs
+- Plugins remain hot-reloadable through systems/logic API
+- Engine systems (ui, webgl, etc) are isolated from each other
 
 ## #current-violations
 ✅ **NONE** - Full architectural compliance achieved!
 
-## #ecs-architecture-fix
-**CRITICAL**: UiSystem uses `Arc<World>` not `Shared<World>`
-- World internally has Shared<> fields for its own locking
-- Adding another layer with Shared<World> causes nested lock deadlocks
-- Solution: `world: Arc<World>` in UiSystem
-- World's methods handle all internal locking
+## #unified-ecs-architecture
+**NEW DESIGN**: Single unified ECS in systems/ecs
+- systems/ecs contains the ONLY World implementation
+- Replaces previous dual-ECS design (core/ecs + systems/logic)
+- core/ecs now defines contracts only
+- systems/logic is pure API gateway (stateless)
+- All systems and plugins scheduled by systems/ecs
+- Staged execution pipeline (Update → Layout → Render)
 
 ## #immediate-goals
-1. ~~Fix systems/logic dyn violations~~ ✅ COMPLETED (Session 21-22)
-2. ~~Fix systems/networking type aliases~~ ✅ COMPLETED (Session 18)
-3. ~~Fix Component/ComponentData pattern~~ ✅ COMPLETED (Session 20)
-4. ~~Fix systems/logic NO turbofish~~ ✅ COMPLETED (Session 22)
-5. ~~Fix core/ecs NO dyn violations~~ ✅ COMPLETED (Session 23)
-6. ~~Fix core/server Handle/Shared compliance~~ ✅ COMPLETED (Session 24)
-7. ~~Fix plugin architecture~~ ✅ COMPLETED (Session 27)
-   - All IDE plugins implement systems/logic::System
-   - Plugins are self-contained
-   - App coordinates all plugins
-8. **Implement dynamic channel system** 🔴 (Session 28)
+1. **Implement unified ECS architecture** 🔴 (Session 43)
+   - Create systems/ecs package with World implementation
+   - Refactor core/ecs to contracts only
+   - Convert systems/logic to stateless API gateway
+   - Migrate ECS functionality from both layers
+2. **Update system registration** 🔴
+   - Engine systems auto-register with systems/ecs
+   - Plugin registration through systems/logic API
+   - Compile-time manifest for discovery
+3. **Implement dynamic channel system** 🔴 (Session 28)
    - SystemsManager channel registry
    - Channel discovery protocol on channel 0
    - Remove all hardcoded channels except 0
-9. **Complete UI rendering pipeline** 🔴
+4. **Complete UI rendering pipeline** 🔴
    - UiSystem sends RenderCommandBatch
    - Browser receives and renders with WebGL
    - Full render loop working
-10. **Implement plugin functionality** 🔴
+5. **Implement plugin functionality** 🔴
    - Wire up actual editor functionality
    - Implement terminal PTY support
    - Add file browser operations

@@ -63,30 +63,31 @@ plugins/        # Reusable feature modules
 └── chat              # Real-time messaging
 
 systems/        # Engine components
-├── logic       # ECS and system initialization
+├── ecs         # Unified ECS World implementation (NEW)
+├── logic       # Public API gateway (stateless)
 ├── networking  # WebSocket channels
 ├── ui          # UI framework
-├── rendering   # Legacy renderer (deprecated)
 ├── webgl       # WebGL2 renderer implementation
 └── physics     # 2D/3D physics (planned)
 
-core/           # Foundation layer
+core/           # Foundation layer (contracts only)
 ├── types       # Shared types
-├── ecs         # Minimal ECS for Systems
+├── ecs         # ECS contracts/traits (no implementation)
 ├── server      # WebSocket + MCP server
 ├── client      # WASM browser client
-└── plugin      # Plugin system
+└── ui          # UI contracts/traits
 ```
 
 ### Key Design Principles
+- **Stateless Core**: core/* defines contracts only, no implementation
+- **Unified ECS**: Single systems/ecs World for entire engine
+- **API Gateway**: systems/logic is the ONLY public API for plugins/apps
 - **Mobile-First**: Designed for touch, optimized for battery
-- **Hot-Reload**: Change plugins without restart
 - **Server Authority**: Browser is pure view, logic on server
 - **NO unsafe code**: 100% safe Rust
 - **NO dyn**: Concrete types with wrapper pattern
 - **Handle vs Shared**: Handle<T> for external refs, Shared<T> for internal state
 - **Async Everything**: Built on tokio
-- **ECS Architecture**: Two-layer design (core/ecs + systems/logic)
 - **Self-Contained Plugins**: No inter-plugin dependencies, App coordinates all
 
 ## 🎯 Features
@@ -158,11 +159,12 @@ cargo test --workspace
 
 ### Architecture Rules
 1. Apps → Plugins → Systems → Core (strict layering)
-2. Systems use core/ecs for internal state
-3. Plugins use systems/logic for game ECS
-4. No turbofish syntax - use `.with_component(ComponentId)`
-5. **ONLY tokio::sync::RwLock** - Never use parking_lot (Send issues)
-6. All async functions must properly propagate with .await
+2. Core/* provides contracts only (no implementation)
+3. Systems/ecs is the unified ECS implementation
+4. Plugins/Apps use ONLY systems/logic API
+5. No turbofish syntax - use `.with_component(ComponentId)`
+6. **ONLY tokio::sync::RwLock** - Never use parking_lot (Send issues)
+7. All async functions must properly propagate with .await
 
 ## 🤝 Contributing
 
