@@ -1,22 +1,69 @@
 # CONTEXT.md - Current Session Context
 
-## Active Session - 2025-09-10 (Session 44)
+## Active Session - 2025-09-14 (Session 47)
 
 ### Current Status
-**Build**: ✅ COMPLETE - Both core/server and systems/networking compile successfully
-**Architecture**: ✅ REFACTORED - Unified messaging architecture fully implemented
-**Core/Server**: ✅ CONTRACTS ONLY - Split into separate files per contract
-**Systems/Networking**: ✅ COMPLETE - All server implementations moved here
-**Unified Messaging**: ✅ COMPLETE - WebSocket IS a MessageHandler, no bridge needed
-**API Gateway**: 🔴 PENDING - systems/logic still needs refactoring to API-only
-**Rendering**: 🟡 Pipeline ready - waiting for test
-**Networking**: ✅ Fixed packet broadcasting - all clients receive packets
-**Channels**: ✅ Dynamic channel allocation working correctly
-**Browser**: ✅ Fixed - endianness issue resolved, manifest working
-**Lifecycle**: ✅ Fixed circular dependency in startup
-**Logging**: ✅ Component-specific logging fully implemented across codebase
+**Build**: ✅ COMPLETE - All core packages compile successfully
+**Phase 1**: ✅ COMPLETE - Core layer fully restructured with generic contracts
+**Architecture**: 🔴 MISALIGNED - Systems layer still needs refactoring
+**World Command Processor**: ✅ COMPLETE - Session 46 implementation working
+**System Architecture**: 🔴 INCORRECT - systems/networking still has dashboard, not using ECS
+**API Gateway**: 🔴 INCOMPLETE - systems/logic needs proper API modules
+**Roadmap**: ✅ CREATED - Comprehensive 7-phase plan for architectural alignment
+**Design Docs**: ✅ UPDATED - DESIGN_CLARIFICATION.md reflects correct architecture
 
-### Session 46 - World Command Processor Implementation
+### Session 47 - Architecture Alignment & Phase 1 Implementation
+
+**Goal**: Create roadmap for proper system isolation and implement Phase 1 (Core Layer Restructuring).
+
+**Initial Analysis**:
+1. **systems/networking is incorrect** - Contains dashboard functionality that should be separate
+2. **Systems not using ECS properly** - Should expose functionality through command processors, not direct exports
+3. **systems/logic incomplete** - Needs API modules for networking, console, client operations
+4. **Core packages not generic** - Many core/* packages had implementation-specific assumptions
+
+**Major Accomplishments**:
+
+1. **Created Architecture Roadmap (ROADMAP.md)**:
+   - 7-phase plan for complete architectural alignment
+   - Clear implementation order and success criteria
+   - Emphasis on generic core contracts
+
+2. **Updated DESIGN_CLARIFICATION.md**:
+   - Added principle: "Systems Expose Functionality Through ECS"
+   - Clarified ALL core/* packages must be generic
+   - Documented command processor pattern for all systems
+
+3. **✅ COMPLETED Phase 1 - Core Layer Restructuring**:
+
+   **core/console (NEW)**:
+   - Generic console/logging contracts
+   - ConsoleContract, LoggingContract, InputContract traits
+   - Command processor pattern with ConsoleCommand/ConsoleResponse
+   - Supports ANY backend (terminal, file, GUI, network)
+
+   **core/server (REWRITTEN)**:
+   - Removed dashboard functionality
+   - Made ALL contracts generic (not WebSocket-specific)
+   - ServerContract works for TCP, UDP, IPC, named pipes, etc.
+   - ConnectionContract, ChannelContract, MessageContract
+   - Command processor with ServerCommand/ServerResponse
+
+   **core/client (REWRITTEN)**:
+   - Was browser/WASM specific, now completely generic
+   - ClientContract, RenderingClientContract, InputClientContract
+   - Generic input system (keyboard, mouse, touch, gamepad)
+   - Command processor with ClientCommand/ClientResponse
+   - Works for browser, native, mobile, CLI clients
+
+**Architecture Pattern Established**:
+```
+App → systems/logic API → core/* command → ECS World → System command processor
+```
+
+**Build Status**: ✅ All core packages compile successfully
+
+### Session 46 - World Command Processor Implementation (Previous)
 
 **Goal**: Implement World command processor to allow systems to interact with ECS through core/ecs without violating architecture boundaries.
 
@@ -353,7 +400,26 @@ Successfully implemented the unified ECS design from DESIGN_CLARIFICATION.md:
 - Browser can now properly request and receive channel manifest
 - All control channel messages work correctly
 
-### Next Steps for Session 38
+### Next Steps for Implementation
+
+According to ROADMAP.md, the implementation order should be:
+
+1. **Create core/console package** - Define console/dashboard contracts
+2. **Create systems/console package** - Move dashboard from systems/networking
+3. **Refactor systems/networking** - Remove dashboard, add command processor
+4. **Update systems/logic** - Add API modules for console and networking
+5. **Validate with one plugin** - Ensure new API works properly
+
+This approach starts with the smallest, most self-contained change and gradually builds up the new architecture.
+
+### Important Notes
+
+- **DO NOT** skip ahead to other systems until networking/console are properly separated
+- **DO NOT** update plugins/apps until the API gateway is ready
+- **FOLLOW** the roadmap phases in order to avoid breaking changes
+- **TEST** each phase before moving to the next
+
+### Session History for Reference
 1. **Test the system**:
    - Run playground-editor and verify plugins initialize
    - Check channel allocations in dashboard

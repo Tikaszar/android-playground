@@ -12,23 +12,8 @@ path = "src/lib.rs"
 [dependencies]
 playground-core-types = { path = "../../core/types" }
 playground-core-ecs = { path = "../../core/ecs" }
-axum = { workspace = true, features = ["ws", "macros"] }
-tower = { workspace = true }
-tower-http = { workspace = true, features = ["fs", "cors", "trace", "set-header"] }
-tokio = { workspace = true }
-tracing = { workspace = true }
-tracing-subscriber = { workspace = true }
-anyhow = { workspace = true }
 serde = { workspace = true }
-tokio-tungstenite = "0.24"
-bytes = "1.5"
-futures-util = "0.3"
 serde_json = { workspace = true }
-
-# MCP dependencies
-async-trait = "0.1"
-tokio-stream = "0.1"
-uuid = { workspace = true, features = ["v4"] }
-chrono = { version = "0.4", features = ["serde"] }
-axum-extra = { version = "0.10", features = ["typed-header"] }
-thiserror = { workspace = true }
+async-trait = { workspace = true }
+tokio = { workspace = true }
+once_cell = { workspace = true }

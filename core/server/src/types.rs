@@ -1,191 +1,133 @@
-use std::time::Instant;
+//! Generic types for server operations
+//! 
+//! These types are generic and can be used by any server implementation
+//! (WebSocket, TCP, UDP, IPC, named pipes, etc.)
+
+use serde::{Deserialize, Serialize};
+use std::time::Duration;
 use std::collections::HashMap;
-use serde::{Serialize, Deserialize};
-use serde_json::Value;
 
-/// Binary packet structure for network communication
-#[derive(Clone, Debug)]
-pub struct Packet {
-    pub channel_id: u16,
-    pub packet_type: u16,
-    pub priority: Priority,
+/// Generic message that can be sent over any transport
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Message {
+    /// Unique message identifier
+    pub id: MessageId,
+    /// Channel this message belongs to (logical grouping)
+    pub channel: ChannelId,
+    /// Priority for ordering/QoS
+    pub priority: MessagePriority,
+    /// The actual message payload
     pub payload: Vec<u8>,
+    /// Optional correlation ID for request/response patterns
+    pub correlation_id: Option<MessageId>,
 }
 
-/// Priority levels for packet ordering
-#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
-pub enum Priority {
-    Low = 0,
-    Medium = 1,
-    High = 2,
-    Critical = 3,
-    Blocker = 4,
-}
+/// Unique identifier for messages
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct MessageId(pub u64);
 
-/// Logging severity levels
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum LogLevel {
-    Debug,
-    Info,
-    Warning,
-    Error,
+/// Message priority levels (generic, not protocol-specific)
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+pub enum MessagePriority {
+    Low,
+    Normal,
+    High,
     Critical,
 }
 
-impl LogLevel {
-    pub fn as_emoji(&self) -> &str {
-        match self {
-            LogLevel::Debug => "🔍",
-            LogLevel::Info => "ℹ️",
-            LogLevel::Warning => "⚠️",
-            LogLevel::Error => "❌",
-            LogLevel::Critical => "🔴",
-        }
-    }
-    
-    pub fn as_color_code(&self) -> &str {
-        match self {
-            LogLevel::Debug => "\x1b[90m",    // Gray
-            LogLevel::Info => "\x1b[36m",     // Cyan
-            LogLevel::Warning => "\x1b[33m",  // Yellow
-            LogLevel::Error => "\x1b[31m",    // Red
-            LogLevel::Critical => "\x1b[91m",  // Bright Red
-        }
-    }
-}
+/// Generic connection identifier
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct ConnectionId(pub usize);
 
-/// Channel categorization
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum ChannelType {
-    System,   // Core systems (1-999)
-    Plugin,   // Plugin channels (1000+)
-    Session,  // Dynamic sessions (2000+)
-}
-
-/// Client connection information
-#[derive(Clone, Debug)]
-pub struct ClientInfo {
-    pub id: usize,
-    pub connected_at: Instant,
-    pub last_activity: Instant,
+/// Information about a connection (generic, not protocol-specific)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ConnectionInfo {
+    pub id: ConnectionId,
+    /// Timestamp in seconds since UNIX epoch
+    pub established_at: u64,
+    /// Timestamp in seconds since UNIX epoch
+    pub last_activity: u64,
+    pub bytes_sent: u64,
+    pub bytes_received: u64,
     pub messages_sent: u64,
     pub messages_received: u64,
-    pub bytes_sent: u64,
-    pub bytes_received: u64,
-    pub ip_address: String,
-    pub user_agent: Option<String>,
-    pub status: ClientStatus,
+    pub status: ConnectionStatus,
+    /// Generic metadata (could be IP, pipe name, etc.)
+    pub metadata: HashMap<String, String>,
 }
 
-/// Client connection status
-#[derive(Clone, Debug, PartialEq)]
-pub enum ClientStatus {
+/// Connection status
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ConnectionStatus {
     Connecting,
     Connected,
-    Idle,
-    Active,
     Disconnecting,
     Disconnected,
+    Error,
 }
 
-impl ClientStatus {
-    pub fn as_emoji(&self) -> &str {
-        match self {
-            ClientStatus::Connecting => "🔄",
-            ClientStatus::Connected => "✅",
-            ClientStatus::Idle => "💤",
-            ClientStatus::Active => "🟢",
-            ClientStatus::Disconnecting => "🔻",
-            ClientStatus::Disconnected => "❌",
-        }
-    }
-}
+/// Channel identifier for logical message grouping
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct ChannelId(pub u16);
 
-/// Channel manifest for discovery protocol
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct ChannelManifest {
-    #[serde(rename = "type")]
-    pub manifest_type: String,
-    pub channels: HashMap<String, u16>,
-}
-
-impl ChannelManifest {
-    pub fn new() -> Self {
-        Self {
-            manifest_type: "channel_manifest".to_string(),
-            channels: HashMap::new(),
-        }
-    }
-}
-
-/// MCP tool definition
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct McpTool {
+/// Information about a channel
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ChannelInfo {
+    pub id: ChannelId,
     pub name: String,
-    pub description: String,
-    pub input_schema: Value,
-    pub handler_channel: u16,
-}
-
-/// MCP request structure
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct McpRequest {
-    pub id: String,
-    pub method: String,
-    pub params: Option<Value>,
-}
-
-/// MCP response structure
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct McpResponse {
-    pub id: String,
-    pub result: Option<Value>,
-    pub error: Option<McpError>,
-}
-
-/// MCP error structure
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct McpError {
-    pub code: i32,
-    pub message: String,
-    pub data: Option<Value>,
-}
-
-/// Dashboard channel info
-#[derive(Clone, Debug)]
-pub struct DashboardChannelInfo {
-    pub name: String,
-    pub channel_id: u16,
-    pub channel_type: ChannelType,
-    pub registered_at: Instant,
+    pub description: Option<String>,
+    /// Timestamp in seconds since UNIX epoch
+    pub created_at: u64,
     pub message_count: u64,
+    pub subscriber_count: usize,
 }
 
-/// Network statistics
-#[derive(Clone, Debug, Default)]
-pub struct NetworkStats {
-    pub bytes_sent: u64,
-    pub bytes_received: u64,
-    pub packets_sent: u64,
-    pub packets_received: u64,
-    pub connections_active: usize,
-    pub average_latency_ms: u32,
-}
-
-/// Server configuration
-#[derive(Clone, Debug)]
+/// Generic server configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ServerConfig {
-    pub port: u16,
-    pub dashboard_enabled: bool,
-    pub mcp_enabled: bool,
-    pub frame_rate: u32,
+    /// Maximum number of connections (0 = unlimited)
     pub max_connections: usize,
-    pub log_to_file: bool,
+    /// Maximum message size in bytes
+    pub max_message_size: usize,
+    /// Connection timeout
+    pub connection_timeout: Duration,
+    /// Keep-alive interval (None = disabled)
+    pub keep_alive_interval: Option<Duration>,
+    /// Message queue size per connection
+    pub message_queue_size: usize,
+    /// Enable message batching
+    pub enable_batching: bool,
+    /// Batch interval (if batching enabled)
+    pub batch_interval: Duration,
+    /// Generic configuration options
+    pub options: HashMap<String, serde_json::Value>,
 }
 
-/// Handle for a WebSocket connection
-pub struct ConnectionHandle {
-    pub id: usize,
-    pub sender: tokio::sync::mpsc::Sender<bytes::Bytes>,
-    pub info: ClientInfo,
+impl Default for ServerConfig {
+    fn default() -> Self {
+        Self {
+            max_connections: 1000,
+            max_message_size: 1024 * 1024, // 1MB
+            connection_timeout: Duration::from_secs(30),
+            keep_alive_interval: Some(Duration::from_secs(30)),
+            message_queue_size: 1000,
+            enable_batching: true,
+            batch_interval: Duration::from_millis(16), // ~60fps
+            options: HashMap::new(),
+        }
+    }
+}
+
+/// Server statistics
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ServerStats {
+    /// Timestamp in seconds since UNIX epoch
+    pub start_time: u64,
+    pub total_connections: u64,
+    pub active_connections: usize,
+    pub total_messages_sent: u64,
+    pub total_messages_received: u64,
+    pub total_bytes_sent: u64,
+    pub total_bytes_received: u64,
+    pub errors: u64,
 }

@@ -1,40 +1,48 @@
-//! Main server contract
+//! Generic server contract
 //!
-//! This defines the contract for the main server that coordinates all components.
+//! This defines a generic server that can be implemented by any transport
+//! (WebSocket, TCP, UDP, IPC, named pipes, etc.)
 
-use std::sync::Arc;
 use async_trait::async_trait;
-use crate::dashboard::DashboardContract;
-use crate::websocket::WebSocketContract;
-use crate::channel_manager::ChannelManagerContract;
-use crate::batcher::BatcherContract;
-use crate::mcp::McpServerContract;
-use playground_core_ecs::MessageBusContract;
+use crate::types::*;
+use std::error::Error;
 
-/// Main server contract that implementations must fulfill
+/// Generic contract for any server implementation
 #[async_trait]
 pub trait ServerContract: Send + Sync {
-    /// Get dashboard component
-    fn dashboard(&self) -> Arc<dyn DashboardContract>;
+    /// Start the server
+    async fn start(&self, config: ServerConfig) -> Result<(), Box<dyn Error>>;
     
-    /// Get websocket component
-    fn websocket(&self) -> Arc<dyn WebSocketContract>;
+    /// Stop the server gracefully
+    async fn stop(&self) -> Result<(), Box<dyn Error>>;
     
-    /// Get channel manager component
-    fn channel_manager(&self) -> Arc<dyn ChannelManagerContract>;
+    /// Check if the server is running
+    async fn is_running(&self) -> bool;
     
-    /// Get batcher component
-    fn batcher(&self) -> Arc<dyn BatcherContract>;
+    /// Get server statistics
+    async fn stats(&self) -> ServerStats;
     
-    /// Get MCP server component
-    fn mcp(&self) -> Arc<dyn McpServerContract>;
+    /// Get server configuration
+    async fn config(&self) -> ServerConfig;
     
-    /// Start the server on specified port
-    async fn start(&self, port: u16) -> Result<(), Box<dyn std::error::Error>>;
+    /// Handle incoming connection (called by implementation)
+    async fn on_connection(&self, connection: ConnectionInfo) -> Result<(), Box<dyn Error>>;
     
-    /// Stop the server
-    async fn stop(&self) -> Result<(), Box<dyn std::error::Error>>;
+    /// Handle connection closed (called by implementation)
+    async fn on_disconnection(&self, id: ConnectionId) -> Result<(), Box<dyn Error>>;
     
-    /// Connect to unified messaging system
-    async fn connect_to_message_bus(&self, bus: Arc<dyn MessageBusContract>) -> Result<(), Box<dyn std::error::Error>>;
+    /// Send a message to a specific connection
+    async fn send_to(&self, connection: ConnectionId, message: Message) -> Result<(), Box<dyn Error>>;
+    
+    /// Broadcast a message to all connections
+    async fn broadcast(&self, message: Message) -> Result<(), Box<dyn Error>>;
+    
+    /// Send a message to all connections on a channel
+    async fn publish(&self, channel: ChannelId, message: Message) -> Result<(), Box<dyn Error>>;
+    
+    /// Get list of active connections
+    async fn connections(&self) -> Vec<ConnectionInfo>;
+    
+    /// Get connection info
+    async fn connection(&self, id: ConnectionId) -> Option<ConnectionInfo>;
 }

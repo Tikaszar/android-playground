@@ -1,51 +1,43 @@
 //! Core server contracts and types
 //!
-//! This package defines ONLY contracts (traits) and types for server infrastructure.
-//! All implementations live in systems/networking.
+//! This package defines GENERIC contracts (traits) and types for server infrastructure.
+//! These contracts can be implemented by ANY server type (WebSocket, TCP, UDP, IPC, etc.).
+//! All implementations live in systems/* packages.
 
 // Contract modules
 pub mod server;
-pub mod dashboard;
-pub mod websocket;
-pub mod channel_manager;
-pub mod batcher;
-pub mod mcp;
+pub mod connection;
+pub mod channel;
+pub mod message;
+pub mod commands;
 pub mod types;
 
 // Re-export all contracts
 pub use server::ServerContract;
-pub use dashboard::DashboardContract;
-pub use websocket::WebSocketContract;
-pub use channel_manager::ChannelManagerContract;
-pub use batcher::BatcherContract;
-pub use mcp::McpServerContract;
+pub use connection::ConnectionContract;
+pub use channel::ChannelContract;
+pub use message::{MessageContract, MessageHandler};
 
 // Re-export all types
 pub use types::{
-    // Packet types
-    Packet,
-    Priority,
+    // Generic message types
+    Message,
+    MessagePriority,
+    MessageId,
     
-    // Logging types
-    LogLevel,
+    // Generic connection types
+    ConnectionId,
+    ConnectionInfo,
+    ConnectionStatus,
     
-    // Channel types
-    ChannelType,
-    ChannelManifest,
-    DashboardChannelInfo,
+    // Generic channel types
+    ChannelId,
+    ChannelInfo,
     
-    // Client types
-    ClientInfo,
-    ClientStatus,
-    ConnectionHandle,
-    
-    // MCP types
-    McpTool,
-    McpRequest,
-    McpResponse,
-    McpError,
-    
-    // Statistics and config
-    NetworkStats,
+    // Server configuration
     ServerConfig,
+    ServerStats,
 };
+
+// Re-export command types
+pub use commands::{ServerCommand, ServerResponse, ServerCommandHandler};
