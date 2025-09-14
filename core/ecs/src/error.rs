@@ -44,6 +44,15 @@ pub enum EcsError {
     
     #[error("Generic error: {0}")]
     Generic(String),
+    
+    #[error("ECS not initialized")]
+    NotInitialized,
+    
+    #[error("Failed to send command")]
+    SendError,
+    
+    #[error("Failed to receive response")]
+    ReceiveError,
 }
 
 impl From<anyhow::Error> for EcsError {

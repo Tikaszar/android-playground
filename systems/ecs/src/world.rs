@@ -5,7 +5,8 @@ use playground_core_types::{Handle, handle, Shared, shared};
 use async_trait::async_trait;
 use playground_core_ecs::{
     ComponentData, ComponentId, EntityId, 
-    EcsError, EcsResult, WorldContract, StorageType
+    EcsError, EcsResult, WorldContract, StorageType,
+    WorldCommand, WorldCommandHandler
 };
 use crate::storage::ComponentStorage;
 use crate::entity::EntityAllocator;
@@ -424,6 +425,127 @@ impl World {
         use playground_core_ecs::MessageBusContract;
         self.message_bus.unsubscribe(channel, handler_id).await
     }
+    
+    // Command processor functionality
+    
+    /// Start the command processor for this World
+    /// This allows systems to interact with the World through core/ecs
+    pub fn start_command_processor(self: std::sync::Arc<Self>) {
+        use tokio::sync::mpsc;
+        
+        let (tx, mut rx) = mpsc::unbounded_channel();
+        
+        // Register the sender with core/ecs
+        playground_core_ecs::register_command_sender(tx);
+        
+        // Spawn the command processor task
+        let world = self;
+        tokio::spawn(async move {
+            while let Some(command) = rx.recv().await {
+                world.handle_command(command).await;
+            }
+        });
+    }
+    
+    /// Spawn a single entity without components
+    pub async fn spawn_entity(&self) -> EcsResult<EntityId> {
+        let entity = {
+            let allocator = self.allocator.read().await;
+            allocator.allocate().await
+        };
+        
+        self.entities.write().await.insert(entity, Vec::new());
+        
+        let mut stats = self.memory_stats.write().await;
+        stats.total_entities += 1;
+        
+        Ok(entity)
+    }
+    
+    /// Get a component as bytes (for command processor)
+    pub async fn get_component_bytes(&self, entity: EntityId, component_id: ComponentId) -> EcsResult<Bytes> {
+        // Check if entity exists
+        if !self.entities.read().await.contains_key(&entity) {
+            return Err(EcsError::EntityNotFound(entity));
+        }
+        
+        // Get the storage for this component type
+        let storage = {
+            let storages = self.storages.read().await;
+            storages.get(&component_id).cloned()
+        };
+        
+        if let Some(storage) = storage {
+            storage.get_bytes(entity).await
+        } else {
+            Err(EcsError::ComponentNotRegistered(format!("{:?}", component_id)))
+        }
+    }
+    
+    /// Set a component from bytes (for command processor)
+    pub async fn set_component_bytes(&self, entity: EntityId, component_id: ComponentId, data: Bytes) -> EcsResult<()> {
+        // Check if entity exists
+        if !self.entities.read().await.contains_key(&entity) {
+            return Err(EcsError::EntityNotFound(entity));
+        }
+        
+        // Get the storage for this component type
+        let storage = {
+            let storages = self.storages.read().await;
+            storages.get(&component_id).cloned()
+        };
+        
+        if let Some(storage) = storage {
+            // Create a ComponentBox from the bytes
+            let component = crate::component::component_box::from_bytes(component_id.clone(), data);
+            storage.insert(entity, component).await?;
+            
+            // Update entity's component list
+            let mut entities = self.entities.write().await;
+            if let Some(components) = entities.get_mut(&entity) {
+                if !components.contains(&component_id) {
+                    components.push(component_id);
+                }
+            }
+            
+            Ok(())
+        } else {
+            Err(EcsError::ComponentNotRegistered(format!("{:?}", component_id)))
+        }
+    }
+    
+    /// Add a component from bytes
+    pub async fn add_component_bytes(&self, entity: EntityId, component_id: ComponentId, data: Bytes) -> EcsResult<()> {
+        self.set_component_bytes(entity, component_id, data).await
+    }
+    
+    /// Remove a component from an entity
+    pub async fn remove_component(&self, entity: EntityId, component_id: ComponentId) -> EcsResult<()> {
+        // Get the storage for this component type
+        let storage = {
+            let storages = self.storages.read().await;
+            storages.get(&component_id).cloned()
+        };
+        
+        if let Some(storage) = storage {
+            storage.remove(entity).await?;
+            
+            // Update entity's component list
+            let mut entities = self.entities.write().await;
+            if let Some(components) = entities.get_mut(&entity) {
+                components.retain(|c| c != &component_id);
+            }
+            
+            Ok(())
+        } else {
+            Err(EcsError::ComponentNotRegistered(format!("{:?}", component_id)))
+        }
+    }
+    
+    /// Check if an entity is alive
+    pub async fn is_alive(&self, entity: EntityId) -> bool {
+        self.entities.read().await.contains_key(&entity)
+    }
 }
 
 impl Default for World {
@@ -505,5 +627,58 @@ impl WorldContract for World {
     
     async fn is_empty(&self) -> bool {
         self.is_empty().await
+    }
+}
+
+#[async_trait]
+impl WorldCommandHandler for World {
+    async fn handle_command(&self, command: WorldCommand) {
+        match command {
+            WorldCommand::SpawnEntity { response } => {
+                let result = self.spawn_entity().await;
+                let _ = response.send(result);
+            }
+            WorldCommand::SpawnBatch { count, response } => {
+                let bundles = vec![vec![]; count]; // Empty bundles
+                let result = self.spawn_batch(bundles).await;
+                let _ = response.send(result);
+            }
+            WorldCommand::DespawnEntity { entity, response } => {
+                let result = self.despawn_batch(vec![entity]).await;
+                let _ = response.send(result);
+            }
+            WorldCommand::DespawnBatch { entities, response } => {
+                let result = self.despawn_batch(entities).await;
+                let _ = response.send(result);
+            }
+            WorldCommand::QueryEntities { required, excluded, response } => {
+                let result = self.query_entities(required, excluded).await;
+                let _ = response.send(result);
+            }
+            WorldCommand::GetComponent { entity, component_id, response } => {
+                let result = self.get_component_bytes(entity, component_id).await;
+                let _ = response.send(result);
+            }
+            WorldCommand::SetComponent { entity, component_id, data, response } => {
+                let result = self.set_component_bytes(entity, component_id, data).await;
+                let _ = response.send(result);
+            }
+            WorldCommand::AddComponent { entity, component_id, data, response } => {
+                let result = self.add_component_bytes(entity, component_id, data).await;
+                let _ = response.send(result);
+            }
+            WorldCommand::RemoveComponent { entity, component_id, response } => {
+                let result = self.remove_component(entity, component_id).await;
+                let _ = response.send(result);
+            }
+            WorldCommand::HasComponent { entity, component_id, response } => {
+                let result = self.has_component(entity, component_id).await;
+                let _ = response.send(result);
+            }
+            WorldCommand::IsAlive { entity, response } => {
+                let result = self.is_alive(entity).await;
+                let _ = response.send(result);
+            }
+        }
     }
 }

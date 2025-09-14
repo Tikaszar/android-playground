@@ -376,6 +376,16 @@ impl ComponentStorage {
         }
     }
     
+    pub async fn get_bytes(&self, entity: EntityId) -> EcsResult<bytes::Bytes> {
+        let component_box = match self {
+            Self::Sparse(storage) => storage.get_raw(entity).await?,
+            Self::Dense(storage) => storage.get_raw(entity).await?,
+        };
+        
+        // ComponentBox contains a Component which has serialize() method
+        Ok((*component_box).serialize())
+    }
+    
     pub async fn get_raw(&self, entity: EntityId) -> EcsResult<ComponentBox> {
         match self {
             Self::Sparse(storage) => storage.get_raw(entity).await,

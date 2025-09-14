@@ -61,6 +61,21 @@ impl Component {
 /// Type alias for boxed components (NO dyn pattern)
 pub type ComponentBox = Box<Component>;
 
+/// Helper functions for ComponentBox
+pub mod component_box {
+    use super::*;
+    
+    /// Create a ComponentBox from raw bytes
+    pub fn from_bytes(component_id: ComponentId, data: Bytes) -> ComponentBox {
+        Box::new(Component::from_bytes(
+            data,
+            component_id.clone(),
+            format!("{:?}", component_id), // Use Debug format as name
+            0, // Size hint not needed
+        ))
+    }
+}
+
 /// Component information metadata
 #[derive(Clone)]
 pub struct ComponentInfo {
