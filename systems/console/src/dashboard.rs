@@ -1,40 +1,73 @@
+//! Terminal dashboard implementation for server monitoring
+
 use std::sync::Arc;
 use std::collections::{HashMap, VecDeque};
-use std::time::{SystemTime, Instant};
+use std::time::Instant;
 use std::io::{self, Write};
-use async_trait::async_trait;
-use serde_json::Value;
 use tokio::fs::OpenOptions;
 use tokio::io::AsyncWriteExt;
-use playground_core_server::{
-    DashboardContract, LogLevel, ChannelType, ClientInfo, DashboardChannelInfo
-};
-use playground_core_types::{Shared, shared};
+use playground_core_types::{Shared, shared, CoreError, CoreResult};
+use playground_core_console::{LogEntry, LogLevel};
 use chrono;
 
 const MAX_LOG_ENTRIES: usize = 100;
 const DASHBOARD_REFRESH_MS: u64 = 1000;
 
+/// Server monitoring dashboard that displays in terminal
 pub struct Dashboard {
     enabled: bool,
     log_entries: Shared<VecDeque<LogEntry>>,
     clients: Shared<HashMap<usize, ClientInfo>>,
-    channels: Shared<HashMap<u16, DashboardChannelInfo>>,
+    channels: Shared<HashMap<u16, ChannelInfo>>,
     log_file: Shared<Option<tokio::fs::File>>,
     component_log_files: Shared<HashMap<String, tokio::fs::File>>,
     start_time: Instant,
 }
 
 #[derive(Clone, Debug)]
-struct LogEntry {
-    timestamp: SystemTime,
-    level: LogLevel,
-    message: String,
-    component: Option<String>,
+pub struct ClientInfo {
+    pub id: usize,
+    pub connected_at: Instant,
+    pub messages_sent: u64,
+    pub messages_received: u64,
+    pub status: ClientStatus,
+}
+
+#[derive(Clone, Debug)]
+pub enum ClientStatus {
+    Connected,
+    Disconnected,
+    Error,
+}
+
+impl ClientStatus {
+    pub fn as_emoji(&self) -> &str {
+        match self {
+            ClientStatus::Connected => "✅",
+            ClientStatus::Disconnected => "❌",
+            ClientStatus::Error => "⚠️",
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct ChannelInfo {
+    pub name: String,
+    pub channel_id: u16,
+    pub channel_type: ChannelType,
+    pub registered_at: Instant,
+    pub message_count: u64,
+}
+
+#[derive(Clone, Debug)]
+pub enum ChannelType {
+    System,
+    Plugin,
+    Custom,
 }
 
 impl Dashboard {
-    pub async fn new(enabled: bool) -> Result<Self, Box<dyn std::error::Error>> {
+    pub async fn new(enabled: bool) -> CoreResult<Self> {
         Ok(Self {
             enabled,
             log_entries: shared(VecDeque::with_capacity(MAX_LOG_ENTRIES)),
@@ -46,7 +79,7 @@ impl Dashboard {
         })
     }
     
-    async fn add_log_entry(&self, entry: LogEntry) {
+    pub async fn add_log_entry(&self, entry: LogEntry) {
         let mut entries = self.log_entries.write().await;
         if entries.len() >= MAX_LOG_ENTRIES {
             entries.pop_front();
@@ -54,58 +87,25 @@ impl Dashboard {
         entries.push_back(entry);
     }
     
-    async fn write_to_log_file(&self, message: &str) {
-        let log_file = self.log_file.read().await;
-        if let Some(ref mut file) = log_file.as_ref() {
-            let mut file = file.try_clone().await.unwrap();
-            let _ = file.write_all(format!("{}\n", message).as_bytes()).await;
-        }
-    }
-    
-    async fn write_to_component_log(&self, component: &str, message: &str) {
-        let mut files = self.component_log_files.write().await;
-        
-        if !files.contains_key(component) {
-            // Create component log file
-            let timestamp = chrono::Local::now().format("%Y%m%d_%H%M%S");
-            let safe_component = component.replace('/', "_");
-            let filename = format!("logs/playground_editor_{}_{}.log", safe_component, timestamp);
-            
-            if let Ok(file) = OpenOptions::new()
-                .create(true)
-                .append(true)
-                .open(&filename)
-                .await
-            {
-                files.insert(component.to_string(), file);
-            }
-        }
-        
-        if let Some(file) = files.get_mut(component) {
-            let _ = file.write_all(format!("{}\n", message).as_bytes()).await;
-        }
-    }
-}
-
-#[async_trait]
-impl DashboardContract for Dashboard {
-    async fn log(&self, level: LogLevel, message: String, _details: Option<Value>) {
+    pub async fn log(&self, level: LogLevel, message: String) {
         if !self.enabled {
             return;
         }
         
         let entry = LogEntry {
-            timestamp: SystemTime::now(),
+            timestamp: std::time::SystemTime::now(),
             level: level.clone(),
             message: message.clone(),
             component: None,
+            data: None,
+            correlation_id: None,
         };
         
         let timestamp = chrono::Local::now().format("%H:%M:%S%.3f");
         let formatted = format!(
             "[{}] {} {}",
             timestamp,
-            level.as_emoji(),
+            log_level_emoji(&level),
             message
         );
         
@@ -113,16 +113,18 @@ impl DashboardContract for Dashboard {
         self.write_to_log_file(&formatted).await;
     }
     
-    async fn log_component(&self, component: &str, level: LogLevel, message: String) {
+    pub async fn log_component(&self, component: &str, level: LogLevel, message: String) {
         if !self.enabled {
             return;
         }
         
         let entry = LogEntry {
-            timestamp: SystemTime::now(),
+            timestamp: std::time::SystemTime::now(),
             level: level.clone(),
             message: message.clone(),
             component: Some(component.to_string()),
+            data: None,
+            correlation_id: None,
         };
         
         let timestamp = chrono::Local::now().format("%H:%M:%S%.3f");
@@ -130,7 +132,7 @@ impl DashboardContract for Dashboard {
             "[{}] [{}] {} {}",
             timestamp,
             component,
-            level.as_emoji(),
+            log_level_emoji(&level),
             message
         );
         
@@ -139,9 +141,9 @@ impl DashboardContract for Dashboard {
         self.write_to_component_log(component, &formatted).await;
     }
     
-    async fn register_channel(&self, id: u16, name: String, channel_type: ChannelType) {
+    pub async fn register_channel(&self, id: u16, name: String, channel_type: ChannelType) {
         let mut channels = self.channels.write().await;
-        channels.insert(id, DashboardChannelInfo {
+        channels.insert(id, ChannelInfo {
             name,
             channel_id: id,
             channel_type,
@@ -150,14 +152,14 @@ impl DashboardContract for Dashboard {
         });
     }
     
-    async fn update_client(&self, id: usize, info: ClientInfo) {
+    pub async fn update_client(&self, id: usize, info: ClientInfo) {
         let mut clients = self.clients.write().await;
         clients.insert(id, info);
     }
     
-    async fn init_log_file(&self) -> Result<(), std::io::Error> {
+    pub async fn init_log_file(&self) -> CoreResult<()> {
         // Ensure logs directory exists
-        tokio::fs::create_dir_all("logs").await?;
+        tokio::fs::create_dir_all("logs").await.map_err(CoreError::from)?;
         
         let timestamp = chrono::Local::now().format("%Y%m%d_%H%M%S");
         let filename = format!("logs/playground_editor_{}.log", timestamp);
@@ -166,7 +168,7 @@ impl DashboardContract for Dashboard {
             .create(true)
             .append(true)
             .open(filename)
-            .await?;
+            .await.map_err(CoreError::from)?;
         
         let mut log_file = self.log_file.write().await;
         *log_file = Some(file);
@@ -174,7 +176,7 @@ impl DashboardContract for Dashboard {
         Ok(())
     }
     
-    async fn start_render_loop(self: Arc<Self>) {
+    pub async fn start_render_loop(self: Arc<Self>) {
         if !self.enabled {
             return;
         }
@@ -227,7 +229,7 @@ impl DashboardContract for Dashboard {
                 
                 println!("│ [{}] {} {}│",
                     timestamp,
-                    entry.level.as_emoji(),
+                    log_level_emoji(&entry.level),
                     format!("{:<40}", msg)
                 );
             }
@@ -238,7 +240,7 @@ impl DashboardContract for Dashboard {
         }
     }
     
-    async fn get_recent_logs(&self, count: usize) -> Vec<String> {
+    pub async fn get_recent_logs(&self, count: usize) -> Vec<String> {
         let entries = self.log_entries.read().await;
         entries.iter()
             .rev()
@@ -246,8 +248,52 @@ impl DashboardContract for Dashboard {
             .map(|e| {
                 let timestamp = chrono::DateTime::<chrono::Local>::from(e.timestamp)
                     .format("%H:%M:%S");
-                format!("[{}] {} {}", timestamp, e.level.as_emoji(), e.message)
+                format!("[{}] {} {}", timestamp, log_level_emoji(&e.level), e.message)
             })
             .collect()
+    }
+    
+    async fn write_to_log_file(&self, message: &str) {
+        let log_file = self.log_file.read().await;
+        if let Some(ref mut file) = log_file.as_ref() {
+            let mut file = file.try_clone().await.unwrap();
+            let _ = file.write_all(format!("{}\n", message).as_bytes()).await;
+        }
+    }
+    
+    async fn write_to_component_log(&self, component: &str, message: &str) {
+        let mut files = self.component_log_files.write().await;
+        
+        if !files.contains_key(component) {
+            // Create component log file
+            let timestamp = chrono::Local::now().format("%Y%m%d_%H%M%S");
+            let safe_component = component.replace('/', "_");
+            let filename = format!("logs/playground_editor_{}_{}.log", safe_component, timestamp);
+            
+            if let Ok(file) = OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(&filename)
+                .await
+            {
+                files.insert(component.to_string(), file);
+            }
+        }
+        
+        if let Some(file) = files.get_mut(component) {
+            let _ = file.write_all(format!("{}\n", message).as_bytes()).await;
+        }
+    }
+}
+
+// Helper function for LogLevel emoji representation
+fn log_level_emoji(level: &LogLevel) -> &str {
+    match level {
+        LogLevel::Trace => "🔍",
+        LogLevel::Debug => "🐛",
+        LogLevel::Info => "ℹ️",
+        LogLevel::Warning => "⚠️",
+        LogLevel::Error => "❌",
+        LogLevel::Fatal => "💀",
     }
 }

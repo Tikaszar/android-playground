@@ -1,4 +1,5 @@
 pub mod context;
+pub mod core_error;
 pub mod error;
 pub mod event;
 pub mod message;
@@ -11,6 +12,7 @@ pub mod stateful;
 
 // Re-export commonly used types
 pub use context::Context;
+pub use core_error::{CoreError, CoreResult};
 pub use error::PluginError;
 pub use event::Event;
 pub use message::Message;

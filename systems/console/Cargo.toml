@@ -1,0 +1,24 @@
+[package]
+name = "playground-systems-console"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+# Core dependencies
+playground-core-types = { path = "../../core/types" }
+playground-core-ecs = { path = "../../core/ecs" }
+playground-core-console = { path = "../../core/console" }
+
+# Async runtime
+tokio = { version = "1.36", features = ["full"] }
+async-trait = "0.1"
+
+# Error handling
+thiserror = "1.0"
+
+# Utilities
+chrono = "0.4"
+bytes = "1.5"
+
+# Terminal UI
+crossterm = "0.28"

@@ -15,6 +15,7 @@ members = [
     "systems/ecs",
     "systems/ui",
     "systems/networking",
+    "systems/console",
     "systems/physics",
     "systems/logic",
     "systems/webgl",
