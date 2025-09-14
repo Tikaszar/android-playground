@@ -2,9 +2,9 @@ use std::sync::Arc;
 use std::collections::BinaryHeap;
 use std::cmp::Ordering;
 use std::time::Duration;
-use async_trait::async_trait;
-use playground_core_server::{BatcherContract, Packet, Priority};
+use playground_core_server::{ConnectionId, Message};
 use playground_core_types::{Shared, shared};
+use crate::types::{Packet, Priority};
 
 /// Wrapper for packets in the priority queue
 #[derive(Clone)]
@@ -41,6 +41,7 @@ pub struct FrameBatcher {
     queue: Shared<BinaryHeap<PrioritizedPacket>>,
     sequence_counter: Shared<usize>,
     frame_duration_ms: u64,
+    message_queue: Shared<Vec<(ConnectionId, Message)>>,
 }
 
 impl FrameBatcher {
@@ -51,13 +52,10 @@ impl FrameBatcher {
             queue: shared(BinaryHeap::new()),
             sequence_counter: shared(0),
             frame_duration_ms,
+            message_queue: shared(Vec::new()),
         }
     }
-}
-
-#[async_trait]
-impl BatcherContract for FrameBatcher {
-    async fn queue_packet(&self, packet: Packet) {
+    pub async fn queue_packet(&self, packet: Packet) {
         // Blocker priority packets bypass the queue
         if matches!(packet.priority, Priority::Blocker) {
             // These should be sent immediately by the caller
@@ -75,7 +73,7 @@ impl BatcherContract for FrameBatcher {
         *seq = seq.wrapping_add(1);
     }
     
-    async fn get_batch(&self) -> Vec<Packet> {
+    pub async fn get_batch(&self) -> Vec<Packet> {
         let mut queue = self.queue.write().await;
         let mut batch = Vec::new();
         
@@ -91,15 +89,15 @@ impl BatcherContract for FrameBatcher {
         batch
     }
     
-    fn frame_duration(&self) -> Duration {
+    pub fn frame_duration(&self) -> Duration {
         Duration::from_millis(self.frame_duration_ms)
     }
     
-    fn set_frame_rate(&mut self, fps: u32) {
+    pub fn set_frame_rate(&mut self, fps: u32) {
         self.frame_duration_ms = 1000 / fps as u64;
     }
     
-    async fn start_batch_loop(self: Arc<Self>) {
+    pub async fn start_batch_loop(self: Arc<Self>) {
         let mut interval = tokio::time::interval(self.frame_duration());
         
         loop {
@@ -112,5 +110,15 @@ impl BatcherContract for FrameBatcher {
                 // The actual sending would be done by the WebSocket handler
             }
         }
+    }
+    
+    pub async fn queue_message(&self, connection: ConnectionId, message: Message) {
+        let mut queue = self.message_queue.write().await;
+        queue.push((connection, message));
+    }
+    
+    pub async fn get_message_batch(&self) -> Vec<(ConnectionId, Message)> {
+        let mut queue = self.message_queue.write().await;
+        std::mem::take(&mut *queue)
     }
 }

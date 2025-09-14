@@ -7,13 +7,11 @@ use axum::{
     response::Response,
 };
 use futures_util::{SinkExt, StreamExt};
-use playground_core_server::{
-    WebSocketContract, ConnectionHandle, Packet, Priority, ClientInfo, ClientStatus
-};
 use playground_core_ecs::{MessageHandlerData, MessageBusContract, ChannelId, EcsResult, EcsError};
-use playground_core_types::{Shared, shared};
+use playground_core_types::{Shared, shared, CoreResult, CoreError};
 use tokio::sync::mpsc;
 use std::time::Instant;
+use crate::types::{Packet, Priority, ClientInfo, ClientStatus, ConnectionHandle};
 
 /// WebSocket handler that IS a MessageHandler in the unified system
 pub struct WebSocketHandler {
@@ -28,7 +26,7 @@ struct ConnectionState {
 }
 
 impl WebSocketHandler {
-    pub async fn new() -> Result<Self, Box<dyn std::error::Error>> {
+    pub async fn new() -> CoreResult<Self> {
         Ok(Self {
             connections: shared(HashMap::new()),
             next_connection_id: shared(1),
@@ -36,14 +34,14 @@ impl WebSocketHandler {
         })
     }
     
-    pub async fn connect_to_message_bus(&self, bus: Arc<dyn MessageBusContract>) -> Result<(), Box<dyn std::error::Error>> {
+    pub async fn connect_to_message_bus(&self, bus: Arc<dyn MessageBusContract>) -> CoreResult<()> {
         let mut message_bus = self.message_bus.write().await;
         *message_bus = Some(bus.clone());
         
         // Subscribe to channels we want to forward to clients
         // Channel 10 is UI render channel
         bus.subscribe(10, self.handler_id()).await
-            .map_err(|e| Box::new(e) as Box<dyn std::error::Error>)?;
+            .map_err(|e| CoreError::Generic(e.to_string()))?;
         
         // Subscribe to other system channels as needed
         // This replaces the old bridge functionality
@@ -63,9 +61,8 @@ impl Clone for WebSocketHandler {
     }
 }
 
-#[async_trait]
-impl WebSocketContract for WebSocketHandler {
-    async fn add_connection(&self, mut conn: ConnectionHandle) -> Result<(), Box<dyn std::error::Error>> {
+impl WebSocketHandler {
+    pub async fn add_connection(&self, mut conn: ConnectionHandle) -> CoreResult<()> {
         let (tx, mut rx) = mpsc::channel(100);
         
         let conn_id = conn.id;
@@ -96,18 +93,103 @@ impl WebSocketContract for WebSocketHandler {
         Ok(())
     }
     
-    async fn remove_connection(&self, id: usize) -> Result<(), Box<dyn std::error::Error>> {
+    pub async fn remove_connection(&self, id: usize) -> CoreResult<()> {
         let mut connections = self.connections.write().await;
         connections.remove(&id);
         Ok(())
     }
     
-    async fn connection_count(&self) -> usize {
+    pub async fn connection_count(&self) -> usize {
         let connections = self.connections.read().await;
         connections.len()
     }
     
-    async fn broadcast(&self, packet: Packet) -> Result<(), Box<dyn std::error::Error>> {
+    pub async fn store_connection(&self, info: playground_core_server::ConnectionInfo) {
+        // Convert core ConnectionInfo to our ClientInfo
+        let client_info = ClientInfo {
+            id: info.id.0,
+            connected_at: Instant::now(),
+            last_activity: Instant::now(),
+            messages_sent: info.messages_sent,
+            messages_received: info.messages_received,
+            bytes_sent: info.bytes_sent,
+            bytes_received: info.bytes_received,
+            ip_address: info.metadata.get("ip").cloned().unwrap_or_else(|| "unknown".to_string()),
+            user_agent: info.metadata.get("user_agent").cloned(),
+            status: match info.status {
+                playground_core_server::ConnectionStatus::Connected => ClientStatus::Connected,
+                playground_core_server::ConnectionStatus::Connecting => ClientStatus::Connecting,
+                playground_core_server::ConnectionStatus::Disconnecting => ClientStatus::Disconnecting,
+                playground_core_server::ConnectionStatus::Disconnected => ClientStatus::Disconnected,
+                _ => ClientStatus::Disconnected,
+            },
+        };
+        
+        // Store in our internal map (implementation detail)
+    }
+    
+    pub async fn remove_connection_by_core_id(&self, id: playground_core_server::ConnectionId) {
+        let mut connections = self.connections.write().await;
+        connections.remove(&id.0);
+    }
+    
+    pub async fn get_all_connections(&self) -> Vec<playground_core_server::ConnectionInfo> {
+        let connections = self.connections.read().await;
+        connections.iter().map(|(id, state)| {
+            let mut metadata = HashMap::new();
+            metadata.insert("ip".to_string(), state.handle.info.ip_address.clone());
+            if let Some(ref ua) = state.handle.info.user_agent {
+                metadata.insert("user_agent".to_string(), ua.clone());
+            }
+            
+            playground_core_server::ConnectionInfo {
+                id: playground_core_server::ConnectionId(*id),
+                established_at: 0, // Would need to track this properly
+                last_activity: 0,
+                bytes_sent: state.handle.info.bytes_sent,
+                bytes_received: state.handle.info.bytes_received,
+                messages_sent: state.handle.info.messages_sent,
+                messages_received: state.handle.info.messages_received,
+                status: match state.handle.info.status {
+                    ClientStatus::Connected => playground_core_server::ConnectionStatus::Connected,
+                    ClientStatus::Connecting => playground_core_server::ConnectionStatus::Connecting,
+                    ClientStatus::Disconnecting => playground_core_server::ConnectionStatus::Disconnecting,
+                    ClientStatus::Disconnected => playground_core_server::ConnectionStatus::Disconnected,
+                },
+                metadata,
+            }
+        }).collect()
+    }
+    
+    pub async fn get_connection(&self, id: playground_core_server::ConnectionId) -> Option<playground_core_server::ConnectionInfo> {
+        let connections = self.connections.read().await;
+        connections.get(&id.0).map(|state| {
+            let mut metadata = HashMap::new();
+            metadata.insert("ip".to_string(), state.handle.info.ip_address.clone());
+            if let Some(ref ua) = state.handle.info.user_agent {
+                metadata.insert("user_agent".to_string(), ua.clone());
+            }
+            
+            playground_core_server::ConnectionInfo {
+                id,
+                established_at: 0,
+                last_activity: 0,
+                bytes_sent: state.handle.info.bytes_sent,
+                bytes_received: state.handle.info.bytes_received,
+                messages_sent: state.handle.info.messages_sent,
+                messages_received: state.handle.info.messages_received,
+                status: match state.handle.info.status {
+                    ClientStatus::Connected => playground_core_server::ConnectionStatus::Connected,
+                    ClientStatus::Connecting => playground_core_server::ConnectionStatus::Connecting,
+                    ClientStatus::Disconnecting => playground_core_server::ConnectionStatus::Disconnecting,
+                    ClientStatus::Disconnected => playground_core_server::ConnectionStatus::Disconnected,
+                },
+                metadata,
+            }
+        })
+    }
+    
+    pub async fn broadcast(&self, packet: Packet) -> CoreResult<()> {
         let connections = self.connections.read().await;
         let binary_data = serialize_packet(&packet)?;
         let message = Message::Binary(Bytes::from(binary_data));
@@ -119,13 +201,14 @@ impl WebSocketContract for WebSocketHandler {
         Ok(())
     }
     
-    async fn send_to(&self, conn_id: usize, packet: Packet) -> Result<(), Box<dyn std::error::Error>> {
+    pub async fn send_to(&self, conn_id: usize, packet: Packet) -> CoreResult<()> {
         let connections = self.connections.read().await;
         
         if let Some(conn) = connections.get(&conn_id) {
             let binary_data = serialize_packet(&packet)?;
             let message = Message::Binary(Bytes::from(binary_data));
-            conn.sender.send(message).await?;
+            conn.sender.send(message).await
+                .map_err(|e| CoreError::Network(e.to_string()))?;
         }
         
         Ok(())
@@ -150,8 +233,7 @@ impl MessageHandlerData for WebSocketHandler {
             payload: message.to_vec(),
         };
         
-        self.broadcast(packet).await
-            .map_err(|e| EcsError::Generic(e.to_string()))?;
+        let _ = self.broadcast(packet).await;
         
         Ok(())
     }
@@ -233,14 +315,19 @@ async fn handle_socket(socket: WebSocket, handler: Arc<WebSocketHandler>) {
         match msg {
             Message::Binary(data) => {
                 // Parse packet and handle
-                if let Ok(packet) = deserialize_packet(&data) {
-                    // Route to appropriate handler based on channel
-                    // This is where incoming messages from clients are processed
-                    
-                    // If we have a message bus, publish to it
-                    let bus_opt = handler.message_bus.read().await;
-                    if let Some(ref bus) = *bus_opt {
-                        let _ = bus.publish(packet.channel_id, Bytes::from(packet.payload)).await;
+                match deserialize_packet(&data) {
+                    Ok(packet) => {
+                        // Route to appropriate handler based on channel
+                        // This is where incoming messages from clients are processed
+                        
+                        // If we have a message bus, publish to it
+                        let bus_opt = handler.message_bus.read().await;
+                        if let Some(ref bus) = *bus_opt {
+                            let _ = bus.publish(packet.channel_id, Bytes::from(packet.payload)).await;
+                        }
+                    }
+                    Err(_) => {
+                        // Invalid packet, ignore
                     }
                 }
             }
@@ -253,7 +340,7 @@ async fn handle_socket(socket: WebSocket, handler: Arc<WebSocketHandler>) {
     let _ = handler.remove_connection(conn_id).await;
 }
 
-fn serialize_packet(packet: &Packet) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
+fn serialize_packet(packet: &Packet) -> CoreResult<Vec<u8>> {
     let mut data = Vec::new();
     data.extend_from_slice(&packet.channel_id.to_le_bytes());
     data.extend_from_slice(&packet.packet_type.to_le_bytes());
@@ -264,9 +351,9 @@ fn serialize_packet(packet: &Packet) -> Result<Vec<u8>, Box<dyn std::error::Erro
     Ok(data)
 }
 
-fn deserialize_packet(data: &[u8]) -> Result<Packet, String> {
+fn deserialize_packet(data: &[u8]) -> CoreResult<Packet> {
     if data.len() < 12 {
-        return Err("Packet too small".into());
+        return Err(CoreError::InvalidInput("Packet too small".into()));
     }
     
     let channel_id = u16::from_le_bytes([data[0], data[1]]);

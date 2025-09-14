@@ -21,3 +21,13 @@ pub use plugin_metadata::{PluginId, PluginMetadata, Version};
 pub use render_context::RenderContext;
 pub use shared::{Handle, handle, Shared, shared};
 pub use stateful::Stateful;
+
+/// Temporary LogLevel until console system is properly set up
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum LogLevel {
+    Trace,
+    Debug,
+    Info,
+    Warn,
+    Error,
+}

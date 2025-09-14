@@ -1,6 +1,5 @@
 use std::sync::Arc;
 use std::collections::HashMap;
-use async_trait::async_trait;
 use axum::{
     Router,
     routing::{get, post},
@@ -8,12 +7,35 @@ use axum::{
     response::{IntoResponse, Response, sse::{Event, Sse}},
     Json,
 };
+use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use futures_util::stream::{self, Stream};
-use playground_core_server::{
-    McpServerContract, McpTool, McpRequest, McpResponse, McpError
-};
-use playground_core_types::{Shared, shared};
+use playground_core_types::{Shared, shared, CoreResult, CoreError};
+use crate::types::McpTool;
+
+/// MCP request structure
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct McpRequest {
+    pub id: String,
+    pub method: String,
+    pub params: Option<Value>,
+}
+
+/// MCP response structure
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct McpResponse {
+    pub id: String,
+    pub result: Option<Value>,
+    pub error: Option<McpError>,
+}
+
+/// MCP error structure
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct McpError {
+    pub code: i32,
+    pub message: String,
+    pub data: Option<Value>,
+}
 
 pub struct McpServer {
     enabled: bool,
@@ -21,7 +43,7 @@ pub struct McpServer {
 }
 
 impl McpServer {
-    pub async fn new(enabled: bool) -> Result<Self, Box<dyn std::error::Error>> {
+    pub async fn new(enabled: bool) -> CoreResult<Self> {
         Ok(Self {
             enabled,
             tools: shared(HashMap::new()),
@@ -57,7 +79,7 @@ impl McpServer {
             json!({
                 "name": tool.name,
                 "description": tool.description,
-                "inputSchema": tool.input_schema,
+                "inputSchema": tool.parameters,
             })
         }).collect();
         
@@ -88,9 +110,8 @@ impl McpServer {
     }
 }
 
-#[async_trait]
-impl McpServerContract for McpServer {
-    async fn register_tool(&self, tool: McpTool) -> Result<(), Box<dyn std::error::Error>> {
+impl McpServer {
+    pub async fn register_tool(&self, tool: McpTool) -> CoreResult<()> {
         if !self.enabled {
             return Ok(());
         }
@@ -98,26 +119,26 @@ impl McpServerContract for McpServer {
         let mut tools = self.tools.write().await;
         
         if tools.contains_key(&tool.name) {
-            return Err(format!("Tool '{}' already registered", tool.name).into());
+            return Err(CoreError::InvalidInput(format!("Tool '{}' already registered", tool.name)));
         }
         
         tools.insert(tool.name.clone(), tool);
         Ok(())
     }
     
-    async fn unregister_tool(&self, name: &str) -> Result<(), Box<dyn std::error::Error>> {
+    pub async fn unregister_tool(&self, name: &str) -> CoreResult<()> {
         let mut tools = self.tools.write().await;
         
         if tools.remove(name).is_none() {
-            return Err(format!("Tool '{}' not found", name).into());
+            return Err(CoreError::NotFound(format!("Tool '{}' not found", name)));
         }
         
         Ok(())
     }
     
-    async fn handle_request(&self, request: McpRequest) -> Result<McpResponse, Box<dyn std::error::Error>> {
+    pub async fn handle_request(&self, request: McpRequest) -> CoreResult<McpResponse> {
         if !self.enabled {
-            return Err("MCP server is disabled".into());
+            return Err(CoreError::Generic("MCP server is disabled".to_string()));
         }
         
         // Parse the method to determine what to do
@@ -128,7 +149,7 @@ impl McpServerContract for McpServer {
                     json!({
                         "name": tool.name,
                         "description": tool.description,
-                        "inputSchema": tool.input_schema,
+                        "inputSchema": tool.parameters,
                     })
                 }).collect();
                 
@@ -140,14 +161,14 @@ impl McpServerContract for McpServer {
             }
             "tools/call" => {
                 // Extract tool name and arguments from params
-                let params = request.params.ok_or("Missing params")?;
-                let tool_name = params["name"].as_str().ok_or("Missing tool name")?;
+                let params = request.params.ok_or_else(|| CoreError::InvalidInput("Missing params".to_string()))?;
+                let tool_name = params["name"].as_str().ok_or_else(|| CoreError::InvalidInput("Missing tool name".to_string()))?;
                 let arguments = params.get("arguments").cloned().unwrap_or(json!({}));
                 
                 // Get the tool
                 let tools = self.tools.read().await;
                 let tool = tools.get(tool_name)
-                    .ok_or(format!("Tool '{}' not found", tool_name))?;
+                    .ok_or_else(|| CoreError::NotFound(format!("Tool '{}' not found", tool_name)))?;
                 
                 // In a real implementation, we would forward this to the handler channel
                 // For now, return a placeholder response
@@ -163,12 +184,12 @@ impl McpServerContract for McpServer {
                 })
             }
             _ => {
-                Err(format!("Unknown method: {}", request.method).into())
+                Err(CoreError::InvalidInput(format!("Unknown method: {}", request.method)))
             }
         }
     }
     
-    fn router(&self) -> Router {
+    pub fn router(&self) -> Router {
         Router::new()
             .route("/", get(Self::handle_sse_request))
             .route("/tools/list", post(Self::handle_list_tools))
@@ -176,7 +197,7 @@ impl McpServerContract for McpServer {
             .with_state(Arc::new(self.clone()))
     }
     
-    async fn list_tools(&self) -> Vec<McpTool> {
+    pub async fn list_tools(&self) -> Vec<McpTool> {
         let tools = self.tools.read().await;
         tools.values().cloned().collect()
     }

@@ -10,14 +10,19 @@ use playground_core_server::{
     ChannelId, Message, MessageId, MessagePriority,
 };
 use playground_core_types::{Shared, shared, CoreResult, CoreError};
+// Console imports will be added when console system is created
+// For now, we'll use a simplified approach
+use playground_core_ecs::MessageBusContract;
 use axum::{Router, routing::get};
 use std::net::SocketAddr;
 use tokio::net::TcpListener;
+use tokio::sync::mpsc;
 
 use crate::websocket::WebSocketHandler;
 use crate::channel_manager::ChannelManager;
 use crate::batcher::FrameBatcher;
 use crate::mcp::McpServer;
+use crate::types::{WebSocketConfig, ClientInfo, ConnectionHandle};
 
 /// WebSocket/HTTP server implementation
 pub struct Server {
@@ -31,6 +36,8 @@ pub struct Server {
     mcp: Arc<McpServer>,
     /// Server configuration
     config: Shared<ServerConfig>,
+    /// WebSocket-specific configuration
+    ws_config: WebSocketConfig,
     /// Server statistics
     stats: Shared<ServerStats>,
     /// Running state
@@ -39,14 +46,21 @@ pub struct Server {
     shutdown_signal: Shared<Option<tokio::sync::oneshot::Sender<()>>>,
     /// Start time
     start_time: Instant,
+    /// Console command sender (for logging) - will be added when console system is created
+    // console_sender: Option<mpsc::Sender<ConsoleCommand>>,
+    /// Message bus for ECS integration
+    message_bus: Option<Arc<dyn MessageBusContract>>,
 }
 
 impl Server {
-    pub async fn new() -> CoreResult<Arc<Self>> {
-        let websocket = Arc::new(WebSocketHandler::new().await?);
-        let channel_manager = Arc::new(ChannelManager::new().await?);
-        let batcher = Arc::new(FrameBatcher::new(60)); // Default 60fps
-        let mcp = Arc::new(McpServer::new(true).await?);
+    pub async fn new(ws_config: WebSocketConfig) -> CoreResult<Arc<Self>> {
+        let websocket = Arc::new(WebSocketHandler::new().await
+            .map_err(|e| CoreError::Generic(e.to_string()))?);
+        let channel_manager = Arc::new(ChannelManager::new().await
+            .map_err(|e| CoreError::Generic(e.to_string()))?);
+        let batcher = Arc::new(FrameBatcher::new(ws_config.frame_rate));
+        let mcp = Arc::new(McpServer::new(ws_config.mcp_enabled).await
+            .map_err(|e| CoreError::Generic(e.to_string()))?);
         
         let now = SystemTime::now()
             .duration_since(UNIX_EPOCH)
@@ -59,6 +73,7 @@ impl Server {
             batcher,
             mcp,
             config: shared(ServerConfig::default()),
+            ws_config,
             stats: shared(ServerStats {
                 start_time: now,
                 total_connections: 0,
@@ -72,6 +87,8 @@ impl Server {
             running: shared(false),
             shutdown_signal: shared(None),
             start_time: Instant::now(),
+            // console_sender: None,
+            message_bus: None,
         }))
     }
     
@@ -90,6 +107,22 @@ impl Server {
     pub fn mcp(&self) -> Arc<McpServer> {
         self.mcp.clone()
     }
+    
+    pub async fn connect_to_message_bus(&mut self, bus: Arc<dyn MessageBusContract>) -> CoreResult<()> {
+        self.message_bus = Some(bus.clone());
+        self.websocket.connect_to_message_bus(bus).await
+            .map_err(|e| CoreError::Generic(e.to_string()))?;
+        Ok(())
+    }
+    
+    // pub fn set_console_sender(&mut self, sender: mpsc::Sender<ConsoleCommand>) {
+    //     self.console_sender = Some(sender);
+    // }
+    
+    async fn log(&self, _level: playground_core_types::LogLevel, message: String) {
+        // Will use console command processor when available
+        println!("{}", message);
+    }
 }
 
 #[async_trait]
@@ -101,10 +134,8 @@ impl ServerContract for Server {
             *cfg = config.clone();
         }
         
-        // Extract port from options (WebSocket-specific)
-        let port = config.options.get("port")
-            .and_then(|v| v.as_u64())
-            .unwrap_or(8080) as u16;
+        // Use WebSocket-specific port
+        let port = self.ws_config.port;
         
         // Start batch processing
         if config.enable_batching {
@@ -135,7 +166,10 @@ impl ServerContract for Server {
         let addr = SocketAddr::from(([0, 0, 0, 0], port));
         let listener = TcpListener::bind(addr).await.map_err(CoreError::from)?;
         
-        println!("🚀 Server listening on http://0.0.0.0:{}", port);
+        self.log(
+            playground_core_types::LogLevel::Info,
+            format!("🚀 Server listening on http://0.0.0.0:{}", port)
+        ).await;
         
         // Mark as running
         {
@@ -208,7 +242,7 @@ impl ServerContract for Server {
         }
         
         // Remove connection info
-        self.websocket.remove_connection(id).await;
+        self.websocket.remove_connection_by_core_id(id).await;
         
         Ok(())
     }
@@ -240,7 +274,7 @@ impl ServerContract for Server {
     
     async fn publish(&self, channel: ChannelId, message: Message) -> CoreResult<()> {
         // Get subscribers to this channel
-        let subscribers = self.channel_manager.get_subscribers(channel).await;
+        let subscribers = self.channel_manager.get_subscribers(channel.0).await;
         
         // Send to all subscribers
         for conn_id in subscribers {

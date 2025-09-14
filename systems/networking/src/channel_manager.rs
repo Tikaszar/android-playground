@@ -1,18 +1,20 @@
-use std::collections::HashMap;
-use async_trait::async_trait;
-use playground_core_server::{ChannelManagerContract, ChannelManifest};
-use playground_core_types::{Shared, shared};
+use std::collections::{HashMap, HashSet};
+use playground_core_server::ConnectionId;
+use playground_core_types::{Shared, shared, CoreResult, CoreError};
+use crate::types::ChannelManifest;
 
 pub struct ChannelManager {
     channels: Shared<HashMap<u16, String>>,
     name_to_channel: Shared<HashMap<String, u16>>,
+    subscriptions: Shared<HashMap<u16, HashSet<ConnectionId>>>,
 }
 
 impl ChannelManager {
-    pub async fn new() -> Result<Self, Box<dyn std::error::Error>> {
+    pub async fn new() -> CoreResult<Self> {
         let mut manager = Self {
             channels: shared(HashMap::new()),
             name_to_channel: shared(HashMap::new()),
+            subscriptions: shared(HashMap::new()),
         };
         
         // Register default control channel
@@ -20,20 +22,16 @@ impl ChannelManager {
         
         Ok(manager)
     }
-}
-
-#[async_trait]
-impl ChannelManagerContract for ChannelManager {
-    async fn register(&self, channel: u16, name: String) -> Result<(), Box<dyn std::error::Error>> {
+    pub async fn register(&self, channel: u16, name: String) -> CoreResult<()> {
         let mut channels = self.channels.write().await;
         let mut name_map = self.name_to_channel.write().await;
         
         if channels.contains_key(&channel) {
-            return Err(format!("Channel {} already registered", channel).into());
+            return Err(CoreError::InvalidInput(format!("Channel {} already registered", channel)));
         }
         
         if name_map.contains_key(&name) {
-            return Err(format!("Channel name '{}' already in use", name).into());
+            return Err(CoreError::InvalidInput(format!("Channel name '{}' already in use", name)));
         }
         
         channels.insert(channel, name.clone());
@@ -42,7 +40,7 @@ impl ChannelManagerContract for ChannelManager {
         Ok(())
     }
     
-    async fn unregister(&self, channel: u16) -> Result<(), Box<dyn std::error::Error>> {
+    pub async fn unregister(&self, channel: u16) -> CoreResult<()> {
         let mut channels = self.channels.write().await;
         let mut name_map = self.name_to_channel.write().await;
         
@@ -50,11 +48,11 @@ impl ChannelManagerContract for ChannelManager {
             name_map.remove(&name);
             Ok(())
         } else {
-            Err(format!("Channel {} not found", channel).into())
+            Err(CoreError::NotFound(format!("Channel {} not found", channel)))
         }
     }
     
-    async fn get_manifest(&self) -> ChannelManifest {
+    pub async fn get_manifest(&self) -> ChannelManifest {
         let channels = self.channels.read().await;
         let mut manifest = ChannelManifest::new();
         
@@ -65,13 +63,36 @@ impl ChannelManagerContract for ChannelManager {
         manifest
     }
     
-    async fn get_channel_by_name(&self, name: &str) -> Option<u16> {
+    pub async fn get_channel_by_name(&self, name: &str) -> Option<u16> {
         let name_map = self.name_to_channel.read().await;
         name_map.get(name).copied()
     }
     
-    async fn is_registered(&self, channel: u16) -> bool {
+    pub async fn is_registered(&self, channel: u16) -> bool {
         let channels = self.channels.read().await;
         channels.contains_key(&channel)
+    }
+    
+    pub async fn subscribe(&self, channel: u16, connection: ConnectionId) -> CoreResult<()> {
+        let mut subs = self.subscriptions.write().await;
+        subs.entry(channel)
+            .or_insert_with(HashSet::new)
+            .insert(connection);
+        Ok(())
+    }
+    
+    pub async fn unsubscribe(&self, channel: u16, connection: ConnectionId) -> CoreResult<()> {
+        let mut subs = self.subscriptions.write().await;
+        if let Some(connections) = subs.get_mut(&channel) {
+            connections.remove(&connection);
+        }
+        Ok(())
+    }
+    
+    pub async fn get_subscribers(&self, channel: u16) -> Vec<ConnectionId> {
+        let subs = self.subscriptions.read().await;
+        subs.get(&channel)
+            .map(|set| set.iter().copied().collect())
+            .unwrap_or_default()
     }
 }

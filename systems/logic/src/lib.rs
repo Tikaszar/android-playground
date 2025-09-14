@@ -23,6 +23,8 @@ pub mod systems_manager;
 pub mod ui_interface;
 pub mod rendering_interface;
 pub mod messaging;
+pub mod networking_api;
+pub mod console_api;
 
 pub use archetype::*;
 pub use component::*;
@@ -56,5 +58,5 @@ pub use playground_core_ui::{
     UiCommand, UiEvent, EventResult as UiEventResult,
 };
 
-// Re-export LogLevel for convenience
-pub use playground_core_server::dashboard::LogLevel;
+// Re-export LogLevel from console for convenience
+pub use playground_core_console::LogLevel;
