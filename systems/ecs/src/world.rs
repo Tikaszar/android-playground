@@ -6,7 +6,8 @@ use async_trait::async_trait;
 use playground_core_ecs::{
     ComponentData, ComponentId, EntityId, 
     EcsError, EcsResult, WorldContract, StorageType,
-    WorldCommand, WorldCommandHandler
+    WorldCommand, WorldCommandHandler,
+    SystemCommand, SystemResponse, SystemCommandProcessor, WorldSystemCommands
 };
 use crate::storage::ComponentStorage;
 use crate::entity::EntityAllocator;
@@ -103,6 +104,9 @@ pub struct World {
     // Memory management
     gc: Handle<GarbageCollector>,
     memory_stats: Shared<MemoryStats>,
+    
+    // System command processors
+    system_processors: Shared<HashMap<String, std::sync::Arc<dyn SystemCommandProcessor>>>,
 }
 
 impl World {
@@ -128,6 +132,7 @@ impl World {
                 pool_limit: 100 * 1024 * 1024, // 100MB default
                 growth_rate: 0.0,
             }),
+            system_processors: shared(HashMap::new()),
         }
     }
     
@@ -680,5 +685,74 @@ impl WorldCommandHandler for World {
                 let _ = response.send(result);
             }
         }
+    }
+}
+
+// Implement WorldSystemCommands for system command processor support
+#[async_trait]
+impl WorldSystemCommands for World {
+    async fn register_system_processor(&self, processor: std::sync::Arc<dyn SystemCommandProcessor>) -> EcsResult<()> {
+        let name = processor.system_name().to_string();
+        let mut processors = self.system_processors.write().await;
+        
+        if processors.contains_key(&name) {
+            return Err(EcsError::Generic(format!("System processor '{}' already registered", name)));
+        }
+        
+        processors.insert(name, processor);
+        Ok(())
+    }
+    
+    async fn unregister_system_processor(&self, system_name: &str) -> EcsResult<()> {
+        let mut processors = self.system_processors.write().await;
+        
+        if processors.remove(system_name).is_none() {
+            return Err(EcsError::Generic(format!("System processor '{}' not found", system_name)));
+        }
+        
+        Ok(())
+    }
+    
+    async fn send_system_command(&self, command: SystemCommand) -> EcsResult<SystemResponse> {
+        let processor = {
+            let processors = self.system_processors.read().await;
+            processors.get(&command.target_system).cloned()
+        };
+        
+        match processor {
+            Some(p) => p.handle_system_command(&command.command_type, command.payload).await,
+            None => Err(EcsError::Generic(format!("System '{}' not registered", command.target_system)))
+        }
+    }
+    
+    async fn registered_systems(&self) -> EcsResult<Vec<String>> {
+        let processors = self.system_processors.read().await;
+        Ok(processors.keys().cloned().collect())
+    }
+    
+    async fn has_system(&self, system_name: &str) -> bool {
+        let processors = self.system_processors.read().await;
+        processors.contains_key(system_name)
+    }
+}
+
+impl World {
+    /// Start the system command processor for cross-system communication
+    pub fn start_system_command_processor(self: std::sync::Arc<Self>) {
+        let (tx, mut rx) = tokio::sync::mpsc::channel(100);
+        
+        // Register with core/ecs system command access
+        tokio::spawn(async move {
+            playground_core_ecs::system_command_access::register_processor(tx).await.ok();
+        });
+        
+        // Process system commands
+        let world = self.clone();
+        tokio::spawn(async move {
+            while let Some((cmd, response_tx)) = rx.recv().await {
+                let result = world.send_system_command(cmd).await;
+                let _ = response_tx.send(result).await;
+            }
+        });
     }
 }

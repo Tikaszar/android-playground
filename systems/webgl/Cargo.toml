@@ -10,6 +10,7 @@ playground-core-types = { path = "../../core/types" }
 playground-core-rendering = { path = "../../core/rendering" }
 playground-core-ecs = { path = "../../core/ecs" }
 playground-core-server = { path = "../../core/server" }
+playground-core-client = { path = "../../core/client" }
 serde = { workspace = true }
 serde_json = { workspace = true }
 bytes = { workspace = true }

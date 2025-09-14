@@ -11,6 +11,7 @@ pub mod rendering;
 pub mod messages;
 pub mod types;
 pub mod internal_storage;
+pub mod command_processor;
 mod register;
 
 pub use error::{UiError, UiResult};

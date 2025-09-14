@@ -446,15 +446,6 @@ impl Renderer for WebGLRenderer {
         Ok(())
     }
     
-    async fn resize(&mut self, width: u32, height: u32) -> RenderResult<()> {
-        // Resizing renderer
-        
-        *self.viewport.write().await = Viewport { x: 0, y: 0, width, height };
-        let context = self.context.read().await;
-        context.set_viewport(0, 0, width as i32, height as i32);
-        Ok(())
-    }
-    
     async fn create_render_target(&mut self, width: u32, height: u32) -> RenderResult<RenderTargetWrapper> {
         // Return error for now since WebGL render targets aren't implemented yet
         // When implemented, would create a framebuffer and wrap it in RenderTargetWrapper
@@ -485,6 +476,25 @@ impl Renderer for WebGLRenderer {
     
     fn is_initialized(&self) -> bool {
         self.initialized
+    }
+}
+
+// Additional methods for WebGLRenderer
+impl WebGLRenderer {
+    pub async fn render_batch(&mut self, commands: &[RenderCommand]) -> RenderResult<()> {
+        // Process batch of render commands
+        for command in commands {
+            self.process_command(command.clone()).await?;
+        }
+        Ok(())
+    }
+    
+    pub async fn resize(&mut self, width: u32, height: u32) -> RenderResult<()> {
+        // Resizing renderer
+        *self.viewport.write().await = Viewport { x: 0, y: 0, width, height };
+        let context = self.context.read().await;
+        context.set_viewport(0, 0, width as i32, height as i32);
+        Ok(())
     }
 }
 

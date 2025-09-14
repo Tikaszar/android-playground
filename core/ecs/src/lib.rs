@@ -13,6 +13,7 @@ pub mod system;
 pub mod query;
 pub mod world_commands;
 pub mod world_access;
+pub mod system_commands;
 
 // Re-export all public types
 pub use component::*;
@@ -25,3 +26,4 @@ pub use system::*;
 pub use query::*;
 pub use world_commands::*;
 pub use world_access::*;
+pub use system_commands::*;

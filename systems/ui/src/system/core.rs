@@ -86,6 +86,25 @@ impl UiSystem {
         // TODO: Systems need proper logging interface that doesn't violate architecture
         // For now, logging is disabled during refactoring
     }
+    
+    /// Perform layout calculation for all UI elements
+    pub async fn perform_layout(&mut self) -> crate::UiResult<()> {
+        // Get root element if it exists
+        if let Some(root_id) = self.root_element {
+            // Perform layout calculation
+            let screen_bounds = crate::types::ElementBounds {
+                x: 0.0,
+                y: 0.0,
+                width: self.screen_size[0],
+                height: self.screen_size[1],
+            };
+            
+            self.layout_engine.write().await
+                .calculate_layout(&root_id, &screen_bounds, &self.storage).await?;
+        }
+        
+        Ok(())
+    }
 }
 
 // Implement the ECS System trait for UiSystem

@@ -5,6 +5,8 @@ pub mod buffer;
 pub mod texture;
 pub mod browser;
 pub mod server_integration;
+pub mod client_impl;
+pub mod command_processor;
 
 pub use renderer::WebGLRenderer;
 pub use context::WebGLContext;
@@ -13,3 +15,5 @@ pub use buffer::{VertexBuffer, IndexBuffer, UniformBuffer};
 pub use texture::{Texture2D, TextureFormat};
 pub use browser::BrowserBuilder;
 pub use server_integration::WebGLServerIntegration;
+pub use client_impl::WebGLClient;
+pub use command_processor::RendererCommandProcessor;
