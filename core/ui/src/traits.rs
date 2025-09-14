@@ -1,7 +1,7 @@
 use async_trait::async_trait;
 use crate::{
     UiResult, ElementId, ElementType, ElementUpdate, UiCommand, UiEvent, 
-    EventResult, Style, Bounds, LayoutType
+    EventResult, Style, Bounds, LayoutType, UiElementWrapper
 };
 use playground_core_rendering::RenderCommandBatch;
 
@@ -88,7 +88,7 @@ pub trait UiRenderer: Send + Sync {
     async fn remove_element(&mut self, id: ElementId) -> UiResult<()>;
     
     /// Get an element by ID
-    async fn get_element(&self, id: ElementId) -> UiResult<Box<dyn UiElement>>;
+    async fn get_element(&self, id: ElementId) -> UiResult<UiElementWrapper>;
     
     /// Process a UI command
     async fn process_command(&mut self, command: UiCommand) -> UiResult<()>;

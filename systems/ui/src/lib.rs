@@ -10,11 +10,13 @@ pub mod mobile;
 pub mod rendering;
 pub mod messages;
 pub mod types;
+pub mod internal_storage;
 mod register;
 
 pub use error::{UiError, UiResult};
 pub use system::UiSystem;
-pub use element::{ElementId, ElementGraph};
+pub use element::ElementGraph;
+pub use playground_core_ui::ElementId;
 pub use types::{
     ElementStyle, ElementBounds, FontWeight, TextAlign,
     LayoutType, FlexboxLayout, FlexDirection, JustifyContent, AlignItems,

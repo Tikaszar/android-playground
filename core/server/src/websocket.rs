@@ -5,7 +5,7 @@
 
 use async_trait::async_trait;
 use crate::types::{Packet, ConnectionHandle};
-use playground_core_ecs::MessageHandlerData;
+use playground_core_ecs::{MessageHandlerData};
 
 /// Contract for WebSocket handling that integrates with ECS messaging
 /// WebSocket IS a message handler in the unified system

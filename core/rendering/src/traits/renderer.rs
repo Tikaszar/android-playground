@@ -1,7 +1,7 @@
 use async_trait::async_trait;
 use crate::error::RenderResult;
 use crate::batch::RenderCommandBatch;
-use crate::traits::RenderTarget;
+use crate::wrapper::RenderTargetWrapper;
 
 #[async_trait]
 pub trait Renderer: Send + Sync {
@@ -17,7 +17,7 @@ pub trait Renderer: Send + Sync {
     
     async fn resize(&mut self, width: u32, height: u32) -> RenderResult<()>;
     
-    async fn create_render_target(&mut self, width: u32, height: u32) -> RenderResult<Box<dyn RenderTarget>>;
+    async fn create_render_target(&mut self, width: u32, height: u32) -> RenderResult<RenderTargetWrapper>;
     
     async fn shutdown(&mut self) -> RenderResult<()>;
     

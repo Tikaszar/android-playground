@@ -9,9 +9,11 @@ pub mod types;
 pub mod commands;
 pub mod events;
 pub mod error;
+pub mod wrapper;
 
 pub use traits::*;
 pub use types::*;
 pub use commands::*;
 pub use events::*;
 pub use error::*;
+pub use wrapper::{UiElementWrapper, UiElementInfo};

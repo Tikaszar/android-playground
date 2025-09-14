@@ -1,9 +1,9 @@
-use playground_core_ecs::EntityId;
+use playground_core_ui::ElementId;
 use playground_core_types::{Shared, shared};
 use crate::error::{UiError, UiResult};
 use std::collections::HashMap;
 
-pub type ElementId = EntityId;
+// ElementId is now from core/ui, not an alias
 
 // Element graph for managing UI hierarchy
 pub struct ElementGraph {

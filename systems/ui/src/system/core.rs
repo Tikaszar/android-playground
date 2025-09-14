@@ -1,9 +1,9 @@
 use playground_core_rendering::Viewport;
-use playground_core_ecs::{World, EntityId, ComponentRegistry};
-use playground_core_types::{Handle, handle, Shared, shared};
-use playground_core_server::ChannelManager;
-use playground_systems_networking::NetworkingSystem;
-use crate::element::{ElementGraph, ElementId};
+use playground_core_types::{Shared, shared};
+use playground_core_ecs::{System as EcsSystem, ExecutionStage, EcsResult};
+use playground_core_ui::ElementId;
+use crate::element::ElementGraph;
+use crate::internal_storage::InternalElementStorage;
 use crate::layout::LayoutEngine;
 use crate::input::InputManager;
 use crate::theme::{ThemeManager, ThemeId};
@@ -13,13 +13,12 @@ use std::collections::HashMap;
 use uuid::Uuid;
 
 pub struct UiSystem {
-    // Core ECS
-    pub(super) world: Handle<World>,
-    pub(super) registry: Handle<ComponentRegistry>,
+    // Internal element storage (no ECS dependency)
+    pub(super) storage: InternalElementStorage,
     
     // Element management
     pub(super) element_graph: Shared<ElementGraph>,
-    pub(super) root_entity: Option<EntityId>,
+    pub(super) root_element: Option<ElementId>,
     
     // Layout
     pub(super) layout_engine: Shared<LayoutEngine>,
@@ -33,7 +32,7 @@ pub struct UiSystem {
     
     // Terminal support
     pub(super) terminal_manager: Shared<TerminalManager>,
-    pub(super) terminal_connections: Shared<HashMap<Uuid, EntityId>>,
+    pub(super) terminal_connections: Shared<HashMap<Uuid, ElementId>>,
     
     // Mobile features
     pub(super) mobile_features: Shared<MobileFeatures>,
@@ -41,11 +40,8 @@ pub struct UiSystem {
     // Rendering
     pub(super) viewport: Viewport,
     pub(super) frame_id: u64,
-    pub(super) dirty_elements: Shared<Vec<EntityId>>,
     
-    // Networking
-    pub(super) channel_manager: Option<Shared<ChannelManager>>,
-    pub(super) networking_system: Option<Shared<NetworkingSystem>>,
+    // Channel for communication
     pub(super) channel_id: u16,
     
     // State
@@ -55,14 +51,10 @@ pub struct UiSystem {
 
 impl UiSystem {
     pub fn new() -> Self {
-        let registry = handle(ComponentRegistry::new());
-        let world = handle(World::with_registry(registry.clone()));
-        
         Self {
-            world,
-            registry,
+            storage: InternalElementStorage::new(),
             element_graph: shared(ElementGraph::new()),
-            root_entity: None,
+            root_element: None,
             layout_engine: shared(LayoutEngine::new()),
             input_manager: shared(InputManager::new()),
             theme_manager: shared(ThemeManager::new()),
@@ -72,55 +64,63 @@ impl UiSystem {
             mobile_features: shared(MobileFeatures::new()),
             viewport: Viewport { x: 0, y: 0, width: 1920, height: 1080 },
             frame_id: 0,
-            dirty_elements: shared(Vec::new()),
-            channel_manager: None,
-            networking_system: None,
             channel_id: 10,
             initialized: false,
             screen_size: [1920.0, 1080.0],
         }
     }
     
-    pub fn get_root_element(&self) -> Option<ElementId> {
-        self.root_entity
+    pub async fn get_root_element(&self) -> Option<ElementId> {
+        self.storage.get_root().await
     }
     
     pub fn is_initialized(&self) -> bool {
         self.initialized
     }
     
-    pub fn set_channel_manager(&mut self, manager: Shared<ChannelManager>) {
-        self.channel_manager = Some(manager);
-    }
-    
-    pub fn set_networking_system(&mut self, networking: Shared<NetworkingSystem>) {
-        self.networking_system = Some(networking);
-    }
-    
-    pub fn set_networking_system_shared(&mut self, networking: Shared<NetworkingSystem>) {
-        self.set_networking_system(networking);
-    }
-    
     pub fn set_channel_id(&mut self, channel_id: u16) {
         self.channel_id = channel_id;
     }
     
-    pub(super) async fn log(&self, level: &str, message: String) {
-        if let Some(ref networking) = self.networking_system {
-            let networking = networking.read().await;
-            let dashboard = networking.get_dashboard().await;
-            
-            if let Some(dashboard) = dashboard {
-                use playground_core_server::dashboard::LogLevel;
-                let log_level = match level {
-                    "error" | "Error" => LogLevel::Error,
-                    "warn" | "Warning" => LogLevel::Warning,
-                    "info" | "Info" => LogLevel::Info,
-                    "debug" | "Debug" => LogLevel::Debug,
-                    _ => LogLevel::Info,
-                };
-                dashboard.log_component("systems/ui", log_level, message, None).await;
-            }
-        }
+    pub(super) async fn log(&self, _level: &str, _message: String) {
+        // TODO: Systems need proper logging interface that doesn't violate architecture
+        // For now, logging is disabled during refactoring
+    }
+}
+
+// Implement the ECS System trait for UiSystem
+#[async_trait::async_trait]
+impl EcsSystem for UiSystem {
+    fn name(&self) -> &str {
+        "UiSystem"
+    }
+    
+    fn stage(&self) -> ExecutionStage {
+        ExecutionStage::Layout
+    }
+    
+    async fn initialize(&mut self) -> EcsResult<()> {
+        self.initialized = true;
+        Ok(())
+    }
+    
+    async fn update(&mut self, _delta_time: f32) -> EcsResult<()> {
+        // In a proper implementation, this would:
+        // 1. Query the World for entities with UI components
+        // 2. Update internal element storage from ECS data
+        // 3. Perform layout calculations
+        // 4. Generate RenderCommandBatch for the render stage
+        
+        self.frame_id += 1;
+        
+        // TODO: Implement proper World querying when scheduler passes World reference
+        
+        Ok(())
+    }
+    
+    async fn cleanup(&mut self) -> EcsResult<()> {
+        self.storage.clear().await;
+        self.initialized = false;
+        Ok(())
     }
 }

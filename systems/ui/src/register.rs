@@ -1,5 +1,7 @@
-/// Register UI system with core/ecs
-/// This is called at startup to register the system type
-pub async fn register() -> Result<(), playground_core_ecs::EcsError> {
-    playground_core_ecs::register_ui_system("ui".to_string()).await
+/// Register UI system
+/// Note: This is a placeholder for future static registration mechanism
+/// Systems will be discovered and registered at compile time
+pub fn register() {
+    // TODO: Implement static registration when build script is added
+    // For now, systems are registered manually by systems/ecs
 }

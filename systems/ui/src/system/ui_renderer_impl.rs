@@ -2,7 +2,7 @@ use crate::system::UiSystem;
 use crate::error::UiError;
 use async_trait::async_trait;
 use playground_core_ui::{
-    UiRenderer, UiElement, ElementId as CoreElementId, ElementType as CoreElementType,
+    UiRenderer, UiElementWrapper, ElementId as CoreElementId, ElementType as CoreElementType,
     UiCommand, UiEvent as CoreUiEvent, ElementUpdate, EventResult, Orientation,
     error::{UiResult as CoreUiResult, UiError as CoreUiError},
 };
@@ -80,9 +80,9 @@ impl UiRenderer for UiSystem {
         Ok(())
     }
     
-    async fn get_element(&self, id: CoreElementId) -> CoreUiResult<Box<dyn UiElement>> {
-        // NOTE: This violates NO dyn rule, but is required by core/ui trait
-        // Always return error to avoid using trait objects
+    async fn get_element(&self, id: CoreElementId) -> CoreUiResult<UiElementWrapper> {
+        // Return a wrapper instead of dyn trait object
+        // For now, return error since element retrieval isn't fully implemented
         Err(CoreUiError::ElementNotFound(format!("{:?}", id)))
     }
     
