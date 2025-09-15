@@ -1,5 +1,32 @@
 # CONTEXT.md - Current Session Context
 
+## Active Session - 2025-09-15 (Session 50)
+
+### Goal
+Complete the architectural audit of the `core/*`, `systems/*`, and `plugins/*` layers.
+
+### Current Status
+**Core Architecture**: ✅ ALIGNED - The `core` layer's design is conceptually sound.
+**Systems Architecture**: ❌ NOT ALIGNED - Audit revealed multiple systems (`ui`, `logic`, `physics`) require rewrites due to critical architectural violations.
+**Plugin Architecture**: ❌ NOT ALIGNED - All IDE plugins are non-compliant and require a complete rewrite.
+**Overall Status**: ⚠️ Major architectural refactoring is required across the `systems` and `plugins` layers before development can proceed.
+
+### Conclusion of Full Project Audit
+
+The architectural audit of all engine layers is complete.
+
+*   **`core` Layer:** The design is conceptually sound. The only issues are implementation bugs (`dyn`/`Any` usage) and one misplaced module (`core/android`).
+
+*   **`systems` Layer:** This layer has significant architectural problems.
+    *   **Require Rewrite:** `systems/ui`, `systems/logic`, `systems/physics`.
+    *   **Require Refactor:** `systems/networking`, `systems/ecs`, `systems/webgl`.
+    *   **New Principle:** Systems should be considered private, only exposing functionality via `core` contracts.
+
+*   **`plugins` Layer:** This layer is fundamentally broken.
+    *   **Conclusion:** All 9 IDE plugins are non-compliant, bypassing the `systems/logic` API gateway and depending directly on other systems. They all require a complete rewrite.
+
+The project is not in a state to add new features. The next step must be to address these foundational architectural issues, starting with the `systems` layer.
+
 ## Active Session - 2025-09-14 (Session 49)
 
 ### Current Status

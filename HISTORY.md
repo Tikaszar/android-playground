@@ -1,5 +1,38 @@
 # HISTORY.md - Development Session History
 
+## Session: 2025-09-15 - Full Project Architectural Audit (Session 50)
+
+### Major Achievement: Completed Comprehensive Audit of `core`, `systems`, and `plugins` Layers
+
+This session completed a deep, iterative audit of all engine layers. A final, precise understanding of the project's architectural principles was established, and a complete list of non-compliant components was generated.
+
+### Final Architectural Principles Clarified:
+
+1.  **`core` is for Generic Primitives Only**: The `core` layer must only define contracts for universal, application-agnostic primitives (ECS, messaging, rendering).
+2.  **`systems` are Private Implementations**: Systems crates are concrete, private implementations of the `core` contracts. They must not expose a public API and should only be interacted with via the command processors defined in `core`.
+3.  **`systems/logic` is the Sole Public API**: This is the only crate that exposes a public API for the engine.
+4.  **`plugins` are Consumers of the Public API**: Plugins must *only* depend on `systems/logic` and interact with the engine exclusively through its public API.
+5.  **Strict Isolation**: `systems` cannot depend on other `systems`. `plugins` cannot depend on `systems` (except `logic`) or other `plugins`.
+
+### Part 1: Core Layer Audit Conclusion
+
+The `core` layer's design is **conceptually sound and largely complete.** The only remaining issues are implementation bugs, not conceptual gaps:
+*   **`NO dyn` / `NO Any` Violations**: Confirmed in `core/types/context.rs` and `core/server/*`.
+*   **Generality Violation**: The `core/android` package contains platform-specific code and is misplaced.
+
+### Part 2: Systems Layer Audit Conclusion
+
+The audit revealed several systems that are not compliant and require rewrites or refactors.
+*   **Require Rewrite:** `systems/ui`, `systems/logic`, `systems/physics`. These crates have critical violations like broken system isolation, improper public APIs, or a complete mismatch with the engine's architecture.
+*   **Require Refactor:** `systems/networking`, `systems/ecs`, `systems/webgl`. These crates are better aligned but have specific issues like `dyn` usage or scope creep (embedded JS).
+*   **Compliant:** `systems/console`.
+
+### Part 3: Plugins Layer Audit Conclusion
+
+The audit of the IDE plugins revealed a **systemic architectural failure.**
+*   **Universal Violation:** **Not a single IDE plugin is compliant.** Every plugin (`chat-assistant`, `debugger`, `editor-core`, `file-browser`, `lsp-client`, `terminal`, `theme-manager`, `ui-framework`, `version-control`) has direct dependencies on `systems/ui`, `systems/networking`, and `core/types`, completely bypassing the `systems/logic` API gateway.
+*   **Rewrite Required:** **All 9 IDE plugins require a complete rewrite** to remove their illegal dependencies and be re-implemented using only the public API provided by `systems/logic`.
+
 This file tracks the detailed history of development sessions, including achievements, bug fixes, and implementation progress.
 
 ## Session: 2025-09-10 - Unified ECS Architecture Implementation (Session 43)
