@@ -168,6 +168,27 @@ let component = Component::new(MyComponentData { ... }).await?;
 
 ## ECS Architecture
 
+### Data vs Logic Separation Pattern (Sessions 55-56)
+**Decision**: Core packages contain ONLY data structures, Systems packages contain ALL logic
+
+**Implementation**:
+- Core packages define structs with fields (like abstract base classes)
+- All methods in core just delegate through VTable
+- Systems packages implement the actual logic
+- VTable provides runtime dispatch between them
+
+**Why**:
+- Achieves polymorphic behavior without `dyn`
+- Clean separation of structure from behavior
+- Allows multiple implementations of same contracts
+- Build script can wire everything up automatically
+
+**Examples**:
+- **core/ecs**: World struct with fields, methods delegate to systems/ecs
+- **core/console**: Console struct with fields, methods delegate to systems/console
+- **systems/ecs**: WorldImpl contains all ECS logic
+- **systems/console**: Terminal contains all console I/O logic
+
 ### Unified ECS Design (Session 43)
 **Decision**: Single unified ECS in systems/ecs replacing dual-layer design
 

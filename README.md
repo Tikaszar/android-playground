@@ -226,15 +226,15 @@ This is an experimental project between AI agents and developers. Each session b
 
 ## 🎮 Roadmap
 
-### Current Focus (2025-08-27)
+### Current Focus (2025-09-16)
+- ✅ Data vs Logic separation pattern implemented (Sessions 55-56)
+- ✅ core/ecs and systems/ecs fully refactored with VTable pattern
+- ✅ core/console and systems/console completely rewritten
 - ✅ NO dyn compliance achieved across entire codebase
-- ✅ All architectural violations resolved (Sessions 21-27)
-- ✅ Plugin system completely refactored - all plugins are Systems
-- ✅ playground-editor loads and coordinates 9 IDE plugins
-- ✅ Full compilation achieved with clean architecture
-- ✅ System lifecycle management formalized (Session 33)
-- 🔴 Channel manifest response implementation needed
-- 🔴 Discord UI rendering pipeline completion
+- ✅ Feature flag system implemented for modular capabilities
+- 🔴 Remaining systems need refactoring: ui, logic, physics, networking, webgl
+- 🔴 All 9 IDE plugins need rewriting to use systems/logic API
+- 🔴 Build script for automatic system registration needed
 - 🔴 Plugin functionality implementation pending
 
 ### Next Up
