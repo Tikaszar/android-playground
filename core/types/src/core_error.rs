@@ -2,6 +2,20 @@
 
 use thiserror::Error;
 
+/// Entity ID for error reporting (temporary until we can import from core/ecs)
+/// This is a simple wrapper to avoid circular dependencies
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct EntityIdError(pub u32);
+
+impl std::fmt::Display for EntityIdError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Entity({})", self.0)
+    }
+}
+
+/// Component ID for error reporting
+pub type ComponentIdError = u32;
+
 /// Concrete error type for all core operations
 #[derive(Debug, Error, Clone)]
 pub enum CoreError {
@@ -26,8 +40,50 @@ pub enum CoreError {
     #[error("Invalid input: {0}")]
     InvalidInput(String),
     
-    #[error("Not initialized: {0}")]
-    NotInitialized(String),
+    #[error("Not initialized")]
+    NotInitialized,
+    
+    #[error("Already initialized")]
+    AlreadyInitialized,
+    
+    #[error("Not registered: {0}")]
+    NotRegistered(String),
+    
+    #[error("Send error")]
+    SendError,
+    
+    #[error("Receive error")]
+    ReceiveError,
+    
+    #[error("Unexpected response")]
+    UnexpectedResponse,
+    
+    #[error("Entity {0} not found")]
+    EntityNotFound(EntityIdError),
+    
+    #[error("Component {1} not found on entity {0}")]
+    ComponentNotFound(EntityIdError, ComponentIdError),
+    
+    #[error("Component type '{0}' not registered")]
+    ComponentNotRegistered(String),
+    
+    #[error("Storage error: {0}")]
+    StorageError(String),
+    
+    #[error("Serialization error: {0}")]
+    SerializationError(String),
+    
+    #[error("Deserialization error: {0}")]
+    DeserializationError(String),
+    
+    #[error("Query failed: {0}")]
+    QueryFailed(String),
+    
+    #[error("System error: {0}")]
+    SystemError(String),
+    
+    #[error("Message error: {0}")]
+    MessageError(String),
     
     #[error("Permission denied: {0}")]
     PermissionDenied(String),

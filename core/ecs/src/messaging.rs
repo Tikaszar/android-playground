@@ -6,7 +6,7 @@ use std::collections::{HashMap, HashSet};
 use bytes::Bytes;
 use tokio::sync::mpsc;
 use playground_core_types::{Shared, shared};
-use crate::{CoreResult, CoreError};
+use crate::CoreResult;
 
 /// Channel ID type for message routing
 pub type ChannelId = u16;

@@ -1,27 +1,19 @@
-//! Unified ECS Implementation for Android Playground Engine
+//! ECS System Implementation
 //! 
-//! This is the single, authoritative ECS implementation for the entire engine.
-//! It provides the concrete World that manages all entities, components, and systems.
+//! This provides the actual ECS logic and functionality.
+//! Core/ecs provides the data structures, systems/ecs provides ALL the operations.
+//! 
+//! This is like implementing the methods of an abstract base class -
+//! core/ecs has the structure, systems/ecs has the behavior.
 
-pub mod world;
-pub mod storage;
-pub mod entity;
-pub mod component;
-pub mod query;
-pub mod scheduler;
-pub mod messaging;
+mod world_impl;
+mod storage_impl;
+mod vtable_handlers;
+mod registration;
 
-// Re-export main types
-pub use world::World;
-pub use scheduler::SystemScheduler;
-pub use messaging::{MessageBus, MessageHandler, BroadcasterWrapper};
+pub use registration::register;
+pub use vtable_handlers::register_handlers;
 
-// Re-export from core/ecs (contracts only)
-pub use playground_core_ecs::{
-    ComponentData, ComponentId, EntityId, Generation,
-    EcsError, EcsResult,
-    ChannelId, MessageHandlerData, BroadcasterData, MessageBusContract,
-    Storage, StorageType,
-    WorldContract, System, ExecutionStage,
-    Query
-};
+// Re-export implementation modules for internal use
+pub(crate) use world_impl::WorldImpl;
+pub(crate) use storage_impl::StorageImpl;

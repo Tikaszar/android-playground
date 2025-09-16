@@ -1,18 +1,43 @@
 # CONTEXT.md - Current Session Context
 
-## Active Session - 2025-12-18 (Session 53)
+## Active Session - 2025-01-16 (Session 55)
 
-### Goal
-Complete rewrite of core/ecs with VTable architecture for clean separation between core/* and systems/*.
+### Previous Session 54 Accomplishments
 
-### Current Status
-**Architecture Design**: ✅ COMPLETE - VTable architecture fully designed and documented
-**Core/ECS Rewrite**: ✅ COMPLETE - All core modules rewritten as concrete types
-**Systems Layer**: ⏳ PENDING - Will register handlers with VTable
-**Plugin Layer**: ⏳ PENDING - Will use core/* packages directly
-**Overall Status**: Core/ecs foundation complete, ready for system integration
+Successfully refactored core/ecs and systems/ecs to achieve proper data vs logic separation:
 
-### Session 53 Accomplishments
+1. **Removed ALL logic from core/ecs**:
+   - `world.rs` - Now just data fields and VTable delegation (~100 lines vs 300+)
+   - `storage.rs` - Now just data structures (~50 lines vs 200)
+   - All public API methods delegate through VTable
+   - NO implementation logic whatsoever
+
+2. **Moved ALL logic to systems/ecs**:
+   - `world_impl.rs` - Contains all World operation implementations
+   - `storage_impl.rs` - Contains all ComponentStorage operations
+   - `vtable_handlers.rs` - Registers handlers and routes commands
+   - `registration.rs` - Wires up VTable registration
+
+3. **Achieved "Abstract Base Class" Pattern**:
+   - core/ecs = Structure only (like abstract classes)
+   - systems/ecs = All behavior (like concrete implementations)
+   - VTable provides runtime dispatch between them
+
+4. **Updated Documentation**:
+   - `DESIGN.md` now clearly explains data vs logic separation
+   - Added concrete examples of the pattern
+   - Emphasized NO logic in core, ALL logic in systems
+
+### Architecture Status
+**Core/ECS**: ✅ COMPLETE - Data structures only, no logic
+**Systems/ECS**: ✅ COMPLETE - All ECS logic implemented via VTable
+**VTable Pattern**: ✅ WORKING - Commands dispatched from core to systems
+**Documentation**: ✅ UPDATED - DESIGN.md reflects new architecture
+
+### Key Achievement
+Successfully implemented the principle that core/ecs should be "mostly stateless" - it now contains ONLY data structures with all logic delegated through VTable to systems/ecs. This is like OOP abstract base classes where the base defines structure but implementations provide behavior.
+
+### Previous Session 53 Accomplishments
 
 1. **Created DESIGN.md** - Complete architecture documentation in core/ecs/DESIGN.md
 2. **Completely rewrote core/ecs**:

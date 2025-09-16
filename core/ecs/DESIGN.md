@@ -2,39 +2,53 @@
 
 ## Overview
 
-This document describes the feature-gated VTable architecture for the playground engine. The design eliminates runtime errors through compile-time feature checking and provides clear error boundaries between layers.
+This document describes the VTable architecture for the playground engine as implemented in Sessions 53-54. The design provides a foundation ECS layer with **data structures only** and generic string-based VTable dispatch. ALL logic is implemented in systems/ecs.
+
+**Key Principle**: core/ecs is like abstract base classes in OOP - it defines the structure (data fields) but ALL behavior (methods) is implemented in systems/ecs.
 
 ## Core Design Principles
 
-1. **Compile-Time Safety**: Features control what's available at compile time
-2. **Clear Error Boundaries**: Errors occur at well-defined layer boundaries
-3. **Single Import Point**: Apps/Plugins only import `playground-core-ecs`
-4. **No Runtime Type Erasure**: Everything is concrete types
-5. **Explicit Registration**: Systems must register before use
+1. **Foundation Layer**: core/ecs is the base that everything builds on
+2. **Zero Dependencies**: core/ecs imports NO other core/* packages
+3. **String-Based VTable**: Generic capability registration by name
+4. **Multiple Imports**: Apps import core/ecs + specific core/* packages needed
+5. **API Ownership**: Each core/* package provides its own API
+6. **Explicit Registration**: Systems must register handlers before use
+7. **DATA ONLY in core/ecs**: NO implementation logic, just data structures
+8. **ALL LOGIC in systems/ecs**: Every operation is implemented in systems/ecs
 
 ## Architecture Layers
 
-### Core Design Principle
+### Core Design Principle - Data vs Logic Separation
+
+`core/ecs` (Data Only):
+1. Provides World and VTable data structures
+2. Contains ONLY fields - entities, components, vtable, etc.
+3. Public API methods are thin wrappers that delegate through VTable
+4. NO implementation logic - like abstract base classes
+5. Example: World struct has `entities: Shared<HashMap<EntityId, Generation>>` field
+
+`systems/ecs` (All Logic):
+1. Implements ALL actual ECS operations
+2. WorldImpl::spawn_entity() contains the actual spawning logic
+3. StorageImpl contains all component storage operations
+4. Registers handlers with VTable for all operations
+5. Operates on core/ecs data structures
 
 Each `core/*` package:
 1. Defines contracts (concrete structs, not traits)
 2. Defines command/response types
 3. **Provides API functions that use VTable dispatch**
-4. Exports features to `core/ecs`
+4. Imported separately by apps/plugins as needed
 
 Each `systems/*` package:
 1. Implements the actual functionality
 2. Registers its command handler with the VTable
 3. Never exposes APIs directly
 
-`core/ecs`:
-1. Provides World and VTable infrastructure
-2. **Re-exports all core/* APIs and features**
-3. Is the single import point for Apps/Plugins
+## Complete Architecture: core/* → systems/* with String-Based VTable
 
-## Complete Architecture: core/* → systems/* with Feature-Gated APIs
-
-### 1. **core/ecs - The Hub**
+### 1. **core/ecs - The Foundation**
 
 ```toml
 # core/ecs/Cargo.toml
@@ -43,29 +57,11 @@ name = "playground-core-ecs"
 
 [dependencies]
 playground-core-types = { path = "../types" }
+# NO other core/* dependencies - this is the foundation!
 
-# Re-export features from other core packages
-playground-core-server = { path = "../server", optional = true }
-playground-core-ui = { path = "../ui", optional = true }
-playground-core-client = { path = "../client", optional = true }
-playground-core-console = { path = "../console", optional = true }
-playground-core-rendering = { path = "../rendering", optional = true }
-
-[features]
-default = ["world"]  # Core ECS always available
-
-# Core ECS feature
-world = []
-
-# Re-export features from other core packages
-networking = ["playground-core-server/networking"]
-ui = ["playground-core-ui/ui"]
-rendering = ["playground-core-rendering/rendering"]
-console = ["playground-core-console/console"]
-client = ["playground-core-client/client"]
-physics = ["playground-core-physics/physics"]
-audio = ["playground-core-audio/audio"]
-storage = ["playground-core-storage/storage"]
+bytes = "1.5"
+tokio = { version = "1.0", features = ["full"] }
+serde = { version = "1.0", features = ["derive"] }
 ```
 
 ```rust
@@ -75,88 +71,84 @@ pub mod world;
 pub mod vtable;
 pub mod entity;
 pub mod component;
+pub mod messaging;
+pub mod query;
+pub mod storage;
+pub mod system;
+pub mod registry;
+pub mod error;
 
 pub use world::*;
 pub use vtable::*;
 pub use entity::*;
 pub use component::*;
+pub use messaging::*;
+pub use query::*;
+pub use storage::*;
+pub use system::*;
+pub use registry::*;
+pub use error::*;
 
-// Re-export APIs from other core packages (feature-gated)
-#[cfg(feature = "networking")]
-pub use playground_core_server::api as networking;
-
-#[cfg(feature = "ui")]
-pub use playground_core_ui::api as ui;
-
-#[cfg(feature = "rendering")]
-pub use playground_core_rendering::api as rendering;
-
-#[cfg(feature = "console")]
-pub use playground_core_console::api as console;
-
-#[cfg(feature = "client")]
-pub use playground_core_client::api as client;
+// NO re-exports from other packages!
+// Apps import core/ecs + whatever core/* packages they need
 ```
 
-### 2. **VTable Architecture**
+### 2. **VTable Architecture (Actual Implementation)**
 
 ```rust
-// core/ecs/src/vtable.rs
+// core/ecs/src/vtable.rs - Generic string-based dispatch
+use std::collections::HashMap;
+use bytes::Bytes;
 use tokio::sync::mpsc;
 use playground_core_types::{Shared, shared};
 
-/// Single concrete VTable containing all capability channels
+/// Generic command that can be sent through the VTable
+pub struct VTableCommand {
+    pub capability: String,
+    pub operation: String,
+    pub payload: Bytes,
+    pub response: mpsc::Sender<VTableResponse>,
+}
+
+/// Generic response from a VTable command
+pub struct VTableResponse {
+    pub success: bool,
+    pub payload: Option<Bytes>,
+    pub error: Option<String>,
+}
+
+/// Generic VTable that stores channels by capability name
 pub struct VTable {
-    #[cfg(feature = "networking")]
-    pub networking: Shared<Option<mpsc::Sender<NetworkingCommand>>>,
-    
-    #[cfg(feature = "ui")]
-    pub ui: Shared<Option<mpsc::Sender<UiCommand>>>,
-    
-    #[cfg(feature = "rendering")]
-    pub rendering: Shared<Option<mpsc::Sender<RenderCommand>>>,
-    
-    #[cfg(feature = "console")]
-    pub console: Shared<Option<mpsc::Sender<ConsoleCommand>>>,
-    
-    #[cfg(feature = "storage")]
-    pub storage: Shared<Option<mpsc::Sender<StorageCommand>>>,
-    
-    #[cfg(feature = "physics")]
-    pub physics: Shared<Option<mpsc::Sender<PhysicsCommand>>>,
-    
-    #[cfg(feature = "audio")]
-    pub audio: Shared<Option<mpsc::Sender<AudioCommand>>>,
-    
-    #[cfg(feature = "input")]
-    pub input: Shared<Option<mpsc::Sender<InputCommand>>>,
-    
-    #[cfg(feature = "client")]
-    pub client: Shared<Option<mpsc::Sender<ClientCommand>>>,
+    /// Registered capability channels
+    channels: Shared<HashMap<String, mpsc::Sender<VTableCommand>>>,
 }
 
 impl VTable {
     pub fn new() -> Self {
         Self {
-            #[cfg(feature = "networking")]
-            networking: shared(None),
-            #[cfg(feature = "ui")]
-            ui: shared(None),
-            #[cfg(feature = "rendering")]
-            rendering: shared(None),
-            #[cfg(feature = "console")]
-            console: shared(None),
-            #[cfg(feature = "storage")]
-            storage: shared(None),
-            #[cfg(feature = "physics")]
-            physics: shared(None),
-            #[cfg(feature = "audio")]
-            audio: shared(None),
-            #[cfg(feature = "input")]
-            input: shared(None),
-            #[cfg(feature = "client")]
-            client: shared(None),
+            channels: shared(HashMap::new()),
         }
+    }
+    
+    /// Register a capability channel
+    pub async fn register(
+        &self,
+        capability: String,
+        sender: mpsc::Sender<VTableCommand>
+    ) -> CoreResult<()> {
+        let mut channels = self.channels.write().await;
+        channels.insert(capability, sender);
+        Ok(())
+    }
+    
+    /// Send a command to a capability
+    pub async fn send_command(
+        &self,
+        capability: &str,
+        operation: String,
+        payload: Bytes
+    ) -> CoreResult<VTableResponse> {
+        // Dispatch to registered handler
     }
 }
 ```
@@ -164,97 +156,106 @@ impl VTable {
 ### 3. **Concrete World Type**
 
 ```rust
-// core/ecs/src/world.rs
+// core/ecs/src/world.rs - DATA STRUCTURE ONLY
 use playground_core_types::{Handle, handle, Shared, shared};
 
 pub struct World {
-    // Core ECS data
-    entities: Shared<HashMap<EntityId, Generation>>,
-    components: Shared<HashMap<EntityId, HashMap<ComponentId, Component>>>,
-    
-    // THE vtable - single instance, not a HashMap
+    // Core ECS data fields (public for systems/ecs to access)
+    pub entities: Shared<HashMap<EntityId, Generation>>,
+    pub components: Shared<HashMap<EntityId, HashMap<ComponentId, Component>>>,
     pub vtable: VTable,
-    
-    // Channels for core operations
-    entity_commands: mpsc::Sender<EntityCommand>,
-    component_commands: mpsc::Sender<ComponentCommand>,
+    pub next_entity_id: AtomicU32,
+    // NO command channels, NO implementation!
 }
 
 impl World {
     pub fn new() -> Handle<Self> {
+        // Just data initialization, no logic
         handle(Self {
             entities: shared(HashMap::new()),
             components: shared(HashMap::new()),
             vtable: VTable::new(),
-            // ... initialize channels
+            next_entity_id: AtomicU32::new(1),
         })
     }
     
-    // Core ECS operations
+    // Public API - just delegates to VTable, NO LOGIC HERE
     pub async fn spawn_entity(&self) -> CoreResult<EntityId> {
-        // Direct implementation, no vtable needed
+        let response = self.vtable.send_command(
+            "ecs.entity", "spawn", Bytes::new()
+        ).await?;
+        // Deserialize and return
     }
-    
-    pub async fn add_component(&self, entity: EntityId, component: Component) -> CoreResult<()> {
-        // Direct implementation
+}
+
+// systems/ecs/src/world_impl.rs - ALL THE LOGIC
+pub struct WorldImpl;
+
+impl WorldImpl {
+    pub async fn spawn_entity(world: &Handle<World>) -> CoreResult<EntityId> {
+        // ACTUAL implementation logic here
+        let id = world.next_entity_id.fetch_add(1, Ordering::SeqCst);
+        let entity_id = EntityId::new(id, Generation::new(0));
+        
+        let mut entities = world.entities.write().await;
+        entities.insert(entity_id, Generation::new(0));
+        // etc...
     }
 }
 ```
 
-### 4. **Example: Networking API**
+### 4. **Example: How Core Packages Provide APIs**
 
 ```rust
-// core/server/src/commands.rs
+// core/server/src/api.rs - API lives in core/server, NOT in core/ecs!
 use bytes::Bytes;
+use serde::{Serialize, Deserialize};
+use playground_core_ecs::{get_world, CoreResult, CoreError};
 
-#[derive(Debug, Clone)]
+#[derive(Serialize, Deserialize)]
 pub enum NetworkingOp {
     StartServer { port: u16 },
     StopServer,
     SendPacket { channel: u16, data: Bytes },
-    Broadcast { data: Bytes },
     RegisterChannel { name: String },
 }
 
-pub struct NetworkingCommand {
-    pub op: NetworkingOp,
-    pub response: oneshot::Sender<CoreResult<NetworkingResponse>>,
-}
-
-#[derive(Debug, Clone)]
+#[derive(Serialize, Deserialize)]
 pub enum NetworkingResponse {
     Started,
     Stopped,
     PacketSent,
     ChannelRegistered(u16),
-    Error(String),
 }
-```
 
-```rust
-// core/server/src/api.rs - THE API LIVES HERE!
-use playground_core_ecs::{get_world};
-use crate::commands::*;
-
+/// Start the networking server (API function in core/server)
 pub async fn start_server(port: u16) -> CoreResult<()> {
     let world = get_world().await?;
     
-    let sender = {
-        let guard = world.vtable.networking.read().await;
-        guard.as_ref().ok_or(CoreError::NotRegistered("networking"))?.clone()
-    };
+    // Serialize the operation
+    let op = NetworkingOp::StartServer { port };
+    let payload = bincode::serialize(&op)
+        .map_err(|e| CoreError::Generic(e.to_string()))?;
     
-    let (tx, rx) = oneshot::channel();
-    sender.send(NetworkingCommand {
-        op: NetworkingOp::StartServer { port },
-        response: tx,
-    }).await.map_err(|_| CoreError::SendError)?;
+    // Send through VTable using generic dispatch
+    let response = world.vtable.send_command(
+        "networking",  // capability name
+        "execute".to_string(),  // operation
+        Bytes::from(payload)
+    ).await?;
     
-    match rx.await.map_err(|_| CoreError::ReceiveError)?? {
-        NetworkingResponse::Started => Ok(()),
-        NetworkingResponse::Error(e) => Err(CoreError::Generic(e)),
-        _ => Err(CoreError::UnexpectedResponse),
+    if !response.success {
+        return Err(CoreError::Generic(
+            response.error.unwrap_or_else(|| "Unknown error".to_string())
+        ));
     }
+    
+    Ok(())
+}
+
+/// Send a packet (API function in core/server)
+pub async fn send_packet(channel: u16, data: Bytes) -> CoreResult<()> {
+    // Similar implementation using VTable dispatch
 }
 ```
 
@@ -262,27 +263,40 @@ pub async fn start_server(port: u16) -> CoreResult<()> {
 
 ```rust
 // systems/networking/src/lib.rs
-use playground_core_server::{NetworkingCommand, NetworkingOp, NetworkingResponse};
-use playground_core_ecs::{get_world};
+use bytes::Bytes;
+use tokio::sync::mpsc;
+use playground_core_ecs::{get_world, VTableCommand, VTableResponse};
+use playground_core_server::{NetworkingOp, NetworkingResponse};
 
 pub async fn register() -> CoreResult<()> {
     let world = get_world().await?;
     
-    // Create command channel
-    let (tx, mut rx) = mpsc::channel::<NetworkingCommand>(100);
+    // Create command channel for VTable
+    let (tx, mut rx) = mpsc::channel::<VTableCommand>(100);
     
-    // Register with vtable
-    {
-        let mut guard = world.vtable.networking.write().await;
-        *guard = Some(tx);
-    }
+    // Register with VTable using string-based capability name
+    world.vtable.register("networking".to_string(), tx).await?;
     
     // Spawn handler task
     tokio::spawn(async move {
         let mut server = NetworkingSystem::new();
         
         while let Some(cmd) = rx.recv().await {
-            let result = match cmd.op {
+            // Deserialize the operation
+            let op: NetworkingOp = match bincode::deserialize(&cmd.payload) {
+                Ok(op) => op,
+                Err(e) => {
+                    let _ = cmd.response.send(VTableResponse {
+                        success: false,
+                        payload: None,
+                        error: Some(e.to_string()),
+                    }).await;
+                    continue;
+                }
+            };
+            
+            // Handle the operation
+            let result = match op {
                 NetworkingOp::StartServer { port } => {
                     server.start(port).await
                 }
@@ -292,7 +306,14 @@ pub async fn register() -> CoreResult<()> {
                 // ... handle other ops
             };
             
-            let _ = cmd.response.send(result);
+            // Send response
+            let response = VTableResponse {
+                success: result.is_ok(),
+                payload: result.ok().and_then(|r| bincode::serialize(&r).ok().map(Bytes::from)),
+                error: result.err().map(|e| e.to_string()),
+            };
+            
+            let _ = cmd.response.send(response).await;
         }
     });
     
@@ -328,27 +349,21 @@ pub enum CoreError {
 
 ## Usage Example
 
-### Plugin Usage - Single Import!
+### Plugin Usage - Multiple Imports!
 
 ```rust
 // plugins/editor/src/lib.rs
+// Import core/ecs for the foundation
 use playground_core_ecs::{
-    // Core ECS (always available)
     World, Entity, Component,
     initialize_world, get_world,
-    
-    // Networking API (from core/server)
-    #[cfg(feature = "networking")]
-    networking::{start_server, send_packet, register_channel},
-    
-    // UI API (from core/ui)
-    #[cfg(feature = "ui")]
-    ui::{create_element, update_element, UiElementKind},
-    
-    // Console API (from core/console)
-    #[cfg(feature = "console")]
-    console::{log, LogLevel},
+    CoreResult, CoreError,
 };
+
+// Import specific core packages for their APIs
+use playground_core_server::api as networking;
+use playground_core_ui::api as ui;
+use playground_core_console::api as console;
 
 pub struct EditorPlugin {
     name: String,
@@ -356,24 +371,18 @@ pub struct EditorPlugin {
 
 impl EditorPlugin {
     pub async fn initialize(&mut self) -> CoreResult<()> {
-        // Everything through playground-core-ecs!
+        // Use APIs from each core package
         
-        #[cfg(feature = "networking")]
-        {
-            start_server(8080).await?;
-            let channel = register_channel("editor".into()).await?;
-        }
+        // Networking API from core/server
+        networking::start_server(8080).await?;
+        let channel = networking::register_channel("editor".into()).await?;
         
-        #[cfg(feature = "ui")]
-        {
-            create_element("editor-panel", UiElementKind::Panel).await?;
-            create_element("file-tree", UiElementKind::List).await?;
-        }
+        // UI API from core/ui
+        ui::create_element("editor-panel", ui::ElementKind::Panel).await?;
+        ui::create_element("file-tree", ui::ElementKind::List).await?;
         
-        #[cfg(feature = "console")]
-        {
-            log(LogLevel::Info, "Editor", "Plugin initialized").await?;
-        }
+        // Console API from core/console
+        console::log(console::LogLevel::Info, "Editor", "Plugin initialized").await?;
         
         Ok(())
     }
@@ -384,28 +393,25 @@ impl EditorPlugin {
 
 ```rust
 // apps/playground-editor/src/main.rs
-use playground_core_ecs::{
-    // Initialize world
-    initialize_world,
-    
-    // All features available
-    networking, ui, console,
-};
+use playground_core_ecs::{initialize_world, get_world};
+use playground_core_server::api as networking;
+use playground_core_ui::api as ui;
+use playground_core_console::api as console;
 
 #[tokio::main]
 async fn main() -> Result<()> {
     // Initialize the world once
     let world = initialize_world().await?;
     
-    // Register all system implementations
+    // Register all system implementations with VTable
     playground_systems_networking::register().await?;
     playground_systems_ui::register().await?;
     playground_systems_console::register().await?;
     playground_systems_webgl::register().await?;
     
-    // Now use the APIs
+    // Now use the APIs from each core package
     networking::start_server(8080).await?;
-    console::log(LogLevel::Info, "App", "Started").await?;
+    console::log(console::LogLevel::Info, "App", "Started").await?;
     
     // Load plugins
     let mut editor = EditorPlugin::new();
@@ -420,29 +426,59 @@ async fn main() -> Result<()> {
 
 ## Benefits
 
-1. **Single Import Point**: Apps/Plugins only need `playground-core-ecs`
-2. **Compile-Time Feature Control**: Missing features caught at compile time
-3. **No systems/logic Layer**: APIs come directly from core/* packages
-4. **Clear Error Boundaries**: Registration errors are explicit
-5. **Type Safety**: No dynamic dispatch, everything is concrete
-6. **Runtime Performance**: No vtable indirection, just channel communication
-7. **Extensibility**: New capabilities just add new VTable fields
+1. **Foundation Layer**: core/ecs is the base everything builds on
+2. **Zero Coupling**: core/ecs knows nothing about other packages
+3. **Clear Separation**: Each core/* package owns its API
+4. **String-Based Dispatch**: Generic VTable works with any capability
+5. **Type Safety**: Concrete types everywhere, no dyn
+6. **Runtime Registration**: Systems register handlers at startup
+7. **Extensibility**: New capabilities just register with VTable
 
-## Migration Path
+## Architecture Summary
 
-1. Refactor `core/ecs` to contain only World and VTable infrastructure
-2. Move API functions from `systems/logic` to respective `core/*` packages
-3. Update `core/ecs` to re-export all APIs
-4. Convert `systems/*` to registration-only pattern
-5. Update all plugins/apps to use single import
-6. Remove `systems/logic` entirely
+```
+Apps/Plugins Import:
+  ├── playground-core-ecs       (foundation: World, VTable, Entity, etc.)
+  ├── playground-core-server     (networking API)
+  ├── playground-core-ui         (UI API)
+  ├── playground-core-console    (logging API)
+  └── playground-core-client     (client API)
+
+core/ecs contains:
+  - World struct with data fields ONLY
+  - ComponentStorage struct with data fields ONLY
+  - VTable for dispatching to systems/ecs
+  - Public API methods that just delegate through VTable
+  - NO implementation logic whatsoever
+
+systems/ecs contains:
+  - WorldImpl with ALL entity/component operations
+  - StorageImpl with ALL storage operations
+  - VTable handlers that receive commands from core/ecs
+  - ALL the actual ECS logic
+
+Each core/* package:
+  - Defines its own API functions
+  - Uses VTable dispatch through core/ecs
+  - Knows nothing about systems/*
+
+Systems register handlers:
+  - systems/ecs → registers "ecs.entity", "ecs.component", "ecs.query" capabilities
+  - systems/networking → registers "networking" capability
+  - systems/ui → registers "ui" capability
+  - systems/console → registers "console" capability
+  - etc.
+```
 
 ## Architecture Rules Compliance
 
 - ✅ **NO dyn**: Everything is concrete types
 - ✅ **NO unsafe**: Pure safe Rust
 - ✅ **NO traits for contracts**: Concrete structs only
-- ✅ **NO enums for type erasure**: VTable is a single struct
+- ✅ **String-based VTable**: Generic dispatch mechanism
 - ✅ **Handle/Shared pattern**: Used consistently
 - ✅ **Async everywhere**: All operations are async
 - ✅ **Result everywhere**: All fallible operations return Result
+- ✅ **Clean separation**: core/ecs is truly foundational
+- ✅ **Data vs Logic**: core/ecs has ONLY data, systems/ecs has ALL logic
+- ✅ **Abstract Base Class Pattern**: core/ecs defines structure, systems/ecs provides behavior

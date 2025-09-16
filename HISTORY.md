@@ -1,5 +1,112 @@
 # HISTORY.md - Development Session History
 
+## Session: 2025-01-16 - Complete Data vs Logic Separation (Session 55)
+
+### Major Achievement: Fully Implemented Abstract Base Class Pattern
+
+Successfully refactored core/ecs to contain ONLY data structures with ALL logic moved to systems/ecs, achieving true separation of structure from behavior.
+
+### Key Architectural Pattern Implemented
+
+**Abstract Base Class Pattern**:
+- **core/ecs** = Abstract base classes (data fields only)
+- **systems/ecs** = Concrete implementations (all methods)
+- **VTable** = Runtime method dispatch
+
+This pattern allows us to avoid `dyn` while still achieving polymorphic behavior through runtime dispatch.
+
+### Changes Made
+
+#### 1. Core/ECS Refactoring (Removed ~350 lines of logic)
+
+**Before**: world.rs had implementation logic
+```rust
+async fn spawn_entity_impl(&self) -> CoreResult<EntityId> {
+    let id = self.next_entity_id.fetch_add(1, Ordering::SeqCst);
+    // 20+ lines of logic...
+}
+```
+
+**After**: world.rs just delegates through VTable
+```rust
+pub async fn spawn_entity(&self) -> CoreResult<EntityId> {
+    let response = self.vtable.send_command(
+        "ecs.entity", "spawn", Bytes::new()
+    ).await?;
+    // Just deserialize and return
+}
+```
+
+#### 2. Systems/ECS Implementation (Added ~400 lines)
+
+Created new modules:
+- **world_impl.rs**: All World operations (spawn, despawn, components, queries)
+- **storage_impl.rs**: All ComponentStorage operations
+- **vtable_handlers.rs**: VTable registration and command routing
+- **registration.rs**: Simple registration function
+
+#### 3. Documentation Updates
+
+Updated DESIGN.md to clearly explain:
+- Data vs Logic separation principle
+- Abstract base class pattern
+- VTable dispatch mechanism
+- Clear examples of the architecture
+
+### Benefits Achieved
+
+1. **Clean Architecture**: Core has NO logic, just data structures
+2. **NO dyn Compliance**: All concrete types, no trait objects
+3. **Extensibility**: New operations just register with VTable
+4. **Type Safety**: Compile-time structure, runtime behavior
+5. **Clear Separation**: Like OOP but in Rust
+
+### Key Learning
+
+The pattern of separating data structures (core) from logic (systems) with VTable dispatch provides the benefits of abstract classes without needing `dyn` trait objects. This maintains the project's strict NO dyn rule while achieving polymorphic behavior.
+
+## Session: 2025-09-16 - Clarifying Core/ECS and Systems/ECS Separation (Session 54)
+
+### Key Architecture Clarification
+
+**CRITICAL UNDERSTANDING**: 
+- **core/ecs** provides concrete structs (World, Component, etc.) with DATA FIELDS ONLY - like abstract classes
+- **core/ecs** should be MOSTLY STATELESS - minimal to no implementation
+- **systems/ecs** provides ALL THE ACTUAL LOGIC AND FUNCTIONALITY
+- We use concrete structs instead of traits to avoid `dyn` (following NO dyn rule)
+
+### Architecture Pattern
+
+The pattern is similar to abstract classes in OOP:
+1. **core/ecs/World** - Has the data fields (entities, components, vtable) but NO logic
+2. **systems/ecs** - Implements all the actual ECS operations (spawn, despawn, query, etc.)
+3. **Communication** - Via VTable dispatch, systems/ecs registers handlers for operations
+
+### Work Completed
+
+1. **Updated core/types**:
+   - Added ECS-specific error variants to CoreError
+   - Added EntityIdError and ComponentIdError types
+   - core/ecs now uses CoreError from core/types (no duplication)
+
+2. **Fixed core/ecs compilation**:
+   - Updated to use CoreError from core/types
+   - Fixed EntityId and Generation constructors
+   - All compilation errors resolved
+
+3. **Started systems/ecs implementation**:
+   - Recognized that systems/ecs should implement the actual logic
+   - core/ecs World should be mostly just data fields
+   - Systems/ecs operates on World data via VTable commands
+
+### Key Insight
+
+This architecture allows us to have:
+- Type safety (concrete structs, no dyn)
+- Clean separation (data vs logic)
+- Extensibility (systems can register new operations)
+- No circular dependencies (core knows nothing about systems)
+
 ## Session: 2025-12-18 - Core/ECS Complete Rewrite Implementation (Session 53)
 
 ### Major Achievement: Implemented VTable Architecture
