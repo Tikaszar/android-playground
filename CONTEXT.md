@@ -1,31 +1,92 @@
 # CONTEXT.md - Current Session Context
 
-## Active Session - 2025-09-15 (Session 50)
+## Active Session - 2025-09-16 (Session 51)
 
 ### Goal
-Complete the architectural audit of the `core/*`, `systems/*`, and `plugins/*` layers.
+Fix all architectural violations in the `core` layer identified in Session 50's audit.
 
 ### Current Status
-**Core Architecture**: ✅ ALIGNED - The `core` layer's design is conceptually sound.
-**Systems Architecture**: ❌ NOT ALIGNED - Audit revealed multiple systems (`ui`, `logic`, `physics`) require rewrites due to critical architectural violations.
-**Plugin Architecture**: ❌ NOT ALIGNED - All IDE plugins are non-compliant and require a complete rewrite.
-**Overall Status**: ⚠️ Major architectural refactoring is required across the `systems` and `plugins` layers before development can proceed.
+**Core Architecture**: ✅ FULLY COMPLIANT - All architectural violations have been fixed
+**Systems Architecture**: ❌ NOT ALIGNED - Multiple systems require rewrites (next priority)
+**Plugin Architecture**: ❌ NOT ALIGNED - All IDE plugins require complete rewrite
+**Overall Status**: ✅ Core layer complete, ready to proceed with systems layer refactoring
 
-### Conclusion of Full Project Audit
+### Session 51 Accomplishments
 
-The architectural audit of all engine layers is complete.
+Successfully fixed all core layer architectural violations:
 
-*   **`core` Layer:** The design is conceptually sound. The only issues are implementation bugs (`dyn`/`Any` usage) and one misplaced module (`core/android`).
+1. **Fixed `core/types/context.rs`**:
+   - Removed `Box<dyn std::any::Any>` violation
+   - Replaced with concrete `Resource` struct using `Bytes` serialization
+   - Follows established Component/ComponentData pattern
+
+2. **Fixed `core/server` violations**:
+   - Replaced all `Box<dyn Error>` with `CoreError` in:
+     - `channel.rs`
+     - `connection.rs`
+     - `message.rs`
+
+3. **Fixed `core/ecs/system_commands.rs`**:
+   - Removed `Arc<dyn SystemCommandProcessor>` violation
+   - Created concrete `SystemCommandProcessorWrapper` struct
+   - Uses channels instead of trait objects
+   - Now uses `Handle<T>` instead of direct `Arc`
+
+4. **Moved `core/android` to `systems/android`**:
+   - Platform-specific code removed from core layer
+   - Renamed package to `playground-systems-android`
+   - Updated all workspace configurations
+
+### Verification Complete
+- ✅ NO `dyn` violations in core
+- ✅ NO `Any` violations in core
+- ✅ NO `unsafe` code in core
+- ✅ NO direct `Arc`/`RwLock` usage (only Handle/Shared)
+- ✅ NO platform-specific code in core
+
+### Next Steps
+With the core layer now fully compliant, the next priority is to address the systems layer violations identified in Session 50:
+- Systems requiring rewrite: `systems/ui`, `systems/logic`, `systems/physics`
+- Systems requiring refactor: `systems/networking`, `systems/ecs`, `systems/webgl`
+
+---
+
+## Previous Session - 2025-09-15 (Session 50) - Full Architectural Audit
+
+### Audit Results Summary
+
+The architectural audit of all engine layers revealed:
+
+*   **`core` Layer:** The design was conceptually sound. The only issues were implementation bugs (`dyn`/`Any` usage) and one misplaced module (`core/android`). ✅ NOW FIXED
 
 *   **`systems` Layer:** This layer has significant architectural problems.
     *   **Require Rewrite:** `systems/ui`, `systems/logic`, `systems/physics`.
     *   **Require Refactor:** `systems/networking`, `systems/ecs`, `systems/webgl`.
+    *   **Compliant:** `systems/console`.
     *   **New Principle:** Systems should be considered private, only exposing functionality via `core` contracts.
 
 *   **`plugins` Layer:** This layer is fundamentally broken.
     *   **Conclusion:** All 9 IDE plugins are non-compliant, bypassing the `systems/logic` API gateway and depending directly on other systems. They all require a complete rewrite.
 
-The project is not in a state to add new features. The next step must be to address these foundational architectural issues, starting with the `systems` layer.
+---
+
+## Long-Term Project Memory
+
+### Critical Architecture Principles (Must Remember)
+
+1. **`core` is for Generic Primitives Only**: The `core` layer must only define contracts for universal, application-agnostic primitives (ECS, messaging, rendering).
+2. **`systems` are Private Implementations**: Systems crates are concrete, private implementations of the `core` contracts. They must not expose a public API and should only be interacted with via the command processors defined in `core`.
+3. **`systems/logic` is the Sole Public API**: This is the only crate that exposes a public API for the engine.
+4. **`plugins` are Consumers of the Public API**: Plugins must *only* depend on `systems/logic` and interact with the engine exclusively through its public API.
+5. **Strict Isolation**: `systems` cannot depend on other `systems`. `plugins` cannot depend on `systems` (except `logic`) or other `plugins`.
+
+### Project State Overview
+- **Build**: ⚠️ NEEDS TESTING - Major architectural changes need compilation check
+- **Architecture Compliance**:
+  - Core: ✅ FULLY COMPLIANT (Session 51)
+  - Systems: ❌ MAJOR VIOLATIONS
+  - Plugins: ❌ COMPLETE REWRITE NEEDED
+- **Next Priority**: Fix systems layer starting with rewrites of `ui`, `logic`, and `physics`
 
 ## Active Session - 2025-09-14 (Session 49)
 

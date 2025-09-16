@@ -7,6 +7,7 @@ use async_trait::async_trait;
 use crate::{EcsResult, EcsError};
 use serde::{Deserialize, Serialize};
 use bytes::Bytes;
+use playground_core_types::Handle;
 
 /// Generic command that can be sent to any system
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -30,15 +31,44 @@ pub struct SystemResponse {
     pub error: Option<String>,
 }
 
+/// Concrete wrapper for command processors (avoiding dyn)
+pub struct SystemCommandProcessorWrapper {
+    pub system_name: String,
+    pub supported_commands: Vec<String>,
+    /// Channel to send commands to the actual processor
+    command_sender: tokio::sync::mpsc::Sender<(String, Bytes, tokio::sync::oneshot::Sender<EcsResult<SystemResponse>>)>,
+}
+
+impl SystemCommandProcessorWrapper {
+    pub fn new(
+        system_name: String,
+        supported_commands: Vec<String>,
+        command_sender: tokio::sync::mpsc::Sender<(String, Bytes, tokio::sync::oneshot::Sender<EcsResult<SystemResponse>>)>,
+    ) -> Self {
+        Self {
+            system_name,
+            supported_commands,
+            command_sender,
+        }
+    }
+
+    pub async fn handle_command(&self, command_type: String, payload: Bytes) -> EcsResult<SystemResponse> {
+        let (tx, rx) = tokio::sync::oneshot::channel();
+        self.command_sender.send((command_type, payload, tx)).await
+            .map_err(|_| EcsError::SendError)?;
+        rx.await.map_err(|_| EcsError::ReceiveError)?
+    }
+}
+
 /// Trait for systems that can handle commands
 #[async_trait]
 pub trait SystemCommandProcessor: Send + Sync {
     /// Get the name of this system
     fn system_name(&self) -> &str;
-    
+
     /// Handle a command sent to this system
     async fn handle_system_command(&self, command_type: &str, payload: Bytes) -> EcsResult<SystemResponse>;
-    
+
     /// Get list of supported command types
     fn supported_commands(&self) -> Vec<String>;
 }
@@ -47,7 +77,7 @@ pub trait SystemCommandProcessor: Send + Sync {
 #[async_trait]
 pub trait WorldSystemCommands: Send + Sync {
     /// Register a system command processor
-    async fn register_system_processor(&self, processor: std::sync::Arc<dyn SystemCommandProcessor>) -> EcsResult<()>;
+    async fn register_system_processor(&self, processor: SystemCommandProcessorWrapper) -> EcsResult<()>;
     
     /// Unregister a system command processor
     async fn unregister_system_processor(&self, system_name: &str) -> EcsResult<()>;

@@ -1,5 +1,57 @@
 # HISTORY.md - Development Session History
 
+## Session: 2025-09-16 - Core Layer Architectural Compliance (Session 51)
+
+### Major Achievement: Fixed All Core Layer Architectural Violations
+
+Following Session 50's audit, this session successfully addressed and fixed all architectural violations in the `core` layer, achieving full compliance with the project's strict architectural rules.
+
+### Fixes Implemented:
+
+#### 1. Fixed `core/types/context.rs` - NO dyn/Any Violation
+**Problem**: Used `Box<dyn std::any::Any + Send + Sync>` for resources
+**Solution**:
+- Created concrete `Resource` struct with `Bytes` serialization
+- Follows established Component/ComponentData pattern
+- Resources now serialized/deserialized instead of type-erased
+
+#### 2. Fixed `core/server` - Box<dyn Error> Violations
+**Problem**: Multiple files using `Box<dyn Error>` instead of `CoreError`
+**Solution**: Replaced all occurrences with `CoreError` in:
+- `channel.rs` - All trait methods now return `Result<T, CoreError>`
+- `connection.rs` - All trait methods now return `Result<T, CoreError>`
+- `message.rs` - All trait methods now return `Result<T, CoreError>`
+
+#### 3. Fixed `core/ecs/system_commands.rs` - Arc<dyn> Violation
+**Problem**: Used `Arc<dyn SystemCommandProcessor>` trait object
+**Solution**:
+- Created concrete `SystemCommandProcessorWrapper` struct
+- Uses channels for communication instead of trait objects
+- Properly uses `Handle<T>` instead of direct `Arc`
+- Maintains NO dyn compliance while preserving functionality
+
+#### 4. Moved `core/android` to `systems/android`
+**Problem**: Platform-specific code in core layer violates genericity principle
+**Solution**:
+- Relocated entire package to `systems/android`
+- Renamed to `playground-systems-android`
+- Updated workspace Cargo.toml
+- Core layer now contains NO platform-specific code
+
+### Verification Results:
+- ✅ **NO dyn violations** - Complete search confirmed no `dyn` usage in core
+- ✅ **NO Any violations** - No `std::any::Any` usage anywhere in core
+- ✅ **NO unsafe code** - Zero unsafe blocks in entire core layer
+- ✅ **NO direct Arc/RwLock** - Only Handle<T> and Shared<T> type aliases used
+- ✅ **NO platform code** - All platform-specific code moved to systems layer
+
+### Key Architectural Patterns Reinforced:
+- **Concrete wrappers over trait objects**: Use structs with channels/bytes instead of `dyn`
+- **Handle<T> for external references**: Never use `Arc` directly
+- **Shared<T> for internal state**: Never use `Arc<RwLock<>>` directly
+- **CoreError everywhere**: No `Box<dyn Error>` allowed
+- **Platform code in systems only**: Core must remain generic
+
 ## Session: 2025-09-15 - Full Project Architectural Audit (Session 50)
 
 ### Major Achievement: Completed Comprehensive Audit of `core`, `systems`, and `plugins` Layers

@@ -56,7 +56,9 @@ This file contains critical memory for Claude Code when working with this reposi
 - Engine systems (ui, webgl, etc) are isolated from each other
 
 ## #current-violations
-✅ **NONE** - Full architectural compliance achieved!
+✅ **Core Layer: NONE** - Full architectural compliance achieved in Session 51!
+❌ **Systems Layer: MAJOR** - ui, logic, physics need rewrite; networking, ecs, webgl need refactor
+❌ **Plugins Layer: COMPLETE REWRITE** - All 9 IDE plugins bypass systems/logic API
 
 ## #unified-ecs-architecture
 **NEW DESIGN**: Single unified ECS in systems/ecs
@@ -68,15 +70,14 @@ This file contains critical memory for Claude Code when working with this reposi
 - Staged execution pipeline (Update → Layout → Render)
 
 ## #immediate-goals
-1. **Implement unified ECS architecture** 🔴 (Session 43)
-   - Create systems/ecs package with World implementation
-   - Refactor core/ecs to contracts only
-   - Convert systems/logic to stateless API gateway
-   - Migrate ECS functionality from both layers
-2. **Update system registration** 🔴
-   - Engine systems auto-register with systems/ecs
-   - Plugin registration through systems/logic API
-   - Compile-time manifest for discovery
+1. **Fix systems layer violations** 🔴 HIGH PRIORITY
+   - Rewrite: systems/ui, systems/logic, systems/physics
+   - Refactor: systems/networking, systems/ecs, systems/webgl
+   - systems/console is already compliant
+2. **Rewrite all IDE plugins** 🔴 BLOCKED (needs systems fixes first)
+   - All 9 plugins must use ONLY systems/logic API
+   - Remove all direct dependencies on other systems
+   - Remove all core/* dependencies
 3. **Implement dynamic channel system** 🔴 (Session 28)
    - SystemsManager channel registry
    - Channel discovery protocol on channel 0
