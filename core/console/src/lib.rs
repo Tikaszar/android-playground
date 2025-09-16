@@ -1,12 +1,35 @@
-//! Generic console and logging contracts
+//! Core console package - data structures and API only, NO LOGIC!
 //! 
-//! This module defines abstract contracts for console output and logging
-//! that can be implemented by any backend (terminal, file, GUI, network, etc.)
+//! This package defines console contracts that can be implemented by any backend.
+//! All actual implementation logic is in systems/console.
 
-mod contracts;
-mod types;
-mod commands;
+// Module declarations
+pub mod console;
+pub mod types;
+pub mod api;
 
-pub use contracts::*;
+#[cfg(feature = "output")]
+pub mod output;
+
+#[cfg(feature = "logging")]
+pub mod logging;
+
+#[cfg(feature = "progress")]
+pub mod progress;
+
+#[cfg(feature = "input")]
+pub mod input;
+
+#[cfg(feature = "input")]
+pub mod input_api;
+
+// Re-exports - NO implementation here, just exports!
+pub use console::Console;
 pub use types::*;
-pub use commands::*;
+
+// Feature-gated re-exports
+#[cfg(feature = "input")]
+pub use input::*;
+
+// Public API re-exports
+pub use api::*;

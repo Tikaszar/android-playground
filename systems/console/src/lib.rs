@@ -1,7 +1,16 @@
+//! Console system implementation - ALL the logic for console operations
+//! 
+//! This implements the actual console functionality that core/console delegates to.
+
+// Module declarations
+pub mod registration;
+pub mod vtable_handlers;
 pub mod terminal;
 pub mod dashboard;
-pub mod console_system;
+pub mod file_logger;
 
-pub use terminal::TerminalConsole;
+// Re-exports - NO implementation here, just exports!
+pub use registration::register;
+pub use terminal::Terminal;
 pub use dashboard::Dashboard;
-pub use console_system::ConsoleSystem;
+pub use file_logger::FileLogger;

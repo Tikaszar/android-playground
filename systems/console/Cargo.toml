@@ -7,18 +7,29 @@ edition = "2021"
 # Core dependencies
 playground-core-types = { path = "../../core/types" }
 playground-core-ecs = { path = "../../core/ecs" }
-playground-core-console = { path = "../../core/console" }
+playground-core-console = { path = "../../core/console", features = ["default"] }
 
-# Async runtime
-tokio = { version = "1.36", features = ["full"] }
-async-trait = "0.1"
-
-# Error handling
-thiserror = "1.0"
-
-# Utilities
-chrono = "0.4"
-bytes = "1.5"
+# Workspace dependencies
+tokio = { workspace = true }
+bytes = { workspace = true }
+chrono = { workspace = true }
+bincode = { workspace = true }
+serde = { workspace = true }
+once_cell = { workspace = true }
 
 # Terminal UI
 crossterm = "0.28"
+
+[features]
+default = ["logging", "output", "terminal"]
+
+# Base features
+output = []           # Console output support
+logging = []          # Logging support
+input = []            # Input support
+progress = []         # Progress indicator support
+
+# Implementation features
+terminal = []         # Terminal-based implementation
+dashboard = []        # Dashboard monitoring
+file-logging = []     # File-based logging

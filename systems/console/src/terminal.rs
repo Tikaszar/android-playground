@@ -1,14 +1,9 @@
-//! Terminal-specific implementation of console contracts using ANSI/crossterm
+//! Terminal implementation - actual logic for terminal operations
 
-use async_trait::async_trait;
-use playground_core_types::{CoreError, CoreResult};
 use std::io::{self, Write};
-use playground_core_console::{
-    ConsoleContract, LoggingContract, InputContract,
-    LogEntry, LogLevel, OutputStyle, Progress, ConsoleCapabilities, InputEvent
-};
-use playground_core_types::{Shared, shared};
-use std::collections::{HashMap, VecDeque};
+use std::collections::VecDeque;
+use playground_core_types::{CoreResult, CoreError, Shared, shared};
+use playground_core_console::{LogEntry, LogLevel, OutputStyle, Progress};
 use crossterm::{
     ExecutableCommand,
     cursor,
@@ -16,34 +11,28 @@ use crossterm::{
     style::{Color, SetForegroundColor, ResetColor}
 };
 
+#[cfg(feature = "input")]
+use playground_core_console::InputEvent;
+
 const MAX_LOG_ENTRIES: usize = 1000;
 
-/// Terminal implementation of console contracts using ANSI escape codes
-pub struct TerminalConsole {
-    /// Whether terminal output is enabled
+/// Terminal implementation with actual logic
+pub struct Terminal {
     enabled: bool,
-    /// Recent log entries kept in memory
     log_entries: Shared<VecDeque<LogEntry>>,
-    /// Current minimum log level
     log_level: Shared<LogLevel>,
-    /// Active progress indicators
-    progress_indicators: Shared<HashMap<String, Progress>>,
 }
 
-impl TerminalConsole {
+impl Terminal {
     pub fn new(enabled: bool) -> Self {
         Self {
             enabled,
             log_entries: shared(VecDeque::with_capacity(MAX_LOG_ENTRIES)),
             log_level: shared(LogLevel::Info),
-            progress_indicators: shared(HashMap::new()),
         }
     }
-}
-
-#[async_trait]
-impl ConsoleContract for TerminalConsole {
-    async fn write(&self, text: &str) -> CoreResult<()> {
+    
+    pub async fn write(&self, text: &str) -> CoreResult<()> {
         if !self.enabled {
             return Ok(());
         }
@@ -52,7 +41,7 @@ impl ConsoleContract for TerminalConsole {
         Ok(())
     }
     
-    async fn write_styled(&self, text: &str, style: OutputStyle) -> CoreResult<()> {
+    pub async fn write_styled(&self, text: &str, style: OutputStyle) -> CoreResult<()> {
         if !self.enabled {
             return Ok(());
         }
@@ -81,7 +70,7 @@ impl ConsoleContract for TerminalConsole {
         Ok(())
     }
     
-    async fn write_line(&self, text: &str) -> CoreResult<()> {
+    pub async fn write_line(&self, text: &str) -> CoreResult<()> {
         if !self.enabled {
             return Ok(());
         }
@@ -89,7 +78,7 @@ impl ConsoleContract for TerminalConsole {
         Ok(())
     }
     
-    async fn clear(&self) -> CoreResult<()> {
+    pub async fn clear(&self) -> CoreResult<()> {
         if !self.enabled {
             return Ok(());
         }
@@ -98,55 +87,12 @@ impl ConsoleContract for TerminalConsole {
         Ok(())
     }
     
-    async fn update_progress(&self, progress: Progress) -> CoreResult<()> {
-        if !self.enabled {
-            return Ok(());
-        }
-        
-        let mut indicators = self.progress_indicators.write().await;
-        indicators.insert(progress.id.clone(), progress.clone());
-        
-        // For terminal, we'll just print inline progress
-        if progress.indeterminate {
-            print!("\r{}: [spinner] - {:?}", progress.label, progress.message);
-        } else {
-            let percentage = (progress.current * 100.0) as u32;
-            print!("\r{}: [{}%] - {:?}", 
-                progress.label, percentage, progress.message);
-        }
-        io::stdout().flush().map_err(CoreError::from)?;
-        
-        Ok(())
-    }
-    
-    async fn clear_progress(&self, id: &str) -> CoreResult<()> {
-        let mut indicators = self.progress_indicators.write().await;
-        indicators.remove(id);
-        Ok(())
-    }
-    
-    async fn capabilities(&self) -> ConsoleCapabilities {
-        ConsoleCapabilities {
-            color: true,
-            styling: true,
-            progress: true,
-            clear: true,
-            cursor_control: true,
-            input: true,
-            width: terminal::size().map(|(w, _)| w as u32).ok(),
-            height: terminal::size().map(|(_, h)| h as u32).ok(),
-        }
-    }
-    
-    async fn flush(&self) -> CoreResult<()> {
+    pub async fn flush(&self) -> CoreResult<()> {
         io::stdout().flush().map_err(CoreError::from)?;
         Ok(())
     }
-}
-
-#[async_trait]
-impl LoggingContract for TerminalConsole {
-    async fn log(&self, entry: LogEntry) -> CoreResult<()> {
+    
+    pub async fn log(&self, entry: &LogEntry) -> CoreResult<()> {
         // Store in memory
         {
             let mut entries = self.log_entries.write().await;
@@ -164,8 +110,9 @@ impl LoggingContract for TerminalConsole {
         
         // Print to terminal if enabled
         if self.enabled {
-            let timestamp = chrono::DateTime::<chrono::Local>::from(entry.timestamp)
-                .format("%H:%M:%S%.3f");
+            let timestamp = chrono::DateTime::<chrono::Utc>::from_timestamp_millis(entry.timestamp as i64)
+                .map(|dt| dt.format("%H:%M:%S%.3f").to_string())
+                .unwrap_or_else(|| "??:??:??.???".to_string());
             
             let level_emoji = match entry.level {
                 LogLevel::Trace => "🔍",
@@ -186,52 +133,89 @@ impl LoggingContract for TerminalConsole {
         Ok(())
     }
     
-    async fn get_recent_logs(&self, count: usize) -> CoreResult<Vec<LogEntry>> {
+    pub async fn get_recent_logs(&self, count: usize) -> Vec<LogEntry> {
         let entries = self.log_entries.read().await;
-        Ok(entries.iter().rev().take(count).cloned().collect())
+        entries.iter().rev().take(count).cloned().collect()
     }
     
-    async fn get_component_logs(&self, component: &str, count: usize) -> CoreResult<Vec<LogEntry>> {
+    pub async fn get_component_logs(&self, component: &str, count: usize) -> Vec<LogEntry> {
         let entries = self.log_entries.read().await;
-        Ok(entries.iter()
+        entries.iter()
             .rev()
             .filter(|e| e.component.as_deref() == Some(component))
             .take(count)
             .cloned()
-            .collect())
+            .collect()
     }
     
-    async fn clear_logs(&self) -> CoreResult<()> {
+    pub async fn clear_logs(&self) -> CoreResult<()> {
         let mut entries = self.log_entries.write().await;
         entries.clear();
         Ok(())
     }
     
-    async fn get_log_level(&self) -> LogLevel {
+    pub async fn get_log_level(&self) -> LogLevel {
         *self.log_level.read().await
     }
     
-    async fn set_log_level(&self, level: LogLevel) -> CoreResult<()> {
+    pub async fn set_log_level(&self, level: LogLevel) -> CoreResult<()> {
         let mut current = self.log_level.write().await;
         *current = level;
         Ok(())
     }
-}
-
-#[async_trait]
-impl InputContract for TerminalConsole {
-    async fn read_line(&self) -> CoreResult<String> {
+    
+    pub async fn update_progress(&self, progress: Progress) -> CoreResult<()> {
+        if !self.enabled {
+            return Ok(());
+        }
+        
+        if progress.indeterminate {
+            print!("\r{}: [spinner] - {:?}", progress.label, progress.message);
+        } else {
+            let percentage = (progress.current * 100.0) as u32;
+            print!("\r{}: [{}%] - {:?}", 
+                progress.label, percentage, progress.message);
+        }
+        io::stdout().flush().map_err(CoreError::from)?;
+        
+        Ok(())
+    }
+    
+    pub async fn clear_progress(&self, _id: &str) -> CoreResult<()> {
+        // For terminal, just clear the line
+        if self.enabled {
+            print!("\r\x1B[K");
+            io::stdout().flush().map_err(CoreError::from)?;
+        }
+        Ok(())
+    }
+    
+    pub async fn clear_all_progress(&self) -> CoreResult<()> {
+        if self.enabled {
+            print!("\r\x1B[K");
+            io::stdout().flush().map_err(CoreError::from)?;
+        }
+        Ok(())
+    }
+    
+    pub async fn read_line(&self) -> CoreResult<String> {
         let mut line = String::new();
         io::stdin().read_line(&mut line).map_err(CoreError::from)?;
         Ok(line.trim_end().to_string())
     }
     
-    async fn read_event(&self) -> CoreResult<Option<InputEvent>> {
+    #[cfg(feature = "input")]
+    pub async fn read_event(&self) -> CoreResult<Option<InputEvent>> {
         // For now, just return None - full event handling would require crossterm event loop
         Ok(None)
     }
     
-    async fn has_input(&self) -> bool {
+    #[cfg(not(feature = "input"))]
+    pub async fn read_event(&self) -> CoreResult<Option<()>> {
+        Ok(None)
+    }
+    
+    pub async fn has_input(&self) -> bool {
         // Would need crossterm event polling
         false
     }

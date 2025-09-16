@@ -4,11 +4,31 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-async-trait = { workspace = true }
-bytes = { workspace = true }
 playground-core-types = { path = "../types" }
 playground-core-ecs = { path = "../ecs" }
-serde = { workspace = true }
-serde_json = { workspace = true }
+
+bytes = { workspace = true }
 tokio = { workspace = true }
-once_cell = { workspace = true }
+serde = { workspace = true }
+bincode = { workspace = true }
+
+# Optional dependencies for features
+serde_json = { workspace = true, optional = true }
+chrono = { workspace = true, optional = true }
+
+[features]
+default = ["logging", "output"]
+
+# Base features (always available)
+output = []           # Basic console output (write, write_line, clear)
+logging = []          # Logging system (log levels, components, etc.)
+
+# Optional features
+input = []            # Console input support (read_line, read_event)
+progress = []         # Progress indicators and spinners
+styling = []          # Text styling and colors
+structured = ["serde_json"]  # Structured logging with JSON data
+timestamps = ["chrono"]       # Enhanced timestamp formatting
+dashboard = []        # Dashboard/monitoring support
+file-logging = []     # File-based logging backend support
+network-logging = []  # Network-based logging support
