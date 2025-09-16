@@ -58,8 +58,12 @@ This file contains critical memory for Claude Code when working with this reposi
 ## #current-violations
 ✅ **Core Layer: NONE** - Full architectural compliance achieved in Session 51!
 ✅ **Core/Console: COMPLETE** - Full data vs logic separation achieved in Session 56!
+✅ **Core/Server: COMPLETE** - Full data vs logic separation achieved in Session 57!
+✅ **Core/Client: COMPLETE** - Full data vs logic separation achieved in Session 57!
 ❌ **Systems Layer: MAJOR** - ui, logic, physics need rewrite; networking, webgl need refactor
 ✅ **Systems/Console: COMPLETE** - Fully rewritten with VTable pattern in Session 56!
+❌ **Systems/Networking: NEEDS UPDATE** - Must implement VTable handlers for core/server
+❌ **Systems/WebGL: NEEDS UPDATE** - Must implement VTable handlers for core/client
 ❌ **Plugins Layer: COMPLETE REWRITE** - All 9 IDE plugins bypass systems/logic API
 
 ## #unified-ecs-architecture
@@ -74,7 +78,8 @@ This file contains critical memory for Claude Code when working with this reposi
 ## #immediate-goals
 1. **Fix systems layer violations** 🔴 HIGH PRIORITY
    - Rewrite: systems/ui, systems/logic, systems/physics
-   - Refactor: systems/networking, systems/webgl
+   - Update: systems/networking (add VTable handlers for core/server)
+   - Update: systems/webgl (add VTable handlers for core/client)
    - ✅ systems/console COMPLETE (Session 56)
    - ✅ systems/ecs already compliant (Session 54)
 2. **Rewrite all IDE plugins** 🔴 BLOCKED (needs systems fixes first)

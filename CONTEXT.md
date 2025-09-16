@@ -1,8 +1,40 @@
 # CONTEXT.md - Current Session Context
 
-## Active Session - 2025-09-16 (Session 56)
+## Active Session - 2025-09-16 (Session 57)
 
-### Current Session 56 Accomplishments
+### Current Session 57 Accomplishments
+
+Successfully rewrote core/server and core/client following the data vs logic separation pattern:
+
+1. **Rewrote core/server completely**:
+   - Removed all trait-based contracts (ServerContract, ConnectionContract, etc.)
+   - Created Server struct with data fields only
+   - All methods delegate through VTable
+   - Comprehensive feature flags (websocket, tcp, udp, channels, batching, etc.)
+   - Split into: server.rs, operations.rs, types.rs, api.rs
+
+2. **Rewrote core/client completely**:
+   - Removed all trait-based contracts (ClientContract, RenderingClientContract, etc.)
+   - Created Client struct with data fields only
+   - All methods delegate through VTable
+   - Feature flags for rendering, input, audio capabilities
+   - Enhanced KeyCode enum with full keyboard support (symbols, numpad, media keys)
+   - Split into: client.rs, operations.rs, types.rs, input.rs, api.rs
+
+3. **Architecture Pattern Applied**:
+   - Abstract base class pattern (structure in core, behavior in systems)
+   - Global instances via Lazy statics
+   - API functions for convenient access
+   - NO dyn, NO traits, just concrete types with VTable delegation
+
+### Architecture Status
+**Core/Server**: ✅ COMPLETE - Data structures only, VTable delegation
+**Core/Client**: ✅ COMPLETE - Data structures only, VTable delegation
+**Next Steps**: Update systems/networking and systems/webgl to implement VTable handlers
+
+## Previous Session - 2025-09-16 (Session 56)
+
+### Session 56 Accomplishments
 
 Successfully rewrote core/console and systems/console following the data vs logic separation pattern:
 

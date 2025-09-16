@@ -131,3 +131,18 @@ pub struct ServerStats {
     pub total_bytes_received: u64,
     pub errors: u64,
 }
+
+impl Default for ServerStats {
+    fn default() -> Self {
+        Self {
+            start_time: 0,
+            total_connections: 0,
+            active_connections: 0,
+            total_messages_sent: 0,
+            total_messages_received: 0,
+            total_bytes_sent: 0,
+            total_bytes_received: 0,
+            errors: 0,
+        }
+    }
+}

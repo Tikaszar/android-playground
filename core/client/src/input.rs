@@ -42,7 +42,7 @@ pub enum KeyState {
 }
 
 /// Generic key codes (not tied to any specific platform)
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum KeyCode {
     // Letters
     A, B, C, D, E, F, G, H, I, J, K, L, M,
@@ -52,9 +52,29 @@ pub enum KeyCode {
     Num0, Num1, Num2, Num3, Num4,
     Num5, Num6, Num7, Num8, Num9,
     
+    // Numpad
+    Numpad0, Numpad1, Numpad2, Numpad3, Numpad4,
+    Numpad5, Numpad6, Numpad7, Numpad8, Numpad9,
+    NumpadAdd, NumpadSubtract, NumpadMultiply, NumpadDivide,
+    NumpadEnter, NumpadDecimal,
+    
     // Function keys
     F1, F2, F3, F4, F5, F6, F7, F8,
-    F9, F10, F11, F12,
+    F9, F10, F11, F12, F13, F14, F15, F16,
+    F17, F18, F19, F20, F21, F22, F23, F24,
+    
+    // Punctuation and symbols
+    Minus,          // -
+    Equals,         // =
+    LeftBracket,    // [
+    RightBracket,   // ]
+    Backslash,      // \
+    Semicolon,      // ;
+    Apostrophe,     // '
+    Grave,          // ` (backtick)
+    Comma,          // ,
+    Period,         // .
+    Slash,          // /
     
     // Control keys
     Escape,
@@ -78,12 +98,33 @@ pub enum KeyCode {
     LeftAlt, RightAlt,
     LeftSuper, RightSuper, // Windows/Command key
     
-    // Other
+    // Lock keys
     CapsLock,
     NumLock,
     ScrollLock,
+    
+    // Media keys
+    PlayPause,
+    Stop,
+    NextTrack,
+    PreviousTrack,
+    VolumeUp,
+    VolumeDown,
+    Mute,
+    
+    // Browser keys
+    BrowserBack,
+    BrowserForward,
+    BrowserRefresh,
+    BrowserStop,
+    BrowserSearch,
+    BrowserFavorites,
+    BrowserHome,
+    
+    // Other
     Pause,
     PrintScreen,
+    Menu,           // Context menu key
     
     // Unknown key
     Unknown(u32),
@@ -210,4 +251,46 @@ pub enum WindowEvent {
     CloseRequested,
     /// DPI scale changed
     ScaleChanged { scale: f32 },
+}
+
+/// State of input devices
+#[derive(Debug, Clone)]
+pub struct InputState {
+    /// Currently pressed keys
+    pub pressed_keys: std::collections::HashSet<KeyCode>,
+    /// Mouse position (if available)
+    pub mouse_position: Option<(f32, f32)>,
+    /// Touch points (for touch devices)
+    pub touches: Vec<Touch>,
+    /// Gamepad states
+    pub gamepads: Vec<GamepadState>,
+}
+
+impl Default for InputState {
+    fn default() -> Self {
+        Self {
+            pressed_keys: std::collections::HashSet::new(),
+            mouse_position: None,
+            touches: Vec::new(),
+            gamepads: Vec::new(),
+        }
+    }
+}
+
+/// Touch point state
+#[derive(Debug, Clone)]
+pub struct Touch {
+    pub id: u32,
+    pub x: f32,
+    pub y: f32,
+    pub pressure: f32,
+}
+
+/// Gamepad state
+#[derive(Debug, Clone)]
+pub struct GamepadState {
+    pub id: u32,
+    pub connected: bool,
+    pub buttons: Vec<bool>,
+    pub axes: Vec<f32>,
 }

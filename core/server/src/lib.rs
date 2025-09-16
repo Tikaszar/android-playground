@@ -1,22 +1,19 @@
-//! Core server contracts and types
+//! Core server data structures and types
 //!
-//! This package defines GENERIC contracts (traits) and types for server infrastructure.
-//! These contracts can be implemented by ANY server type (WebSocket, TCP, UDP, IPC, etc.).
-//! All implementations live in systems/* packages.
+//! This package defines ONLY data structures - NO LOGIC!
+//! All server implementation logic lives in systems/networking.
+//! 
+//! This follows the "abstract base class" pattern where core defines
+//! structure and systems provide behavior.
 
-// Contract modules
+// Data structure modules
 pub mod server;
-pub mod connection;
-pub mod channel;
-pub mod message;
-pub mod commands;
+pub mod operations;
 pub mod types;
+pub mod api;
 
-// Re-export all contracts
-pub use server::ServerContract;
-pub use connection::ConnectionContract;
-pub use channel::ChannelContract;
-pub use message::{MessageContract, MessageHandler};
+// Re-export the main Server struct
+pub use server::{Server, ServerCapabilities};
 
 // Re-export all types
 pub use types::{
@@ -39,5 +36,25 @@ pub use types::{
     ServerStats,
 };
 
-// Re-export command types
-pub use commands::{ServerCommand, ServerResponse, ServerCommandHandler};
+// Re-export API functions
+pub use api::{
+    get_server_instance,
+    start_server,
+    stop_server,
+    is_server_running,
+    get_server_stats,
+    get_server_config,
+    send_to_connection,
+    broadcast_message,
+    get_connections,
+    get_connection,
+    handle_connection,
+    handle_disconnection,
+};
+
+#[cfg(feature = "channels")]
+pub use api::{
+    publish_to_channel,
+    subscribe_to_channel,
+    unsubscribe_from_channel,
+};

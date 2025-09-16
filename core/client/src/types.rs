@@ -44,6 +44,20 @@ pub struct ClientCapabilities {
     pub platform: String,
 }
 
+impl Default for ClientCapabilities {
+    fn default() -> Self {
+        Self {
+            can_render: cfg!(feature = "rendering"),
+            can_play_audio: cfg!(feature = "audio"),
+            can_input: cfg!(feature = "input"),
+            render_backends: Vec::new(),
+            max_resolution: None,
+            multi_window: false,
+            platform: "unknown".to_string(),
+        }
+    }
+}
+
 /// Client configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ClientConfig {
@@ -61,6 +75,20 @@ pub struct ClientConfig {
     pub max_reconnect_attempts: u32,
     /// Client capabilities
     pub capabilities: ClientCapabilities,
+}
+
+impl Default for ClientConfig {
+    fn default() -> Self {
+        Self {
+            id: ClientId(0),
+            name: "Generic Client".to_string(),
+            version: "1.0.0".to_string(),
+            auto_reconnect: true,
+            reconnect_delay_ms: 1000,
+            max_reconnect_attempts: 5,
+            capabilities: ClientCapabilities::default(),
+        }
+    }
 }
 
 /// Render target information (generic, not graphics API specific)
@@ -99,4 +127,19 @@ pub struct ClientStats {
     pub bytes_received: u64,
     /// Current memory usage in bytes
     pub memory_usage: u64,
+}
+
+impl Default for ClientStats {
+    fn default() -> Self {
+        Self {
+            fps: 0.0,
+            frame_time_ms: 0.0,
+            total_frames: 0,
+            messages_sent: 0,
+            messages_received: 0,
+            bytes_sent: 0,
+            bytes_received: 0,
+            memory_usage: 0,
+        }
+    }
 }

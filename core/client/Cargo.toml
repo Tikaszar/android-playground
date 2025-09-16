@@ -12,9 +12,19 @@ path = "src/lib.rs"
 [dependencies]
 playground-core-types = { path = "../types" }
 playground-core-rendering = { path = "../rendering" }
+playground-core-ecs = { path = "../ecs" }
 serde = { workspace = true }
 serde_json = { workspace = true }
 async-trait = { workspace = true }
 tokio = { workspace = true }
 once_cell = { workspace = true }
 bytes = { workspace = true }
+bincode = { workspace = true }
+
+[features]
+default = ["rendering", "input"]
+rendering = []
+input = []
+audio = []
+wasm = []
+native = []
