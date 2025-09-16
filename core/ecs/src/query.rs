@@ -1,33 +1,130 @@
-//! Query contracts for the ECS
+//! Query system for the ECS
 //! 
-//! This defines the contract for querying entities and components.
+//! Provides entity querying using concrete types (no traits).
 
-use async_trait::async_trait;
-use crate::{ComponentId, EntityId, EcsResult};
+use crate::{ComponentId, EntityId};
 
-/// Query trait for finding entities with specific components
-/// 
-/// Queries are the primary way to find entities that match certain
-/// component criteria in the ECS.
-#[async_trait]
-pub trait Query: Send + Sync {
-    /// Add a required component to the query
-    fn with_component(self, component_id: ComponentId) -> Self where Self: Sized;
+/// Concrete query builder struct
+#[derive(Debug, Clone, Default)]
+pub struct Query {
+    /// Components that must be present
+    pub required: Vec<ComponentId>,
     
-    /// Add an excluded component to the query
-    fn without_component(self, component_id: ComponentId) -> Self where Self: Sized;
+    /// Components that must NOT be present
+    pub excluded: Vec<ComponentId>,
     
-    /// Add an optional component to the query
-    fn optional_component(self, component_id: ComponentId) -> Self where Self: Sized;
+    /// Optional tag filters
+    pub with_tags: Vec<String>,
+    pub without_tags: Vec<String>,
     
-    /// Execute the query and return matching entities
-    async fn execute(&self) -> EcsResult<Vec<EntityId>>;
+    /// Limit results
+    pub limit: Option<usize>,
+}
+
+impl Query {
+    /// Create a new empty query
+    pub fn new() -> Self {
+        Self::default()
+    }
     
-    /// Check if an entity matches this query
-    async fn matches(&self, entity: EntityId) -> bool;
+    /// Add a required component (builder pattern)
+    pub fn with_component(mut self, component_id: ComponentId) -> Self {
+        self.required.push(component_id);
+        self
+    }
     
-    /// Get the count of matching entities
-    async fn count(&self) -> usize {
-        self.execute().await.map(|e| e.len()).unwrap_or(0)
+    /// Add an excluded component (builder pattern)
+    pub fn without_component(mut self, component_id: ComponentId) -> Self {
+        self.excluded.push(component_id);
+        self
+    }
+    
+    /// Add a required tag (builder pattern)
+    pub fn with_tag(mut self, tag: String) -> Self {
+        self.with_tags.push(tag);
+        self
+    }
+    
+    /// Add an excluded tag (builder pattern)
+    pub fn without_tag(mut self, tag: String) -> Self {
+        self.without_tags.push(tag);
+        self
+    }
+    
+    /// Set result limit (builder pattern)
+    pub fn limit(mut self, limit: usize) -> Self {
+        self.limit = Some(limit);
+        self
+    }
+    
+    /// Check if an entity matches this query (given its components)
+    pub fn matches(&self, entity_components: &[ComponentId]) -> bool {
+        // Check all required components are present
+        for required in &self.required {
+            if !entity_components.contains(required) {
+                return false;
+            }
+        }
+        
+        // Check no excluded components are present
+        for excluded in &self.excluded {
+            if entity_components.contains(excluded) {
+                return false;
+            }
+        }
+        
+        true
+    }
+}
+
+/// Result of a query
+#[derive(Debug, Clone, Default)]
+pub struct QueryResult {
+    /// Entities that matched the query
+    pub entities: Vec<EntityId>,
+    
+    /// Total count before limit was applied
+    pub total_count: usize,
+}
+
+impl QueryResult {
+    /// Create a new query result
+    pub fn new(entities: Vec<EntityId>, total_count: usize) -> Self {
+        Self { entities, total_count }
+    }
+    
+    /// Check if the query returned any results
+    pub fn is_empty(&self) -> bool {
+        self.entities.is_empty()
+    }
+    
+    /// Get the number of entities returned
+    pub fn len(&self) -> usize {
+        self.entities.len()
+    }
+    
+    /// Iterate over the entities
+    pub fn iter(&self) -> std::slice::Iter<EntityId> {
+        self.entities.iter()
+    }
+}
+
+/// Query cache key for optimization
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct QueryKey {
+    required: Vec<ComponentId>,
+    excluded: Vec<ComponentId>,
+}
+
+impl QueryKey {
+    /// Create a cache key from a query
+    pub fn from_query(query: &Query) -> Self {
+        let mut required = query.required.clone();
+        required.sort_by_key(|id| id.0);
+        
+        let mut excluded = query.excluded.clone();
+        excluded.sort_by_key(|id| id.0);
+        
+        Self { required, excluded }
     }
 }

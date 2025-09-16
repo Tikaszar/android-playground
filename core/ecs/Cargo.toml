@@ -4,15 +4,15 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-# Core dependencies (contracts only need minimal deps)
-async-trait = { workspace = true }
+# Core dependencies only - no other core/* or systems/* packages!
+playground-core-types = { path = "../types" }
 bytes = { workspace = true }
 thiserror = { workspace = true }
 serde = { workspace = true }
-anyhow = { workspace = true }
-bincode = { workspace = true }
-once_cell = "1.20"
 tokio = { workspace = true }
+once_cell = "1.20"
+futures = { workspace = true }
+bincode = { workspace = true }
 
 [dev-dependencies]
 tokio-test = "0.4"

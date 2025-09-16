@@ -1,47 +1,198 @@
-//! Storage contracts for the ECS
+//! Storage system for components
+//! 
+//! Provides different storage strategies using concrete types.
 
-use async_trait::async_trait;
-use crate::entity::EntityId;
-use crate::error::EcsResult;
+use std::collections::HashMap;
+use playground_core_types::{Shared, shared};
+use crate::{Component, ComponentId, EntityId, CoreResult, CoreError};
 
-/// Storage type enumeration
+/// Storage type selection
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum StorageType {
+    /// Dense storage - good for common components
     Dense,
+    /// Sparse storage - good for rare components
     Sparse,
-    Pooled,
 }
 
-/// Trait for component storage implementations
-/// This is the contract that storage systems must implement
-#[async_trait]
-pub trait Storage: Send + Sync {
-    /// Get the storage type
-    fn storage_type(&self) -> StorageType;
+/// Concrete component storage
+pub struct ComponentStorage {
+    /// Storage type
+    pub storage_type: StorageType,
     
-    /// Check if an entity has this component
-    async fn contains(&self, entity: EntityId) -> bool;
+    /// Dense storage: entity index -> component
+    dense: Option<Shared<Vec<Option<Component>>>>,
     
-    /// Clear all components
-    async fn clear(&self) -> EcsResult<()>;
+    /// Sparse storage: entity -> component
+    sparse: Option<Shared<HashMap<EntityId, Component>>>,
+}
+
+impl ComponentStorage {
+    /// Create new storage of the specified type
+    pub fn new(storage_type: StorageType) -> Self {
+        match storage_type {
+            StorageType::Dense => Self {
+                storage_type,
+                dense: Some(shared(Vec::new())),
+                sparse: None,
+            },
+            StorageType::Sparse => Self {
+                storage_type,
+                dense: None,
+                sparse: Some(shared(HashMap::new())),
+            },
+        }
+    }
     
-    /// Get the number of components
-    async fn len(&self) -> usize;
+    /// Insert a component for an entity
+    pub async fn insert(&self, entity: EntityId, component: Component) -> CoreResult<()> {
+        match self.storage_type {
+            StorageType::Dense => {
+                let mut storage = self.dense.as_ref()
+                    .ok_or_else(|| CoreError::StorageError("Dense storage not initialized".into()))?
+                    .write().await;
+                
+                let index = entity.id() as usize;
+                
+                // Grow storage if needed
+                if index >= storage.len() {
+                    storage.resize(index + 1, None);
+                }
+                
+                storage[index] = Some(component);
+                Ok(())
+            }
+            StorageType::Sparse => {
+                let mut storage = self.sparse.as_ref()
+                    .ok_or_else(|| CoreError::StorageError("Sparse storage not initialized".into()))?
+                    .write().await;
+                
+                storage.insert(entity, component);
+                Ok(())
+            }
+        }
+    }
     
-    /// Check if storage is empty
-    async fn is_empty(&self) -> bool {
-        self.len().await == 0
+    /// Get a component for an entity
+    pub async fn get(&self, entity: EntityId) -> CoreResult<Component> {
+        match self.storage_type {
+            StorageType::Dense => {
+                let storage = self.dense.as_ref()
+                    .ok_or_else(|| CoreError::StorageError("Dense storage not initialized".into()))?
+                    .read().await;
+                
+                let index = entity.id() as usize;
+                
+                storage.get(index)
+                    .and_then(|opt| opt.as_ref())
+                    .cloned()
+                    .ok_or_else(|| CoreError::ComponentNotFound(entity, ComponentId(0)))
+            }
+            StorageType::Sparse => {
+                let storage = self.sparse.as_ref()
+                    .ok_or_else(|| CoreError::StorageError("Sparse storage not initialized".into()))?
+                    .read().await;
+                
+                storage.get(&entity)
+                    .cloned()
+                    .ok_or_else(|| CoreError::ComponentNotFound(entity, ComponentId(0)))
+            }
+        }
+    }
+    
+    /// Remove a component for an entity
+    pub async fn remove(&self, entity: EntityId) -> CoreResult<()> {
+        match self.storage_type {
+            StorageType::Dense => {
+                let mut storage = self.dense.as_ref()
+                    .ok_or_else(|| CoreError::StorageError("Dense storage not initialized".into()))?
+                    .write().await;
+                
+                let index = entity.id() as usize;
+                
+                if index < storage.len() {
+                    storage[index] = None;
+                }
+                Ok(())
+            }
+            StorageType::Sparse => {
+                let mut storage = self.sparse.as_ref()
+                    .ok_or_else(|| CoreError::StorageError("Sparse storage not initialized".into()))?
+                    .write().await;
+                
+                storage.remove(&entity);
+                Ok(())
+            }
+        }
+    }
+    
+    /// Check if entity has a component
+    pub async fn contains(&self, entity: EntityId) -> bool {
+        match self.storage_type {
+            StorageType::Dense => {
+                if let Some(storage) = &self.dense {
+                    let storage = storage.read().await;
+                    let index = entity.id() as usize;
+                    index < storage.len() && storage[index].is_some()
+                } else {
+                    false
+                }
+            }
+            StorageType::Sparse => {
+                if let Some(storage) = &self.sparse {
+                    let storage = storage.read().await;
+                    storage.contains_key(&entity)
+                } else {
+                    false
+                }
+            }
+        }
     }
     
     /// Get all entities with this component
-    async fn entities(&self) -> Vec<EntityId>;
+    pub async fn entities(&self) -> Vec<EntityId> {
+        match self.storage_type {
+            StorageType::Dense => {
+                if let Some(storage) = &self.dense {
+                    let storage = storage.read().await;
+                    storage.iter()
+                        .enumerate()
+                        .filter_map(|(index, opt)| {
+                            opt.as_ref().map(|_| EntityId::new(index as u32))
+                        })
+                        .collect()
+                } else {
+                    Vec::new()
+                }
+            }
+            StorageType::Sparse => {
+                if let Some(storage) = &self.sparse {
+                    let storage = storage.read().await;
+                    storage.keys().copied().collect()
+                } else {
+                    Vec::new()
+                }
+            }
+        }
+    }
     
-    /// Mark an entity as dirty
-    async fn mark_dirty(&self, entity: EntityId) -> EcsResult<()>;
-    
-    /// Get all dirty entities
-    async fn get_dirty(&self) -> Vec<EntityId>;
-    
-    /// Clear dirty flags
-    async fn clear_dirty(&self) -> EcsResult<()>;
+    /// Clear all components
+    pub async fn clear(&self) -> CoreResult<()> {
+        match self.storage_type {
+            StorageType::Dense => {
+                if let Some(storage) = &self.dense {
+                    let mut storage = storage.write().await;
+                    storage.clear();
+                }
+                Ok(())
+            }
+            StorageType::Sparse => {
+                if let Some(storage) = &self.sparse {
+                    let mut storage = storage.write().await;
+                    storage.clear();
+                }
+                Ok(())
+            }
+        }
+    }
 }

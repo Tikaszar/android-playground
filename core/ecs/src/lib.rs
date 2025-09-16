@@ -1,29 +1,35 @@
-//! Core ECS contracts and traits
+//! Core ECS - Foundation for the entire engine
 //! 
-//! This module defines ONLY the contracts (traits and types) for the ECS.
-//! All implementations live in systems/ecs.
+//! This provides the fundamental ECS infrastructure that all other packages build upon.
+//! Apps and Plugins import this PLUS the specific core/* packages they need.
+//! 
+//! Example usage:
+//! ```rust
+//! use playground_core_ecs::{World, Entity, Component, initialize_world};
+//! use playground_core_server::api as networking;  // Additional import for networking
+//! use playground_core_ui::api as ui;              // Additional import for UI
+//! ```
 
-pub mod component;
+// Core ECS modules (always available)
 pub mod entity;
-pub mod storage;
+pub mod component;
 pub mod error;
-pub mod messaging;
 pub mod world;
-pub mod system;
+pub mod vtable;
+pub mod registry;
+pub mod messaging;
 pub mod query;
-pub mod world_commands;
-pub mod world_access;
-pub mod system_commands;
+pub mod storage;
+pub mod system;
 
-// Re-export all public types
-pub use component::*;
+// Re-export core ECS types (always available)
 pub use entity::*;
-pub use storage::*;
+pub use component::*;
 pub use error::*;
-pub use messaging::*;
 pub use world::*;
-pub use system::*;
+pub use vtable::*;
+pub use registry::*;
+pub use messaging::*;
 pub use query::*;
-pub use world_commands::*;
-pub use world_access::*;
-pub use system_commands::*;
+pub use storage::*;
+pub use system::*;

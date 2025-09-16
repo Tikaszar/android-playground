@@ -1,26 +1,46 @@
 # CONTEXT.md - Current Session Context
 
-## Active Session - 2025-09-16 (Session 52)
+## Active Session - 2025-12-18 (Session 53)
 
 ### Goal
-Design and implement feature-gated core architecture where Apps/Plugins use ONLY core/ecs contracts.
+Complete rewrite of core/ecs with VTable architecture for clean separation between core/* and systems/*.
 
 ### Current Status
-**Architecture Design**: ✅ COMPLETE - Revolutionary feature-gated architecture designed
-**Core Layer**: ⏳ PENDING REWRITE - Will implement pure contracts + VTables
-**Systems Layer**: ⏳ PENDING REWRITE - Will register VTables with World
-**Plugin Layer**: ⏳ PENDING REWRITE - Will use only core/ecs
-**Overall Status**: Major architectural breakthrough achieved, ready for implementation
+**Architecture Design**: ✅ COMPLETE - VTable architecture fully designed and documented
+**Core/ECS Rewrite**: ✅ COMPLETE - All core modules rewritten as concrete types
+**Systems Layer**: ⏳ PENDING - Will register handlers with VTable
+**Plugin Layer**: ⏳ PENDING - Will use core/* packages directly
+**Overall Status**: Core/ecs foundation complete, ready for system integration
 
-### Session 52 Accomplishments
+### Session 53 Accomplishments
 
-Successfully designed revolutionary new architecture:
+1. **Created DESIGN.md** - Complete architecture documentation in core/ecs/DESIGN.md
+2. **Completely rewrote core/ecs**:
+   - `vtable.rs` - Generic VTable for capability registration
+   - `world.rs` - Concrete World struct with VTable
+   - `registry.rs` - Global World instance management
+   - `component.rs` - Concrete Component struct (no dyn)
+   - `entity.rs` - Entity ID system with generations
+   - `messaging.rs` - Concrete MessageBus implementation
+   - `query.rs` - Concrete Query builder
+   - `storage.rs` - Concrete ComponentStorage
+   - `system.rs` - Concrete System and SystemScheduler
+   - `error.rs` - Clear error boundaries
 
-1. **Eliminated systems/logic entirely** - Massive simplification
-2. **Apps/Plugins use ONLY core/ecs** - Single import for all contracts
-3. **Feature-gated capabilities** - Compile-time + runtime flexibility
-4. **VTable-based dispatch** - True implementation independence
-5. **Comprehensive capability taxonomy** - All features identified
+3. **Clarified architecture**:
+   - core/ecs provides foundation, knows nothing about other packages
+   - Other core/* packages define contracts and APIs
+   - Systems implement contracts and register with VTable
+   - Apps/Plugins use core/ecs + specific core/* packages needed
+
+### Architecture Summary
+
+- **NO Single Import**: Apps import core/ecs + needed core/* packages
+- **Clean Separation**: core/ecs never depends on other packages
+- **Concrete Types**: NO dyn, NO traits for contracts
+- **Generic VTable**: String-based capability registration
+- **API Ownership**: Each core/* package owns its API
+- **Clear Boundaries**: Compile errors for missing packages, runtime errors for unregistered systems
 
 ### Session 51 Accomplishments (Previous)
 
