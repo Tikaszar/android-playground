@@ -69,7 +69,7 @@ pub struct AudioTrackInfo {
 
 /// Audio format information
 #[cfg(feature = "audio")]
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, serde::Serialize, serde::Deserialize)]
 pub struct AudioFormat {
     pub sample_rate: u32,
     pub channels: u8,

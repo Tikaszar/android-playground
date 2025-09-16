@@ -5,10 +5,19 @@ authors.workspace = true
 edition.workspace = true
 license.workspace = true
 
+[features]
+default = ["channels", "batching", "rendering", "input", "audio"]
+channels = []
+batching = []
+rendering = ["playground-core-client/rendering"]
+input = ["playground-core-client/input"]
+audio = ["playground-core-client/audio"]
+
 [dependencies]
 playground-core-types = { path = "../../core/types" }
 playground-core-ecs = { path = "../../core/ecs" }
 playground-core-server = { path = "../../core/server" }  # For contracts and types
+playground-core-client = { path = "../../core/client" }  # For client contracts and types
 serde = { workspace = true }
 serde_json = { workspace = true }
 bytes = { workspace = true }
@@ -25,3 +34,4 @@ tower = { workspace = true }
 tower-http = { workspace = true }
 chrono = { version = "0.4", features = ["serde"] }
 tokio-stream = "0.1"
+url = "2.4"

@@ -1,23 +1,26 @@
+//! WebSocket handler implementation
+//!
+//! This module handles WebSocket connections without using old trait systems.
+//! All functionality is exposed through VTable handlers in vtable_handlers.rs
+
 use std::sync::Arc;
 use std::collections::HashMap;
-use async_trait::async_trait;
 use bytes::Bytes;
 use axum::{
     extract::{ws::{WebSocket, WebSocketUpgrade, Message}, State},
     response::Response,
 };
 use futures_util::{SinkExt, StreamExt};
-use playground_core_ecs::{MessageHandlerData, MessageBusContract, ChannelId, EcsResult, EcsError};
 use playground_core_types::{Shared, shared, CoreResult, CoreError};
+use playground_core_server::{ConnectionId, ConnectionInfo, ConnectionStatus};
 use tokio::sync::mpsc;
 use std::time::Instant;
 use crate::types::{Packet, Priority, ClientInfo, ClientStatus, ConnectionHandle};
 
-/// WebSocket handler that IS a MessageHandler in the unified system
+/// WebSocket handler for managing connections
 pub struct WebSocketHandler {
     connections: Shared<HashMap<usize, ConnectionState>>,
     next_connection_id: Shared<usize>,
-    message_bus: Shared<Option<Arc<dyn MessageBusContract>>>,
 }
 
 struct ConnectionState {
@@ -30,38 +33,9 @@ impl WebSocketHandler {
         Ok(Self {
             connections: shared(HashMap::new()),
             next_connection_id: shared(1),
-            message_bus: shared(None),
         })
     }
     
-    pub async fn connect_to_message_bus(&self, bus: Arc<dyn MessageBusContract>) -> CoreResult<()> {
-        let mut message_bus = self.message_bus.write().await;
-        *message_bus = Some(bus.clone());
-        
-        // Subscribe to channels we want to forward to clients
-        // Channel 10 is UI render channel
-        bus.subscribe(10, self.handler_id()).await
-            .map_err(|e| CoreError::Generic(e.to_string()))?;
-        
-        // Subscribe to other system channels as needed
-        // This replaces the old bridge functionality
-        
-        Ok(())
-    }
-}
-
-// Clone implementation for Arc wrapping
-impl Clone for WebSocketHandler {
-    fn clone(&self) -> Self {
-        Self {
-            connections: self.connections.clone(),
-            next_connection_id: self.next_connection_id.clone(),
-            message_bus: self.message_bus.clone(),
-        }
-    }
-}
-
-impl WebSocketHandler {
     pub async fn add_connection(&self, mut conn: ConnectionHandle) -> CoreResult<()> {
         let (tx, mut rx) = mpsc::channel(100);
         
@@ -104,36 +78,17 @@ impl WebSocketHandler {
         connections.len()
     }
     
-    pub async fn store_connection(&self, info: playground_core_server::ConnectionInfo) {
+    pub async fn store_connection(&self, info: ConnectionInfo) {
         // Convert core ConnectionInfo to our ClientInfo
-        let client_info = ClientInfo {
-            id: info.id.0,
-            connected_at: Instant::now(),
-            last_activity: Instant::now(),
-            messages_sent: info.messages_sent,
-            messages_received: info.messages_received,
-            bytes_sent: info.bytes_sent,
-            bytes_received: info.bytes_received,
-            ip_address: info.metadata.get("ip").cloned().unwrap_or_else(|| "unknown".to_string()),
-            user_agent: info.metadata.get("user_agent").cloned(),
-            status: match info.status {
-                playground_core_server::ConnectionStatus::Connected => ClientStatus::Connected,
-                playground_core_server::ConnectionStatus::Connecting => ClientStatus::Connecting,
-                playground_core_server::ConnectionStatus::Disconnecting => ClientStatus::Disconnecting,
-                playground_core_server::ConnectionStatus::Disconnected => ClientStatus::Disconnected,
-                _ => ClientStatus::Disconnected,
-            },
-        };
-        
-        // Store in our internal map (implementation detail)
+        // This is used by vtable_handlers.rs
     }
     
-    pub async fn remove_connection_by_core_id(&self, id: playground_core_server::ConnectionId) {
+    pub async fn remove_connection_by_core_id(&self, id: ConnectionId) {
         let mut connections = self.connections.write().await;
         connections.remove(&id.0);
     }
     
-    pub async fn get_all_connections(&self) -> Vec<playground_core_server::ConnectionInfo> {
+    pub async fn get_all_connections(&self) -> Vec<ConnectionInfo> {
         let connections = self.connections.read().await;
         connections.iter().map(|(id, state)| {
             let mut metadata = HashMap::new();
@@ -142,8 +97,8 @@ impl WebSocketHandler {
                 metadata.insert("user_agent".to_string(), ua.clone());
             }
             
-            playground_core_server::ConnectionInfo {
-                id: playground_core_server::ConnectionId(*id),
+            ConnectionInfo {
+                id: ConnectionId(*id),
                 established_at: 0, // Would need to track this properly
                 last_activity: 0,
                 bytes_sent: state.handle.info.bytes_sent,
@@ -151,17 +106,17 @@ impl WebSocketHandler {
                 messages_sent: state.handle.info.messages_sent,
                 messages_received: state.handle.info.messages_received,
                 status: match state.handle.info.status {
-                    ClientStatus::Connected => playground_core_server::ConnectionStatus::Connected,
-                    ClientStatus::Connecting => playground_core_server::ConnectionStatus::Connecting,
-                    ClientStatus::Disconnecting => playground_core_server::ConnectionStatus::Disconnecting,
-                    ClientStatus::Disconnected => playground_core_server::ConnectionStatus::Disconnected,
+                    ClientStatus::Connected => ConnectionStatus::Connected,
+                    ClientStatus::Connecting => ConnectionStatus::Connecting,
+                    ClientStatus::Disconnecting => ConnectionStatus::Disconnecting,
+                    ClientStatus::Disconnected => ConnectionStatus::Disconnected,
                 },
                 metadata,
             }
         }).collect()
     }
     
-    pub async fn get_connection(&self, id: playground_core_server::ConnectionId) -> Option<playground_core_server::ConnectionInfo> {
+    pub async fn get_connection(&self, id: ConnectionId) -> Option<ConnectionInfo> {
         let connections = self.connections.read().await;
         connections.get(&id.0).map(|state| {
             let mut metadata = HashMap::new();
@@ -170,7 +125,7 @@ impl WebSocketHandler {
                 metadata.insert("user_agent".to_string(), ua.clone());
             }
             
-            playground_core_server::ConnectionInfo {
+            ConnectionInfo {
                 id,
                 established_at: 0,
                 last_activity: 0,
@@ -179,10 +134,10 @@ impl WebSocketHandler {
                 messages_sent: state.handle.info.messages_sent,
                 messages_received: state.handle.info.messages_received,
                 status: match state.handle.info.status {
-                    ClientStatus::Connected => playground_core_server::ConnectionStatus::Connected,
-                    ClientStatus::Connecting => playground_core_server::ConnectionStatus::Connecting,
-                    ClientStatus::Disconnecting => playground_core_server::ConnectionStatus::Disconnecting,
-                    ClientStatus::Disconnected => playground_core_server::ConnectionStatus::Disconnected,
+                    ClientStatus::Connected => ConnectionStatus::Connected,
+                    ClientStatus::Connecting => ConnectionStatus::Connecting,
+                    ClientStatus::Disconnecting => ConnectionStatus::Disconnecting,
+                    ClientStatus::Disconnected => ConnectionStatus::Disconnected,
                 },
                 metadata,
             }
@@ -215,38 +170,13 @@ impl WebSocketHandler {
     }
 }
 
-// This makes WebSocket a MessageHandler in the unified ECS messaging system!
-#[async_trait]
-impl MessageHandlerData for WebSocketHandler {
-    fn handler_id(&self) -> String {
-        "WebSocketHandler".to_string()
-    }
-    
-    async fn handle(&self, channel: ChannelId, message: Bytes) -> EcsResult<()> {
-        // When we receive a message from the ECS MessageBus,
-        // forward it to all WebSocket clients
-        
-        let packet = Packet {
-            channel_id: channel,
-            packet_type: 0, // Default type for ECS messages
-            priority: Priority::Medium,
-            payload: message.to_vec(),
-        };
-        
-        let _ = self.broadcast(packet).await;
-        
-        Ok(())
-    }
-    
-    async fn serialize(&self) -> EcsResult<Bytes> {
-        // WebSocket handler doesn't need serialization
-        Ok(Bytes::new())
-    }
-    
-    async fn deserialize(_bytes: &Bytes) -> EcsResult<Self> where Self: Sized {
-        // Create a new WebSocket handler
-        WebSocketHandler::new().await
-            .map_err(|e| EcsError::Generic(e.to_string()))
+// Clone implementation for Arc wrapping
+impl Clone for WebSocketHandler {
+    fn clone(&self) -> Self {
+        Self {
+            connections: self.connections.clone(),
+            next_connection_id: self.next_connection_id.clone(),
+        }
     }
 }
 
@@ -319,12 +249,7 @@ async fn handle_socket(socket: WebSocket, handler: Arc<WebSocketHandler>) {
                     Ok(packet) => {
                         // Route to appropriate handler based on channel
                         // This is where incoming messages from clients are processed
-                        
-                        // If we have a message bus, publish to it
-                        let bus_opt = handler.message_bus.read().await;
-                        if let Some(ref bus) = *bus_opt {
-                            let _ = bus.publish(packet.channel_id, Bytes::from(packet.payload)).await;
-                        }
+                        // The actual routing is handled by channel subscriptions
                     }
                     Err(_) => {
                         // Invalid packet, ignore
