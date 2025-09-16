@@ -1,17 +1,28 @@
 # CONTEXT.md - Current Session Context
 
-## Active Session - 2025-09-16 (Session 51)
+## Active Session - 2025-09-16 (Session 52)
 
 ### Goal
-Fix all architectural violations in the `core` layer identified in Session 50's audit.
+Design and implement feature-gated core architecture where Apps/Plugins use ONLY core/ecs contracts.
 
 ### Current Status
-**Core Architecture**: ✅ FULLY COMPLIANT - All architectural violations have been fixed
-**Systems Architecture**: ❌ NOT ALIGNED - Multiple systems require rewrites (next priority)
-**Plugin Architecture**: ❌ NOT ALIGNED - All IDE plugins require complete rewrite
-**Overall Status**: ✅ Core layer complete, ready to proceed with systems layer refactoring
+**Architecture Design**: ✅ COMPLETE - Revolutionary feature-gated architecture designed
+**Core Layer**: ⏳ PENDING REWRITE - Will implement pure contracts + VTables
+**Systems Layer**: ⏳ PENDING REWRITE - Will register VTables with World
+**Plugin Layer**: ⏳ PENDING REWRITE - Will use only core/ecs
+**Overall Status**: Major architectural breakthrough achieved, ready for implementation
 
-### Session 51 Accomplishments
+### Session 52 Accomplishments
+
+Successfully designed revolutionary new architecture:
+
+1. **Eliminated systems/logic entirely** - Massive simplification
+2. **Apps/Plugins use ONLY core/ecs** - Single import for all contracts
+3. **Feature-gated capabilities** - Compile-time + runtime flexibility
+4. **VTable-based dispatch** - True implementation independence
+5. **Comprehensive capability taxonomy** - All features identified
+
+### Session 51 Accomplishments (Previous)
 
 Successfully fixed all core layer architectural violations:
 
@@ -74,11 +85,15 @@ The architectural audit of all engine layers revealed:
 
 ### Critical Architecture Principles (Must Remember)
 
-1. **`core` is for Generic Primitives Only**: The `core` layer must only define contracts for universal, application-agnostic primitives (ECS, messaging, rendering).
-2. **`systems` are Private Implementations**: Systems crates are concrete, private implementations of the `core` contracts. They must not expose a public API and should only be interacted with via the command processors defined in `core`.
-3. **`systems/logic` is the Sole Public API**: This is the only crate that exposes a public API for the engine.
-4. **`plugins` are Consumers of the Public API**: Plugins must *only* depend on `systems/logic` and interact with the engine exclusively through its public API.
-5. **Strict Isolation**: `systems` cannot depend on other `systems`. `plugins` cannot depend on `systems` (except `logic`) or other `plugins`.
+**SESSION 52 UPDATE - Revolutionary Architecture:**
+
+1. **`core/ecs` is the ONLY public interface**: Apps and Plugins import ONLY `playground-core-ecs`, which provides all contracts through feature gates.
+2. **`core` packages define contracts + VTables**: Pure contracts with VTable structs for runtime dispatch. NO implementation.
+3. **`systems` are Private Implementations**: Systems implement core contracts and register VTables with World at runtime.
+4. **NO `systems/logic`**: This layer has been eliminated. The architecture is now simpler: Apps/Plugins → core/ecs → VTable dispatch → systems.
+5. **Feature-gated capabilities**: Compile-time features determine what CAN be available, runtime VTable registration determines what IS available.
+6. **Strict Isolation**: Systems cannot depend on other systems. Apps/Plugins cannot depend on systems, only core/ecs.
+7. **VTable-based dispatch**: All cross-system communication happens through VTables registered in the World as resources.
 
 ### Project State Overview
 - **Build**: ⚠️ NEEDS TESTING - Major architectural changes need compilation check

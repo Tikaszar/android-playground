@@ -1,5 +1,94 @@
 # HISTORY.md - Development Session History
 
+## Session: 2025-09-16 - Revolutionary Architecture Design: core/ecs as Universal Contract (Session 52)
+
+### Major Achievement: Designed Feature-Gated Core Architecture
+
+This session established a revolutionary new architecture where Apps and Plugins use ONLY `core/ecs` - the pure contract layer. All implementations become runtime details selected through VTable dispatch.
+
+### Key Architectural Breakthrough
+
+**Old Architecture** (Session 51 and earlier):
+```
+Apps/Plugins → systems/logic (API gateway) → systems/ecs → other systems
+```
+
+**New Architecture** (Session 52):
+```
+Apps/Plugins → core/ecs (contracts only) → [Runtime VTable dispatch] → systems/*
+```
+
+### Revolutionary Design Principles
+
+1. **Apps/Plugins import ONLY core/ecs** - Single import provides all contracts
+2. **True implementation independence** - Apps have zero knowledge of implementations
+3. **Feature-gated capabilities** - Optional features available through Cargo features
+4. **VTable-based dispatch** - Runtime selection of implementations
+5. **Eliminated systems/logic entirely** - Massive simplification
+
+### Feature-Gating System Design
+
+**Two-Phase Model**:
+- **Compile-time**: Cargo features determine what capabilities CAN be available
+- **Runtime**: VTable registration determines what IS available
+
+**Capability Taxonomy Created**:
+- Comprehensive feature matrix for all core packages
+- Base capabilities (always available) vs Optional capabilities (feature-gated)
+- Composite capabilities that depend on multiple features
+- Version evolution support (e.g., rendering-v1, rendering-v2)
+
+### Core Package Restructuring Plan
+
+Each core package will have:
+- **Base contracts** - Minimal functionality always available
+- **Optional contracts** - Feature-gated extensions
+- **VTable structs** - For runtime dispatch
+- **NO implementation** - Pure contracts only
+
+Example features identified:
+- **core/rendering**: instancing, compute, raytracing, tessellation, HDR, PBR
+- **core/networking**: websocket, compression, encryption, HTTP/2, gRPC, P2P
+- **core/ui**: animations, accessibility, IME, RTL text, virtualization
+- **core/ecs**: parallel execution, hot-reload, networking, persistence, scripting
+
+### Implementation Strategy
+
+```rust
+// Apps/Plugins code - completely generic
+use playground_core_ecs::{
+    World, Entity, Component,
+    #[cfg(feature = "rendering")]
+    rendering::Renderer,
+};
+
+fn my_app(world: &World) {
+    // Uses contracts, not implementations
+    // Could be WebGL, Vulkan, Software - app doesn't know!
+    let renderer = world.capability::<dyn Renderer>()?;
+    renderer.clear(Color::BLACK)?;
+}
+```
+
+### Benefits Achieved
+
+1. **Perfect abstraction** - No implementation details can leak to apps
+2. **Single dependency** - Apps only need `playground-core-ecs`
+3. **Runtime flexibility** - Swap implementations without recompiling apps
+4. **Feature discovery** - Apps can query available capabilities at runtime
+5. **True plugin architecture** - Plugins work with ANY implementation
+
+### Next Steps
+
+With this design complete, the implementation will involve:
+1. Rewriting core/ecs with feature-gated capability contracts
+2. Adding VTable registration system to World
+3. Updating all core packages to define contracts + VTables
+4. Rewriting systems to register their VTables
+5. Updating Apps/Plugins to use only core/ecs
+
+This represents the most significant architectural improvement since the project's inception, providing unprecedented flexibility and clean separation of concerns.
+
 ## Session: 2025-09-16 - Core Layer Architectural Compliance (Session 51)
 
 ### Major Achievement: Fixed All Core Layer Architectural Violations
