@@ -1,33 +1,34 @@
 # Context - Session Continuity
 
-## Session 60 In Progress 🔄
-Complete rewrite of core/rendering:
-1. ✅ Created proper ECS-based architecture
-2. ✅ All resources are components
-3. ✅ Proper feature flags throughout
-4. ✅ Type aliases (Float, Int, UInt)
-5. ✅ Fixed all compilation errors
+## Session 61 In Progress 🔄
+Entity/EntityRef handle system:
+1. ✅ Created Entity and EntityRef handle types
+2. ✅ Added generation tracking for validity
+3. ✅ Updated core/rendering to use EntityRef
+4. ✅ Updated systems/ecs with validate/has operations
+5. ✅ All core packages compile successfully
 
 ## Key Accomplishments
+- Implemented Entity/EntityRef handle system for safe references
 - Completely rewrote core/rendering with proper architecture
 - Everything is a component (including resources)
-- No immediate mode - all batched and async
-- Proper subdirectory structure (2d/, 3d/, shared/)
-- One component per file
-- All feature-gated appropriately
+- Generation tracking prevents dangling references
+- All core packages compile successfully
 
 ## Pattern Established
 ```rust
-// Resources as components
-let texture = world.create_entity();
-world.add_component(texture, Texture { ... });
+// Safe entity handles with automatic validity checking
+let entity = world.spawn_entity().await?;  // Returns Entity
+entity.add_component(component).await?;     // Direct methods
 
-// Reference resources via EntityId
-let sprite = world.create_entity();
-world.add_component(sprite, Sprite {
-    texture: Some(texture),  // EntityId reference
+// Weak references for components
+let sprite = Sprite {
+    texture: Some(other_entity.downgrade()),  // EntityRef
     ...
-});
+};
+
+// Automatic invalidation on despawn
+entity.despawn().await?;  // All EntityRefs become invalid
 ```
 
 ## Next Session Tasks

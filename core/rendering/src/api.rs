@@ -5,7 +5,7 @@
 
 use once_cell::sync::Lazy;
 use playground_core_types::{Handle, CoreResult};
-use playground_core_ecs::EntityId;
+use playground_core_ecs::{Entity, EntityRef};
 use crate::{Renderer, RendererConfig, RendererCapabilities, RendererStats};
 use crate::commands::RenderCommand;
 use crate::types::*;

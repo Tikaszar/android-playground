@@ -4,7 +4,7 @@
 
 use bytes::Bytes;
 use playground_core_types::{CoreResult, CoreError};
-use playground_core_ecs::EntityId;
+use playground_core_ecs::{Entity, EntityRef};
 use crate::{Renderer, RendererConfig};
 use crate::types::*;
 
@@ -69,8 +69,9 @@ impl Renderer {
     }
 
     /// Begin a new frame (delegated via VTable)
-    pub async fn begin_frame(&self, camera: EntityId) -> CoreResult<()> {
-        let payload = bincode::serialize(&camera)
+    pub async fn begin_frame(&self, camera: &Entity) -> CoreResult<()> {
+        // Serialize the entity's ID for VTable communication
+        let payload = bincode::serialize(&camera.id())
             .map_err(|e| CoreError::SerializationError(e.to_string()))?;
 
         let response = self.vtable.send_command(

@@ -60,7 +60,16 @@ pub enum CoreError {
     
     #[error("Entity {0} not found")]
     EntityNotFound(EntityIdError),
-    
+
+    #[error("Entity {0} has expired (generation mismatch)")]
+    ExpiredEntity(EntityIdError),
+
+    #[error("Invalid entity reference")]
+    InvalidEntity,
+
+    #[error("Generation mismatch for entity {0}")]
+    GenerationMismatch(EntityIdError),
+
     #[error("Component {1} not found on entity {0}")]
     ComponentNotFound(EntityIdError, ComponentIdError),
     

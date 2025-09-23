@@ -78,6 +78,12 @@ async fn handle_entity_command(world: &Handle<playground_core_ecs::World>, opera
             WorldImpl::despawn_entity(world, entity).await?;
             Ok(Bytes::new())
         },
+        "validate" => {
+            let (id, generation): (EntityId, Generation) = bincode::deserialize(&payload)
+                .map_err(|e| CoreError::DeserializationError(e.to_string()))?;
+            let is_valid = WorldImpl::validate_entity(world, id, generation).await?;
+            Ok(Bytes::from(vec![is_valid as u8]))
+        },
         _ => Err(CoreError::Generic(format!("Unknown entity operation: {}", operation)))
     }
 }
@@ -169,6 +175,12 @@ async fn handle_component_command(world: &Handle<playground_core_ecs::World>, op
             let component = WorldImpl::get_component(world, entity, component_id).await?;
             // Return just the component data - the caller already knows the component_id
             Ok(component.data)
+        },
+        "has" => {
+            let (entity, component_id): (EntityId, ComponentId) = bincode::deserialize(&payload)
+                .map_err(|e| CoreError::DeserializationError(e.to_string()))?;
+            let has = WorldImpl::has_component(world, entity, component_id).await;
+            Ok(Bytes::from(vec![has as u8]))
         },
         _ => Err(CoreError::Generic(format!("Unknown component operation: {}", operation)))
     }

@@ -33,7 +33,7 @@ impl EntityAllocator {
                 id
             }
         };
-        
+
         // Ensure generations vector is large enough
         {
             let mut generations = self.generations.write().await;
@@ -41,13 +41,8 @@ impl EntityAllocator {
                 generations.push(0);
             }
         }
-        
-        let generation = {
-            let generations = self.generations.read().await;
-            generations[id as usize]
-        };
-        
-        EntityId::new(id, Generation::new(generation))
+
+        EntityId::new(id)
     }
     
     /// Allocate a batch of entity IDs
@@ -78,14 +73,10 @@ impl EntityAllocator {
     /// Check if an entity ID is valid
     pub async fn is_valid(&self, entity: EntityId) -> bool {
         let id = entity.index();
-        let generation = entity.generation().value();
-        
-        let generations = self.generations.read().await;
-        if (id as usize) < generations.len() {
-            generations[id as usize] == generation
-        } else {
-            false
-        }
+
+        // Just check if the ID has been allocated
+        let next_id = self.next_id.read().await;
+        id < *next_id && !self.free_list.read().await.contains(&id)
     }
     
     /// Get statistics about the allocator

@@ -1,7 +1,7 @@
 //! Render command definitions
 
 use serde::{Serialize, Deserialize};
-use playground_core_ecs::EntityId;
+use playground_core_ecs::{Entity, EntityRef};
 use crate::types::*;
 
 /// Render commands that can be submitted to the renderer
@@ -9,7 +9,7 @@ use crate::types::*;
 pub enum RenderCommand {
     // Frame control
     BeginFrame {
-        camera: EntityId,
+        camera: EntityRef,
     },
 
     EndFrame,
@@ -25,11 +25,11 @@ pub enum RenderCommand {
 
     // Entity-based rendering
     RenderEntity {
-        entity: EntityId,
+        entity: EntityRef,
     },
 
     RenderEntities {
-        entities: Vec<EntityId>,
+        entities: Vec<EntityRef>,
     },
 
     RenderLayer {
@@ -51,20 +51,20 @@ pub enum RenderCommand {
     // Resource operations
     #[cfg(feature = "textures")]
     LoadTexture {
-        entity: EntityId,
+        entity: EntityRef,
         data: Vec<u8>,
     },
 
     #[cfg(feature = "buffers")]
     LoadMesh {
-        entity: EntityId,
+        entity: EntityRef,
         vertices: Vec<u8>,
         indices: Vec<u8>,
     },
 
     #[cfg(feature = "shaders")]
     CompileShader {
-        entity: EntityId,
+        entity: EntityRef,
         source: String,
         shader_type: ShaderStage,
     },

@@ -18,29 +18,35 @@ impl WorldImpl {
     /// Spawn a new entity in the World
     pub async fn spawn_entity(world: &Handle<World>) -> CoreResult<EntityId> {
         let id = world.next_entity_id.fetch_add(1, Ordering::SeqCst);
-        let entity_id = EntityId::new(id, Generation::new(0));
-        
+        let entity_id = EntityId::new(id);
+
+        // New entities start at Generation 1
         let mut entities = world.entities.write().await;
-        entities.insert(entity_id, Generation::new(0));
+        entities.insert(entity_id, Generation::new());
         drop(entities);
-        
+
         let mut components = world.components.write().await;
         components.insert(entity_id, HashMap::new());
-        
+
         Ok(entity_id)
     }
     
     /// Despawn an entity from the World
     pub async fn despawn_entity(world: &Handle<World>, entity: EntityId) -> CoreResult<()> {
         let mut entities = world.entities.write().await;
-        if entities.remove(&entity).is_none() {
+
+        // Increment generation to mark as invalid (for future reuse)
+        if let Some(generation) = entities.get_mut(&entity) {
+            generation.increment();
+        } else {
             return Err(entity_not_found(entity));
         }
         drop(entities);
-        
+
+        // Remove components
         let mut components = world.components.write().await;
         components.remove(&entity);
-        
+
         Ok(())
     }
     
@@ -139,7 +145,17 @@ impl WorldImpl {
         let components = world.components.read().await;
         let entity_components = components.get(&entity)
             .ok_or_else(|| entity_not_found(entity))?;
-        
+
         Ok(entity_components.values().cloned().collect())
+    }
+
+    /// Validate an entity's existence and generation
+    pub async fn validate_entity(world: &Handle<World>, id: EntityId, generation: Generation) -> CoreResult<bool> {
+        let entities = world.entities.read().await;
+
+        match entities.get(&id) {
+            Some(current_gen) => Ok(*current_gen == generation),
+            None => Ok(false),
+        }
     }
 }

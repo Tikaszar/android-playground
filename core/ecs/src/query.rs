@@ -1,8 +1,8 @@
 //! Query system for the ECS
-//! 
+//!
 //! Provides entity querying using concrete types (no traits).
 
-use crate::{ComponentId, EntityId};
+use crate::{ComponentId, Entity};
 
 /// Concrete query builder struct
 #[derive(Debug, Clone, Default)]
@@ -78,34 +78,39 @@ impl Query {
 }
 
 /// Result of a query
-#[derive(Debug, Clone, Default)]
+#[derive(Clone)]
 pub struct QueryResult {
     /// Entities that matched the query
-    pub entities: Vec<EntityId>,
-    
+    pub entities: Vec<Entity>,
+
     /// Total count before limit was applied
     pub total_count: usize,
 }
 
 impl QueryResult {
     /// Create a new query result
-    pub fn new(entities: Vec<EntityId>, total_count: usize) -> Self {
+    pub fn new(entities: Vec<Entity>, total_count: usize) -> Self {
         Self { entities, total_count }
     }
-    
+
     /// Check if the query returned any results
     pub fn is_empty(&self) -> bool {
         self.entities.is_empty()
     }
-    
+
     /// Get the number of entities returned
     pub fn len(&self) -> usize {
         self.entities.len()
     }
-    
+
     /// Iterate over the entities
-    pub fn iter(&self) -> std::slice::Iter<EntityId> {
+    pub fn iter(&self) -> std::slice::Iter<Entity> {
         self.entities.iter()
+    }
+
+    /// Iterate over mutable entities
+    pub fn iter_mut(&mut self) -> std::slice::IterMut<Entity> {
+        self.entities.iter_mut()
     }
 }
 

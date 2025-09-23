@@ -1,62 +1,66 @@
 # Current Session - Active Work
 
-## Session 60: IN PROGRESS
+## Session 61: IN PROGRESS
 
 ### Session Goal
-Complete rewrite of core/rendering with proper ECS integration and feature flags
+Implement Entity/EntityRef handle system for safe entity references
 
 ### Work Completed This Session
 
-#### 1. Complete core/rendering rewrite
-- Redesigned with proper ECS integration
+#### 1. Entity Handle System Implementation
+- Created Entity (strong reference) and EntityRef (weak reference) types
+- Added Generation tracking for entity validity
+- Prevents dangling entity references
+- Clear ownership semantics (Entity vs EntityRef)
+
+#### 2. Core/ECS Updates
+- Changed World APIs to return Entity handles instead of EntityId
+- Added entity validation with generation checking
+- EntityId now internal-only (u32 wrapper)
+- Added new error types: InvalidEntity, ExpiredEntity, GenerationMismatch
+
+#### 3. Core/Rendering Updates
+- All components now use EntityRef for entity references
+- Sprite: texture is EntityRef
+- MeshRenderer: mesh and material are EntityRef
+- Material: shader and textures use EntityRef
+- RenderCommand variants use EntityRef
+
+#### 4. Systems/ECS Updates
+- Added "validate" VTable operation for entity/generation validation
+- Added "has" VTable operation for component checks
+- Updated world_impl to track entity generations
+- Fixed all EntityId constructor calls to single parameter
+
+#### 5. Previous Session Work (Session 60)
+- Complete core/rendering rewrite with proper ECS integration
 - Everything is a component (resources too)
-- No immediate mode - all batched, async, multithreaded
-- Proper separation: rendering for graphics, UI goes in core/ui
-
-#### 2. Created proper component structure
-- Created subdirectories: `2d/`, `3d/`, `shared/`
-- One component per file (NO BATCHING as requested)
-- All properly feature-gated:
-  - `core-2d` for 2D components
-  - `core-3d` for 3D components
-  - `textures`, `shaders`, `buffers` for resources
-  - Many more granular features
-
-#### 3. Type system improvements
-- Added type aliases (Float, Int, UInt, etc.)
-- Used consistently throughout
-- No more hardcoded f32, u32, etc.
-
-#### 4. Fixed all compilation errors
-- Fixed EntityId imports (was using wrong Entity type)
-- Created missing modules (operations.rs, api.rs)
-- Fixed all component imports
-- Result: ✅ Zero compilation errors
-
-#### 5. Key architectural decisions
-- Resources ARE components on entities
-- Textures, Meshes, Materials - all components
-- RenderCommand works with entities, not raw data
-- Systems/webgl will query ECS for what to render
-- Batching happens automatically by querying components
+- Proper feature flags throughout
+- Type aliases (Float, Int, UInt) used consistently
 
 ### Architecture Established
 
 ```rust
-// Everything is ECS-based
-let texture_entity = world.create_entity();
-world.add_component(texture_entity, Texture { ... });
+// Safe entity references with Entity/EntityRef
+let texture_entity = world.spawn_entity().await?;  // Returns Entity handle
+texture_entity.add_component(Texture { ... }).await?;
 
-let sprite_entity = world.create_entity();
-world.add_component(sprite_entity, Transform2D { ... });
-world.add_component(sprite_entity, Sprite {
-    texture: Some(texture_entity),  // Reference to texture entity!
+let sprite_entity = world.spawn_entity().await?;
+sprite_entity.add_component(Transform2D { ... }).await?;
+sprite_entity.add_component(Sprite {
+    texture: Some(texture_entity.downgrade()),  // EntityRef (weak reference)
     ...
-});
+}).await?;
 
-// Systems query and batch automatically
-let sprites = world.query::<(&Transform2D, &Sprite)>();
-// Batch by texture for efficiency
+// Entity handles provide convenient methods
+if entity.is_valid().await {
+    let transform = entity.get_component::<Transform2D>().await?;
+}
+
+// Weak refs become invalid when entity is despawned
+if texture_ref.is_valid().await {
+    // Safe to use
+}
 ```
 
 ### Next Steps
@@ -64,10 +68,10 @@ let sprites = world.query::<(&Transform2D, &Sprite)>();
 1. Fix systems/webgl to work with new core/rendering
 2. Fix systems/ui compilation errors
 3. Update plugins to use core/* with feature flags
-4. Implement proper batching in systems/webgl
+4. Convert core/server and core/client to ECS components
 
 ### Notes
-- core/rendering is now purely data + VTable delegation
-- All rendering logic will be in systems/webgl
-- UI components will be in core/ui (separate package)
-- Everything respects the NO unsafe, NO dyn rules
+- Entity/EntityRef prevents entire classes of bugs
+- Generation tracking ensures no dangling references
+- All packages now compile except plugins (need rewrite)
+- No unsafe code, no dyn traits maintained

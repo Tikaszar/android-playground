@@ -12,6 +12,8 @@
 
 // Core ECS modules (always available)
 pub mod entity;
+pub mod entity_ref;
+pub mod generation;
 pub mod component;
 pub mod error;
 pub mod world;
@@ -24,6 +26,8 @@ pub mod system;
 
 // Re-export core ECS types (always available)
 pub use entity::*;
+pub use entity_ref::{Entity, EntityRef};
+pub use generation::Generation;
 pub use component::*;
 pub use error::*;
 pub use world::*;

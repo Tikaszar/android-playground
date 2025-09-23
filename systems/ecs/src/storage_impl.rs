@@ -125,7 +125,7 @@ impl StorageImpl {
                     storage_guard.iter()
                         .enumerate()
                         .filter_map(|(index, opt)| {
-                            opt.as_ref().map(|_| EntityId::new(index as u32, Generation::new(0)))
+                            opt.as_ref().map(|_| EntityId::new(index as u32))
                         })
                         .collect()
                 } else {

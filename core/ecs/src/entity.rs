@@ -1,59 +1,53 @@
-//! Entity contracts for the ECS
+//! Entity ID type for internal use
+//!
+//! This module defines the internal EntityId type. Public APIs should use
+//! Entity and EntityRef handle types instead.
 
 use serde::{Serialize, Deserialize};
 
-/// Generation counter for entity IDs
+/// Internal entity identifier
+///
+/// This is used internally by the ECS. Public APIs should use Entity or EntityRef
+/// handle types which include generation tracking for safety.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub struct Generation(u32);
-
-impl Generation {
-    pub fn new(value: u32) -> Self {
-        Self(value)
-    }
-
-    pub fn increment(&self) -> Self {
-        Self(self.0.wrapping_add(1))
-    }
-
-    pub fn value(&self) -> u32 {
-        self.0
-    }
-}
-
-/// Entity identifier with generation for safe references
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub struct EntityId {
-    index: u32,
-    generation: Generation,
-}
+pub struct EntityId(pub u32);
 
 impl EntityId {
-    pub fn new(index: u32, generation: Generation) -> Self {
-        Self { index, generation }
+    /// Create a new entity ID
+    pub fn new(index: u32) -> Self {
+        Self(index)
     }
 
+    /// Get the index value
     pub fn index(&self) -> u32 {
-        self.index
+        self.0
     }
 
-    pub fn generation(&self) -> Generation {
-        self.generation
-    }
-
+    /// Create a null/invalid entity ID
     pub fn null() -> Self {
-        Self {
-            index: u32::MAX,
-            generation: Generation(0),
-        }
+        Self(u32::MAX)
     }
 
+    /// Check if this is a null entity ID
     pub fn is_null(&self) -> bool {
-        self.index == u32::MAX
+        self.0 == u32::MAX
     }
 }
 
 impl std::fmt::Display for EntityId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Entity({}/{})", self.index, self.generation.0)
+        write!(f, "Entity({})", self.0)
+    }
+}
+
+impl From<u32> for EntityId {
+    fn from(index: u32) -> Self {
+        Self(index)
+    }
+}
+
+impl From<EntityId> for u32 {
+    fn from(id: EntityId) -> Self {
+        id.0
     }
 }

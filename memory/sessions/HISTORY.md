@@ -104,3 +104,5 @@ Use `git log --grep="Session XX"` to see specific session details
 - Sessions 1-57: Various build states during architecture changes
 - Session 58: systems/networking builds but webgl/ui don't
 - Session 59: Confirmed webgl/ui/plugins all broken, need rewrites
+- Session 60: core/rendering rewrite complete, compiles successfully
+- Session 61: Entity/EntityRef system implemented, core/ecs and systems/ecs compile

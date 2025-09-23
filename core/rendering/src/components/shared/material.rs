@@ -5,15 +5,15 @@ use std::collections::HashMap;
 #[cfg(feature = "shaders")]
 use serde::{Serialize, Deserialize};
 #[cfg(feature = "shaders")]
-use playground_core_ecs::{EntityIdId, impl_component_data};
+use playground_core_ecs::{EntityRef, impl_component_data};
 #[cfg(feature = "shaders")]
 use crate::types::*;
 
 #[cfg(feature = "shaders")]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Material {
-    pub shader: EntityId,
-    pub textures: HashMap<String, EntityId>,
+    pub shader: EntityRef,
+    pub textures: HashMap<String, EntityRef>,
     pub uniforms: HashMap<String, UniformValue>,
     pub blend_mode: BlendMode,
     pub cull_mode: CullMode,

@@ -13,10 +13,10 @@ use std::sync::atomic::Ordering;
 /// Spawn a new entity in the World
 pub async fn spawn_entity(world: &World) -> CoreResult<EntityId> {
     let index = world.next_entity_id.fetch_add(1, Ordering::SeqCst);
-    let entity = EntityId::new(index, Generation::new(0));
+    let entity = EntityId::new(index);
     
     let mut entities = world.entities.write().await;
-    entities.insert(entity, Generation::new(0));
+    entities.insert(entity, Generation::new());
     
     let mut components = world.components.write().await;
     components.insert(entity, std::collections::HashMap::new());

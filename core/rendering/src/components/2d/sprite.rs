@@ -1,12 +1,12 @@
 //! Sprite component for 2D rendering
 
 use serde::{Serialize, Deserialize};
-use playground_core_ecs::{EntityId, impl_component_data};
+use playground_core_ecs::{EntityRef, impl_component_data};
 use crate::types::*;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Sprite {
-    pub texture: Option<EntityId>,
+    pub texture: Option<EntityRef>,
     pub color: ColorRGBA,
     pub flip_x: bool,
     pub flip_y: bool,

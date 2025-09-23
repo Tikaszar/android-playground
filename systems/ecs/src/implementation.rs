@@ -39,10 +39,10 @@ impl EcsImplementation {
     /// Spawn a new entity
     pub async fn spawn_entity(&self) -> CoreResult<EntityId> {
         let index = self.next_entity_id.fetch_add(1, Ordering::SeqCst);
-        let entity = EntityId::new(index, Generation::new(0));
+        let entity = EntityId::new(index);
         
         let mut entities = self.entities.write().await;
-        entities.insert(entity, Generation::new(0));
+        entities.insert(entity, Generation::new());
         
         let mut components = self.components.write().await;
         components.insert(entity, HashMap::new());
