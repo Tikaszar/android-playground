@@ -3,10 +3,9 @@
 //! This file no longer contains trait implementations. All server logic
 //! is now in vtable_handlers.rs and accessed via VTable dispatch.
 
-use std::sync::Arc;
 use std::time::Instant;
 use playground_core_server::{ServerConfig, ServerStats};
-use playground_core_types::{Shared, shared, CoreResult, CoreError};
+use playground_core_types::{Handle, handle, Shared, shared, CoreResult, CoreError};
 
 use crate::websocket::WebSocketHandler;
 use crate::channel_manager::ChannelManager;
@@ -18,13 +17,13 @@ use crate::types::WebSocketConfig;
 /// This struct is now just for internal use by vtable_handlers.rs
 pub struct NetworkServer {
     /// WebSocket handler
-    pub websocket: Arc<WebSocketHandler>,
+    pub websocket: Handle<WebSocketHandler>,
     /// Channel manager for logical message grouping
-    pub channel_manager: Arc<ChannelManager>,
+    pub channel_manager: Handle<ChannelManager>,
     /// Frame batcher for efficient message sending
-    pub batcher: Arc<FrameBatcher>,
+    pub batcher: Handle<FrameBatcher>,
     /// MCP server for AI/LLM integration
-    pub mcp: Arc<McpServer>,
+    pub mcp: Handle<McpServer>,
     /// Server configuration
     pub config: Shared<ServerConfig>,
     /// WebSocket-specific configuration
@@ -40,16 +39,16 @@ pub struct NetworkServer {
 }
 
 impl NetworkServer {
-    pub async fn new(ws_config: WebSocketConfig) -> CoreResult<Arc<Self>> {
-        let websocket = Arc::new(WebSocketHandler::new().await
+    pub async fn new(ws_config: WebSocketConfig) -> CoreResult<Handle<Self>> {
+        let websocket = handle(WebSocketHandler::new().await
             .map_err(|e| CoreError::Generic(e.to_string()))?);
-        let channel_manager = Arc::new(ChannelManager::new().await
+        let channel_manager = handle(ChannelManager::new().await
             .map_err(|e| CoreError::Generic(e.to_string()))?);
-        let batcher = Arc::new(FrameBatcher::new(ws_config.frame_rate));
-        let mcp = Arc::new(McpServer::new(ws_config.mcp_enabled).await
+        let batcher = handle(FrameBatcher::new(ws_config.frame_rate));
+        let mcp = handle(McpServer::new(ws_config.mcp_enabled).await
             .map_err(|e| CoreError::Generic(e.to_string()))?);
         
-        Ok(Arc::new(Self {
+        Ok(handle(Self {
             websocket,
             channel_manager,
             batcher,
@@ -63,19 +62,19 @@ impl NetworkServer {
         }))
     }
     
-    pub fn websocket(&self) -> Arc<WebSocketHandler> {
+    pub fn websocket(&self) -> Handle<WebSocketHandler> {
         self.websocket.clone()
     }
-    
-    pub fn channel_manager(&self) -> Arc<ChannelManager> {
+
+    pub fn channel_manager(&self) -> Handle<ChannelManager> {
         self.channel_manager.clone()
     }
-    
-    pub fn batcher(&self) -> Arc<FrameBatcher> {
+
+    pub fn batcher(&self) -> Handle<FrameBatcher> {
         self.batcher.clone()
     }
-    
-    pub fn mcp(&self) -> Arc<McpServer> {
+
+    pub fn mcp(&self) -> Handle<McpServer> {
         self.mcp.clone()
     }
 }

@@ -3,10 +3,9 @@
 //! This module implements all the actual networking logic that core/server
 //! and core/client delegate to via VTable.
 
-use std::sync::Arc;
 use std::collections::HashMap;
 use bytes::Bytes;
-use playground_core_types::{Handle, Shared, shared, CoreError};
+use playground_core_types::{Handle, handle, Shared, shared, CoreResult};
 use playground_core_ecs::VTableResponse;
 use playground_core_server::{
     ServerConfig, ServerStats, ConnectionId, ConnectionInfo, ConnectionStatus,
@@ -16,17 +15,25 @@ use playground_core_client::{ClientConfig, ClientState, ClientStats};
 use axum::{Router, routing::get};
 use tokio::net::TcpListener;
 use std::net::SocketAddr;
+use once_cell::sync::Lazy;
 
 use crate::server::NetworkServer;
-use crate::types::{WebSocketConfig, Packet};
+use crate::types::WebSocketConfig;
 use crate::websocket::WebSocketHandler;
 use crate::channel_manager::ChannelManager;
 use crate::batcher::FrameBatcher;
 use crate::mcp::McpServer;
 
-// Store active server instance
-static mut SERVER_INSTANCE: Option<Arc<NetworkServer>> = None;
-static mut CLIENT_CONNECTIONS: Option<Shared<HashMap<ConnectionId, tokio::sync::mpsc::Sender<Vec<u8>>>>> = None;
+// Network state using Lazy initialization
+static NETWORK_STATE: Lazy<NetworkState> = Lazy::new(|| NetworkState {
+    server: shared(None),
+    client_connections: shared(HashMap::new()),
+});
+
+struct NetworkState {
+    server: Shared<Option<Handle<NetworkServer>>>,
+    client_connections: Shared<HashMap<ConnectionId, tokio::sync::mpsc::Sender<Vec<u8>>>>,
+}
 
 // Helper functions for VTableResponse
 fn error_response(msg: String) -> VTableResponse {
@@ -45,13 +52,11 @@ fn success_response(payload: Option<Bytes>) -> VTableResponse {
     }
 }
 
-/// Initialize storage for handlers
-pub async fn initialize_handlers() {
-    unsafe {
-        if CLIENT_CONNECTIONS.is_none() {
-            CLIENT_CONNECTIONS = Some(shared(HashMap::new()));
-        }
-    }
+/// Initialize network handlers (called during system registration)
+pub async fn initialize() -> CoreResult<()> {
+    // Force lazy initialization by accessing NETWORK_STATE
+    let _ = &*NETWORK_STATE;
+    Ok(())
 }
 
 /// Handle server operations (start, stop, send_to, broadcast, publish)
@@ -99,43 +104,11 @@ pub async fn handle_client_operations(operation: String, payload: Bytes) -> VTab
     }
 }
 
-/// Handle client render operations (forward to renderer via ECS)
-#[cfg(feature = "rendering")]
-pub async fn handle_render_operations(operation: String, _payload: Bytes) -> VTableResponse {
-    // These operations are forwarded to the rendering system via ECS messaging
-    // systems/networking doesn't know about systems/webgl directly
-    match operation.as_str() {
-        "create_target" | "destroy_target" | "set_target" | "submit" | "present" | "resize" => {
-            // Forward to ECS message bus for renderer to handle
-            // This will be implemented when ECS messaging is set up
-            error_response("Rendering operations not yet forwarded to renderer".to_string())
-        }
-        _ => error_response(format!("Unknown render operation: {}", operation)),
-    }
-}
+// Note: Rendering operations removed - they belong in systems/webgl
 
-/// Handle client input operations
-#[cfg(feature = "input")]
-pub async fn handle_input_operations(operation: String, payload: Bytes) -> VTableResponse {
-    match operation.as_str() {
-        "poll" => handle_input_poll().await,
-        "set_capture" => handle_input_set_capture(payload).await,
-        _ => error_response(format!("Unknown input operation: {}", operation)),
-    }
-}
+// Note: Input operations removed - they belong in systems/input
 
-/// Handle client audio operations (forward to audio system via ECS)
-#[cfg(feature = "audio")]
-pub async fn handle_audio_operations(operation: String, _payload: Bytes) -> VTableResponse {
-    // These operations are forwarded to the audio system via ECS messaging
-    match operation.as_str() {
-        "play" | "stop" | "set_volume" => {
-            // Forward to ECS message bus for audio system to handle
-            error_response("Audio operations not yet forwarded to audio system".to_string())
-        }
-        _ => error_response(format!("Unknown audio operation: {}", operation)),
-    }
-}
+// Note: Audio operations removed - they belong in systems/audio
 
 // Server operation implementations
 
@@ -155,25 +128,25 @@ async fn handle_server_start(payload: Bytes) -> VTableResponse {
     };
     
     // Create server components
-    let websocket = Arc::new(match WebSocketHandler::new().await {
+    let websocket = handle(match WebSocketHandler::new().await {
         Ok(ws) => ws,
         Err(e) => return error_response(format!("Failed to create WebSocket handler: {}", e)),
     });
-    
-    let channel_manager = Arc::new(match ChannelManager::new().await {
+
+    let channel_manager = handle(match ChannelManager::new().await {
         Ok(cm) => cm,
         Err(e) => return error_response(format!("Failed to create channel manager: {}", e)),
     });
-    
-    let batcher = Arc::new(FrameBatcher::new(ws_config.frame_rate));
-    
-    let mcp = Arc::new(match McpServer::new(ws_config.mcp_enabled).await {
+
+    let batcher = handle(FrameBatcher::new(ws_config.frame_rate));
+
+    let mcp = handle(match McpServer::new(ws_config.mcp_enabled).await {
         Ok(m) => m,
         Err(e) => return error_response(format!("Failed to create MCP server: {}", e)),
     });
     
     // Create server instance
-    let server = Arc::new(NetworkServer {
+    let server = handle(NetworkServer {
         websocket: websocket.clone(),
         channel_manager,
         batcher: batcher.clone(),
@@ -187,8 +160,14 @@ async fn handle_server_start(payload: Bytes) -> VTableResponse {
     });
     
     // Store server instance
-    unsafe {
-        SERVER_INSTANCE = Some(server.clone());
+    *NETWORK_STATE.server.write().await = Some(server.clone());
+
+    // Update core/server state
+    match playground_core_server::get_server_instance() {
+        Ok(core_server) => {
+            *core_server.is_running.write().await = true;
+        },
+        Err(e) => return error_response(format!("Failed to get server instance: {}", e)),
     }
     
     // Start batch processing if enabled
@@ -241,26 +220,27 @@ async fn handle_server_start(payload: Bytes) -> VTableResponse {
 }
 
 async fn handle_server_stop() -> VTableResponse {
-    let server = unsafe {
-        match &SERVER_INSTANCE {
-            Some(s) => s.clone(),
-            None => return error_response("Server not running".to_string()),
-        }
+    let server = match NETWORK_STATE.server.read().await.as_ref() {
+        Some(s) => s.clone(),
+        None => return error_response("Server not running".to_string()),
     };
-    
+
     // Send shutdown signal
     if let Some(tx) = server.shutdown_signal.write().await.take() {
         let _ = tx.send(());
     }
-    
+
     // Mark as not running
     *server.running.write().await = false;
-    
+
     // Clear server instance
-    unsafe {
-        SERVER_INSTANCE = None;
+    *NETWORK_STATE.server.write().await = None;
+
+    // Update core/server state
+    if let Ok(core_server) = playground_core_server::get_server_instance() {
+        *core_server.is_running.write().await = false;
     }
-    
+
     success_response(None)
 }
 
@@ -276,11 +256,9 @@ async fn handle_send_to(payload: Bytes) -> VTableResponse {
         Err(e) => return error_response(format!("Failed to deserialize payload: {}", e)),
     };
     
-    let server = unsafe {
-        match &SERVER_INSTANCE {
-            Some(s) => s.clone(),
-            None => return error_response("Server not running".to_string()),
-        }
+    let server = match NETWORK_STATE.server.read().await.as_ref() {
+        Some(s) => s.clone(),
+        None => return error_response("Server not running".to_string()),
     };
     
     // Queue message in batcher
@@ -308,11 +286,9 @@ async fn handle_broadcast(payload: Bytes) -> VTableResponse {
         Err(e) => return error_response(format!("Failed to deserialize message: {}", e)),
     };
     
-    let server = unsafe {
-        match &SERVER_INSTANCE {
-            Some(s) => s.clone(),
-            None => return error_response("Server not running".to_string()),
-        }
+    let server = match NETWORK_STATE.server.read().await.as_ref() {
+        Some(s) => s.clone(),
+        None => return error_response("Server not running".to_string()),
     };
     
     // Get all connections and send to each
@@ -338,11 +314,9 @@ async fn handle_publish(payload: Bytes) -> VTableResponse {
         Err(e) => return error_response(format!("Failed to deserialize payload: {}", e)),
     };
     
-    let server = unsafe {
-        match &SERVER_INSTANCE {
-            Some(s) => s.clone(),
-            None => return error_response("Server not running".to_string()),
-        }
+    let server = match NETWORK_STATE.server.read().await.as_ref() {
+        Some(s) => s.clone(),
+        None => return error_response("Server not running".to_string()),
     };
     
     // Get subscribers and send to each
@@ -370,11 +344,9 @@ async fn handle_subscribe(payload: Bytes) -> VTableResponse {
         Err(e) => return error_response(format!("Failed to deserialize payload: {}", e)),
     };
     
-    let server = unsafe {
-        match &SERVER_INSTANCE {
-            Some(s) => s.clone(),
-            None => return error_response("Server not running".to_string()),
-        }
+    let server = match NETWORK_STATE.server.read().await.as_ref() {
+        Some(s) => s.clone(),
+        None => return error_response("Server not running".to_string()),
     };
     
     match server.channel_manager.subscribe(params.channel.0, params.connection).await {
@@ -396,11 +368,9 @@ async fn handle_unsubscribe(payload: Bytes) -> VTableResponse {
         Err(e) => return error_response(format!("Failed to deserialize payload: {}", e)),
     };
     
-    let server = unsafe {
-        match &SERVER_INSTANCE {
-            Some(s) => s.clone(),
-            None => return error_response("Server not running".to_string()),
-        }
+    let server = match NETWORK_STATE.server.read().await.as_ref() {
+        Some(s) => s.clone(),
+        None => return error_response("Server not running".to_string()),
     };
     
     match server.channel_manager.unsubscribe(params.channel.0, params.connection).await {
@@ -417,11 +387,9 @@ async fn handle_on_connection(payload: Bytes) -> VTableResponse {
         Err(e) => return error_response(format!("Failed to deserialize connection: {}", e)),
     };
     
-    let server = unsafe {
-        match &SERVER_INSTANCE {
-            Some(s) => s.clone(),
-            None => return error_response("Server not running".to_string()),
-        }
+    let server = match NETWORK_STATE.server.read().await.as_ref() {
+        Some(s) => s.clone(),
+        None => return error_response("Server not running".to_string()),
     };
     
     // Update stats
@@ -443,11 +411,9 @@ async fn handle_on_disconnection(payload: Bytes) -> VTableResponse {
         Err(e) => return error_response(format!("Failed to deserialize id: {}", e)),
     };
     
-    let server = unsafe {
-        match &SERVER_INSTANCE {
-            Some(s) => s.clone(),
-            None => return error_response("Server not running".to_string()),
-        }
+    let server = match NETWORK_STATE.server.read().await.as_ref() {
+        Some(s) => s.clone(),
+        None => return error_response("Server not running".to_string()),
     };
     
     // Update stats
@@ -470,8 +436,9 @@ async fn handle_client_initialize(payload: Bytes) -> VTableResponse {
         Err(e) => return error_response(format!("Failed to deserialize config: {}", e)),
     };
     
-    // Initialize client connections storage
-    initialize_handlers().await;
+    // Client connections are already initialized via Lazy
+    // Just access to ensure initialization
+    let _ = &*NETWORK_STATE;
     
     success_response(None)
 }
@@ -528,31 +495,4 @@ async fn handle_client_update(payload: Bytes) -> VTableResponse {
     success_response(None)
 }
 
-// Input operation implementations
-
-#[cfg(feature = "input")]
-async fn handle_input_poll() -> VTableResponse {
-    // Poll for input events
-    // This would collect input events from the system
-    let events: Vec<playground_core_client::InputEvent> = Vec::new();
-    
-    let payload = match bincode::serialize(&events) {
-        Ok(p) => p,
-        Err(e) => return error_response(format!("Failed to serialize events: {}", e)),
-    };
-    
-    success_response(Some(Bytes::from(payload)))
-}
-
-#[cfg(feature = "input")]
-async fn handle_input_set_capture(payload: Bytes) -> VTableResponse {
-    let _capture: bool = match bincode::deserialize(&payload) {
-        Ok(c) => c,
-        Err(e) => return error_response(format!("Failed to deserialize capture: {}", e)),
-    };
-    
-    // Set input capture mode
-    // Implementation would configure input capture
-    success_response(None)
-}
-
+// Input operation implementations removed - they belong in systems/input
