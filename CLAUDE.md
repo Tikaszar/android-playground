@@ -37,5 +37,4 @@
 - **Read before write** - Always read a file before modifying
 - **NO migration code** - Never add migration notes, plans, or functions
 - **Never search with grep** - Use Read, Glob, or proper tools
-- **Only user runs cargo** - Never run cargo commands yourself
 - **Check git log for details** - Use `git log --grep="Session XX"` for session history
