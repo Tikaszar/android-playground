@@ -1,47 +1,53 @@
 # Context - Session Continuity
 
-## Session 58 Completed ✅
-Fixed systems/networking unsafe violations:
-1. ✅ Removed all unsafe usage using Lazy<NetworkState>
-2. ✅ Removed non-networking operations (render/audio/input)
-3. ⏸️ Client operations still stubbed (future work)
+## Session 60 In Progress 🔄
+Complete rewrite of core/rendering:
+1. ✅ Created proper ECS-based architecture
+2. ✅ All resources are components
+3. ✅ Proper feature flags throughout
+4. ✅ Type aliases (Float, Int, UInt)
+5. ✅ Fixed all compilation errors
 
 ## Key Accomplishments
-- Replaced `static mut` with `once_cell::sync::Lazy`
-- Used Handle<T> and Shared<T> type aliases consistently
-- Removed operations that belong in other systems
-- systems/networking compiles (with warnings)
+- Completely rewrote core/rendering with proper architecture
+- Everything is a component (including resources)
+- No immediate mode - all batched and async
+- Proper subdirectory structure (2d/, 3d/, shared/)
+- One component per file
+- All feature-gated appropriately
 
 ## Pattern Established
 ```rust
-static NETWORK_STATE: Lazy<NetworkState> = Lazy::new(|| NetworkState {
-    server: shared(None),
-    client_connections: shared(HashMap::new()),
+// Resources as components
+let texture = world.create_entity();
+world.add_component(texture, Texture { ... });
+
+// Reference resources via EntityId
+let sprite = world.create_entity();
+world.add_component(sprite, Sprite {
+    texture: Some(texture),  // EntityId reference
+    ...
 });
 ```
 
 ## Next Session Tasks
-1. Implement client WebSocket operations properly
-2. Fix systems/webgl VTable handlers for rendering
-3. Continue plugin architecture fixes
-4. Update documentation
+1. Fix systems/webgl to use new core/rendering
+2. Fix systems/ui compilation errors
+3. Rewrite plugins to use core/* with features
+4. Implement batching in systems/webgl
 
 ## Important Context
-- Build status: ❌ FAILS (systems/webgl, systems/ui)
-- NO unsafe rule: ✅ COMPLIANT
-- Architecture compliance improving
-- Client implementation deferred but architecture correct
-
-## Build Errors
-- **systems/webgl**: Missing imports, trait mismatches, unimplemented methods
-- **systems/ui**: Severe errors - trait mismatches, missing imports, syntax errors
+- Build status: core/rendering ✅ COMPILES
+- systems/webgl: ❌ BROKEN (needs update)
+- systems/ui: ❌ BROKEN (needs rewrite)
+- plugins/*: ❌ BROKEN (need complete rewrites)
+- Architecture compliance: IMPROVING
 
 ## Outstanding Issues
-- systems/webgl doesn't compile (Critical)
-- systems/ui doesn't compile (Critical)
-- systems/logic deprecated, needs removal (Major)
-- Plugins still bypass core architecture (Critical)
-- Client operations need implementation (Minor)
+- systems/webgl needs to query ECS for rendering
+- systems/ui needs complete rewrite
+- All 9 plugins need rewriting to use core/*
+- Need to implement proper batching
 
 ## Notes for Next Session
-The unsafe violations are completely resolved. Focus should shift to implementing systems/webgl VTable handlers for rendering operations that were removed from systems/networking.
+core/rendering is now complete and follows proper architecture. Focus should shift to updating systems/webgl to use the new component-based rendering system.
