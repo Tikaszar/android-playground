@@ -10,15 +10,16 @@
 - Used `Handle<T>` and `Shared<T>` type aliases consistently
 - Removed all unsafe blocks
 
-### 2. Plugins bypass core architecture
+### 2. Plugins don't compile
 **Location**: All plugins/* packages
-**Issue**: Import systems/ui, systems/networking directly instead of using core/*
+**Issue**: Dependencies removed but code still imports systems/*
 ```rust
-// VIOLATION in plugins/*/Cargo.toml
-playground-systems-ui = { path = "../../systems/ui" }
+// VIOLATION: All plugin source files still have:
+use playground_systems_logic::...
+use playground_systems_ui::...
 ```
-**Fix Required**: Rewrite to use core/* only
-**Priority**: HIGH - Breaks layering
+**Fix Required**: Complete rewrite to use core/* only with feature flags
+**Priority**: CRITICAL - Nothing compiles
 
 ## Major Violations 🟠
 
@@ -34,11 +35,13 @@ playground-systems-ui = { path = "../../systems/ui" }
 **Fix Required**: Complete rewrite following data vs logic pattern
 **Priority**: HIGH - Blocks UI
 
-### 5. systems/logic architecture unclear
+### 5. ~~systems/logic deprecated~~ ✅ REMOVED
 **Location**: systems/logic
-**Issue**: Was API gateway, now core/* serves that purpose
-**Fix Required**: Either remove or repurpose for game logic
-**Priority**: MEDIUM - Architectural debt
+**Status**: REMOVED in Session 59
+**Solution Applied**:
+- Deleted systems/logic directory
+- Removed from workspace
+- Removed all dependencies
 
 ## Minor Violations 🟡
 
@@ -103,12 +106,12 @@ async fn handle_client_send(_payload: Bytes) -> VTableResponse {
 | plugins/* | 1 | 0 | 0 | 1 |
 | Documentation | 0 | 0 | 1 | 1 |
 
-**Total**: ~~2~~ 1 Critical, 3 Major, ~~4~~ 2 Minor violations
+**Total**: 3 Critical (plugins, webgl, ui), 0 Major, 1 Minor violations
 
 ## Fix Order
 
-1. **First**: ~~Remove unsafe from systems/networking~~ ✅ COMPLETE
-2. **Second**: Complete client implementation (Blocks testing)
-3. **Third**: ~~Remove non-networking operations~~ ✅ COMPLETE
-4. **Fourth**: Implement systems/webgl VTable (Blocks rendering)
-5. **Later**: Rewrite systems/ui, all plugins, documentation
+1. **First**: Fix systems/webgl compilation (Blocks everything)
+2. **Second**: Fix systems/ui compilation (Blocks plugins)
+3. **Third**: Rewrite all plugins to use core/* (Major effort)
+4. **Fourth**: Complete client implementation (For testing)
+5. **Later**: Documentation updates

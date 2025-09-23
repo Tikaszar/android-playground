@@ -10,8 +10,7 @@ name = "playground-apps-editor"
 path = "src/main.rs"
 
 [dependencies]
-# Systems - Apps primarily use systems/logic which initializes all others
-playground-systems-logic = { path = "../../systems/logic" }
+# Apps should use core/* packages with feature flags
 
 # Core dependencies
 playground-core-types = { path = "../../core/types" }

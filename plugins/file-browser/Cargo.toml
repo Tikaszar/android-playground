@@ -8,10 +8,7 @@ license.workspace = true
 
 [dependencies]
 async-trait = { workspace = true }
-# Systems - Plugins use Systems APIs only (never Core directly)
-playground-systems-ui = { path = "../../systems/ui" }
-playground-systems-logic = { path = "../../systems/logic" }
-playground-systems-networking = { path = "../../systems/networking" }
+# TODO: Add core/* dependencies with feature flags when plugin is rewritten
 
 # Core types for shared data structures
 playground-core-types = { path = "../../core/types" }

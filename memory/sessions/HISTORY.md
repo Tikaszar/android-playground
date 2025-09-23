@@ -2,6 +2,12 @@
 
 ## Session Ranges and Major Accomplishments
 
+### Session 59: Remove deprecated systems (IN PROGRESS)
+- Removed systems/logic completely (was deprecated)
+- Removed system dependencies from all plugins
+- Documented that plugins/webgl/ui don't compile
+- Clarified idle-mmo-rpg is NOT in development
+
 ### Session 58: Fix unsafe violations
 - Removed all unsafe code from systems/networking
 - Established Lazy<NetworkState> pattern for global state
@@ -93,3 +99,8 @@ Concrete base class pattern for type erasure
 
 ## For Detailed Information
 Use `git log --grep="Session XX"` to see specific session details
+
+## Build Status Tracking
+- Sessions 1-57: Various build states during architecture changes
+- Session 58: systems/networking builds but webgl/ui don't
+- Session 59: Confirmed webgl/ui/plugins all broken, need rewrites
