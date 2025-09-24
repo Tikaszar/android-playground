@@ -2,6 +2,13 @@
 
 ## Session Ranges and Major Accomplishments
 
+### Session 64: Core/rendering ECS rewrite
+- Complete rewrite of core/rendering for ECS compliance
+- Removed singleton pattern and separate VTable
+- Created feature-based component organization
+- Mandatory components always available, optional feature-gated
+- Core/rendering now compiles successfully
+
 ### Session 63: Systems/networking ECS rewrite
 - Complete rewrite of systems/networking for ECS compatibility
 - Created state management for Entity references

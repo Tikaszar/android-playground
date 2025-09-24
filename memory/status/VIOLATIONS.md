@@ -2,7 +2,17 @@
 
 ## Critical Violations 🔴
 
-### 1. ~~unsafe usage in systems/networking~~ ✅ FIXED
+### 1. ~~core/rendering singleton pattern~~ ✅ FIXED
+**Location**: core/rendering
+**Status**: RESOLVED in Session 64
+**Solution Applied**:
+- Deleted renderer.rs and operations.rs
+- Removed singleton RENDERER_INSTANCE
+- Removed separate VTable
+- Everything is now entities with components
+- API functions take EntityRef parameters
+
+### 2. ~~unsafe usage in systems/networking~~ ✅ FIXED
 **Location**: systems/networking/src/vtable_handlers.rs
 **Status**: RESOLVED in Session 58
 **Solution Applied**:

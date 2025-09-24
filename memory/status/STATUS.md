@@ -18,7 +18,7 @@ All core packages follow data vs logic separation:
 | core/console | ✅ | ✅ | ✅ | output, logging, input, etc |
 | core/server | ✅ | N/A | ✅ ECS | websocket, channels, batching, etc |
 | core/client | ✅ | N/A | ✅ ECS | rendering, input, audio, etc |
-| core/rendering | ✅ | N/A | ✅ ECS | core-2d, core-3d, targets, etc |
+| core/rendering | ✅ | N/A | ✅ ECS | shaders, textures, buffers, etc |
 | core/ui | ✅ | N/A | ✅ | N/A |
 
 ### Systems Layer ⚠️ PARTIAL

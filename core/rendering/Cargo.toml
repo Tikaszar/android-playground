@@ -14,36 +14,45 @@ tokio = { version = "1.36", features = ["sync"] }
 once_cell = "1.19"
 
 [features]
-default = ["core-2d", "targets"]
+# Sensible defaults for most applications
+default = ["core-2d", "core-3d", "shaders", "textures", "buffers"]
 
-# Core rendering features
+# Core rendering modes (at least one usually needed)
 core-2d = []          # 2D rendering primitives
 core-3d = []          # 3D rendering with transforms
-targets = []          # Render target management
-commands = []         # Command buffer recording
 
-# Resource management
+# Resource management (commonly needed)
 shaders = []          # Shader compilation/management
 textures = []         # Texture loading/management
 buffers = []          # Vertex/index buffer management
-uniforms = []         # Uniform buffer management
-samplers = []         # Texture sampler states
+uniforms = ["buffers"] # Uniform buffer management (depends on buffers)
+samplers = ["textures"] # Texture sampler states (depends on textures)
 
-# Advanced rendering
-compute = []          # Compute shader support
-instancing = []       # Instanced rendering
-indirect = []         # Indirect/GPU-driven rendering
+# Render target features
+targets = []          # Render target management
+passes = ["targets"]  # Multi-pass rendering (depends on targets)
+
+# Advanced features
+pipelines = ["shaders", "buffers"] # Render pipeline states
+commands = []         # Command buffer recording
+compute = ["shaders"] # Compute shader support
+instancing = ["buffers"] # Instanced rendering
+indirect = ["buffers"] # Indirect/GPU-driven rendering
 queries = []          # Occlusion/timing queries
-tessellation = []     # Tessellation support
-geometry-shaders = [] # Geometry shader support
+tessellation = ["shaders"] # Tessellation support
+geometry-shaders = ["shaders"] # Geometry shader support
 
 # Optimization features
 batching = []         # Automatic draw call batching
 culling = []          # Frustum/occlusion culling
 lod = []              # Level-of-detail support
 streaming = []        # Resource streaming
+framegraphs = ["passes"] # Frame graph support
 
-# Pipeline features
-pipelines = []        # Render pipeline states
-passes = []           # Multi-pass rendering
-framegraphs = []      # Frame graph support
+# Debug features
+debug = []            # Debug rendering helpers
+
+# Backend preferences (hints only)
+prefer-webgl = []
+prefer-vulkan = []
+prefer-metal = []

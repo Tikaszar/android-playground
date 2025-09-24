@@ -1,19 +1,19 @@
 # Context - Session Continuity
 
-## Session 63 Complete ✅
-Systems/networking ECS rewrite:
-1. ✅ Created state management for Entity references
-2. ✅ Rewrote vtable_handlers for ECS entities
-3. ✅ Updated registration for VTable system
-4. ✅ All compilation errors fixed
-5. ✅ Systems/networking now compiles successfully
+## Session 64 Complete ✅
+Core/rendering ECS rewrite:
+1. ✅ Deleted renderer.rs and operations.rs (violations)
+2. ✅ Created proper component organization (mandatory vs optional)
+3. ✅ Rewrote API to use entities instead of singleton
+4. ✅ Implemented feature-based component system
+5. ✅ Core/rendering now compiles successfully
 
 ## Key Accomplishments
-- Complete ECS transformation of systems/networking
-- Proper separation of ECS entities from network implementation
-- Entity-based state management replaces singletons
-- VTable registration through world.vtable
-- Component access follows get/remove/add pattern
+- Complete ECS transformation of core/rendering
+- Removed all singleton patterns and separate VTable
+- Feature-based component organization (mandatory vs optional)
+- All API functions work with entities
+- Proper directory structure for feature components
 
 ## Pattern Established
 ```rust

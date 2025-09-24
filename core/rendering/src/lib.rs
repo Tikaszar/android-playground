@@ -4,21 +4,16 @@
 //! All rendering implementation logic lives in systems packages like
 //! systems/webgl (browser) or systems/vulkan (future native).
 //!
-//! This follows the "abstract base class" pattern where core defines
-//! structure and systems provide behavior.
+//! ECS-based architecture: Everything is entities with components.
+//! No singletons, no separate VTable, just components and API stubs.
 
 // Data structure modules
-pub mod renderer;
 pub mod types;
 pub mod components;
 pub mod resources;
 pub mod commands;
-pub mod operations;
 pub mod api;
 pub mod error;
-
-// Re-export the main Renderer struct
-pub use renderer::Renderer;
 
 // Re-export type aliases and data structures
 pub use types::{
@@ -44,7 +39,7 @@ pub use commands::{CommandBufferInfo, CommandBufferState};
 
 // Re-export API functions
 pub use api::{
-    get_renderer_instance,
+    create_renderer,
     initialize_renderer,
     shutdown_renderer,
     get_capabilities,
@@ -72,7 +67,7 @@ pub use api::{
 
 #[cfg(feature = "shaders")]
 pub use api::{
-    create_shader,
+    compile_shader,
     destroy_shader,
 };
 
@@ -94,17 +89,5 @@ pub use api::{
 pub use api::{
     create_pipeline,
     destroy_pipeline,
+    bind_pipeline,
 };
-
-#[cfg(feature = "passes")]
-pub use api::{
-    create_render_pass,
-    destroy_render_pass,
-};
-
-// High-level helpers
-#[cfg(all(feature = "core-2d", feature = "textures"))]
-pub use api::draw_sprite;
-
-#[cfg(all(feature = "core-3d", feature = "buffers"))]
-pub use api::draw_model;
