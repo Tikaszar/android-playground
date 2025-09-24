@@ -2,6 +2,13 @@
 
 ## Session Ranges and Major Accomplishments
 
+### Session 63: Systems/networking ECS rewrite
+- Complete rewrite of systems/networking for ECS compatibility
+- Created state management for Entity references
+- Replaced singleton access with Entity handles
+- VTable registration through world.vtable
+- Systems/networking now compiles successfully
+
 ### Session 62: Core/server and core/client ECS rewrite
 - Complete rewrite of core/server to use ECS components
 - Complete rewrite of core/client to use ECS components
@@ -124,4 +131,6 @@ Use `git log --grep="Session XX"` to see specific session details
 - Session 58: systems/networking builds but webgl/ui don't
 - Session 59: Confirmed webgl/ui/plugins all broken, need rewrites
 - Session 60: core/rendering rewrite complete, compiles successfully
-- Session 61: Entity/EntityRef system implemented, core/ecs and systems/ecs compile
+- Session 61: Entity/EntityRef system implemented, core/ecs and systems/ecs compile (committed)
+- Session 62: Complete ECS rewrite of core/server and core/client (committed)
+- Session 63: Systems/networking ECS rewrite complete, now compiles

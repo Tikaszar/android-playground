@@ -1,21 +1,26 @@
 //! VTable handlers for server and client operations
 //!
 //! This module implements all the actual networking logic that core/server
-//! and core/client delegate to via VTable.
+//! and core/client delegate to via VTable. It works with ECS entities
+//! and components, managing the actual network implementation internally.
 
-use std::collections::HashMap;
 use bytes::Bytes;
 use playground_core_types::{Handle, handle, Shared, shared, CoreResult};
-use playground_core_ecs::VTableResponse;
+use playground_core_ecs::{VTableResponse, Entity, get_world};
 use playground_core_server::{
     ServerConfig, ServerStats, ConnectionId, ConnectionInfo, ConnectionStatus,
-    Message, MessageId, MessagePriority, ChannelId, ChannelInfo,
+    Message, ChannelId,
+    components::*,
+    api as server_api,
 };
-use playground_core_client::{ClientConfig, ClientState, ClientStats};
+use playground_core_client::{
+    ClientConfig, ClientState, ClientStats,
+    components::*,
+    api as client_api,
+};
 use axum::{Router, routing::get};
 use tokio::net::TcpListener;
 use std::net::SocketAddr;
-use once_cell::sync::Lazy;
 
 use crate::server::NetworkServer;
 use crate::types::WebSocketConfig;
@@ -23,17 +28,7 @@ use crate::websocket::WebSocketHandler;
 use crate::channel_manager::ChannelManager;
 use crate::batcher::FrameBatcher;
 use crate::mcp::McpServer;
-
-// Network state using Lazy initialization
-static NETWORK_STATE: Lazy<NetworkState> = Lazy::new(|| NetworkState {
-    server: shared(None),
-    client_connections: shared(HashMap::new()),
-});
-
-struct NetworkState {
-    server: Shared<Option<Handle<NetworkServer>>>,
-    client_connections: Shared<HashMap<ConnectionId, tokio::sync::mpsc::Sender<Vec<u8>>>>,
-}
+use crate::state::NETWORK_STATE;
 
 // Helper functions for VTableResponse
 fn error_response(msg: String) -> VTableResponse {
@@ -54,8 +49,7 @@ fn success_response(payload: Option<Bytes>) -> VTableResponse {
 
 /// Initialize network handlers (called during system registration)
 pub async fn initialize() -> CoreResult<()> {
-    // Force lazy initialization by accessing NETWORK_STATE
-    let _ = &*NETWORK_STATE;
+    crate::state::NetworkState::initialize().await;
     Ok(())
 }
 
@@ -104,12 +98,6 @@ pub async fn handle_client_operations(operation: String, payload: Bytes) -> VTab
     }
 }
 
-// Note: Rendering operations removed - they belong in systems/webgl
-
-// Note: Input operations removed - they belong in systems/input
-
-// Note: Audio operations removed - they belong in systems/audio
-
 // Server operation implementations
 
 async fn handle_server_start(payload: Bytes) -> VTableResponse {
@@ -117,7 +105,16 @@ async fn handle_server_start(payload: Bytes) -> VTableResponse {
         Ok(c) => c,
         Err(e) => return error_response(format!("Failed to deserialize config: {}", e)),
     };
-    
+
+    // Create server entity with components
+    let server_entity = match server_api::start_server(config.clone()).await {
+        Ok(entity) => entity,
+        Err(e) => return error_response(format!("Failed to create server entity: {}", e)),
+    };
+
+    // Store the server entity
+    *NETWORK_STATE.server_entity.write().await = Some(server_entity.clone());
+
     // Create WebSocket configuration with defaults
     let ws_config = WebSocketConfig {
         port: 8080, // Default port, since ServerConfig doesn't have one
@@ -126,8 +123,8 @@ async fn handle_server_start(payload: Bytes) -> VTableResponse {
         max_message_size: config.max_message_size,
         mcp_enabled: true,
     };
-    
-    // Create server components
+
+    // Create actual network server components
     let websocket = handle(match WebSocketHandler::new().await {
         Ok(ws) => ws,
         Err(e) => return error_response(format!("Failed to create WebSocket handler: {}", e)),
@@ -144,9 +141,9 @@ async fn handle_server_start(payload: Bytes) -> VTableResponse {
         Ok(m) => m,
         Err(e) => return error_response(format!("Failed to create MCP server: {}", e)),
     });
-    
-    // Create server instance
-    let server = handle(NetworkServer {
+
+    // Create network server implementation
+    let server_impl = handle(NetworkServer {
         websocket: websocket.clone(),
         channel_manager,
         batcher: batcher.clone(),
@@ -158,18 +155,24 @@ async fn handle_server_start(payload: Bytes) -> VTableResponse {
         shutdown_signal: shared(None),
         start_time: std::time::Instant::now(),
     });
-    
-    // Store server instance
-    *NETWORK_STATE.server.write().await = Some(server.clone());
 
-    // Update core/server state
-    match playground_core_server::get_server_instance() {
-        Ok(core_server) => {
-            *core_server.is_running.write().await = true;
-        },
-        Err(e) => return error_response(format!("Failed to get server instance: {}", e)),
+    // Store server implementation
+    *NETWORK_STATE.server_impl.write().await = Some(server_impl.clone());
+
+    // Update server entity's state component
+    let world = match get_world().await {
+        Ok(w) => w,
+        Err(e) => return error_response(format!("Failed to get world: {}", e)),
+    };
+
+    // Get and modify the component through World
+    if let Ok(mut state_comp) = server_entity.get_component::<ServerState>().await {
+        let mut modified = state_comp;
+        modified.is_running = true;
+        let _ = server_entity.remove_component::<ServerState>().await;
+        let _ = server_entity.add_component(modified).await;
     }
-    
+
     // Start batch processing if enabled
     #[cfg(feature = "batching")]
     if config.enable_batching {
@@ -178,35 +181,35 @@ async fn handle_server_start(payload: Bytes) -> VTableResponse {
             batcher_clone.start_batch_loop().await;
         });
     }
-    
+
     // Create Axum router
     let ws_routes = Router::new()
         .route("/ws", get(crate::websocket::websocket_handler))
         .with_state(websocket);
-    
+
     let app = Router::new()
         .route("/", get(|| async { "Playground Server" }))
         .merge(ws_routes)
         .nest("/mcp", mcp.router());
-    
+
     // Create shutdown channel
     let (tx, rx) = tokio::sync::oneshot::channel();
     {
-        *server.shutdown_signal.write().await = Some(tx);
+        *server_impl.shutdown_signal.write().await = Some(tx);
     }
-    
+
     // Start server
     let addr = SocketAddr::from(([0, 0, 0, 0], ws_config.port));
     let listener = match TcpListener::bind(addr).await {
         Ok(l) => l,
         Err(e) => return error_response(format!("Failed to bind to port: {}", e)),
     };
-    
+
     // Mark as running
     {
-        *server.running.write().await = true;
+        *server_impl.running.write().await = true;
     }
-    
+
     // Spawn server task
     tokio::spawn(async move {
         let _ = axum::serve(listener, app)
@@ -215,31 +218,41 @@ async fn handle_server_start(payload: Bytes) -> VTableResponse {
             })
             .await;
     });
-    
+
     success_response(None)
 }
 
 async fn handle_server_stop() -> VTableResponse {
-    let server = match NETWORK_STATE.server.read().await.as_ref() {
+    // Get server implementation
+    let server_impl = match NETWORK_STATE.server_impl.read().await.as_ref() {
         Some(s) => s.clone(),
         None => return error_response("Server not running".to_string()),
     };
 
     // Send shutdown signal
-    if let Some(tx) = server.shutdown_signal.write().await.take() {
+    if let Some(tx) = server_impl.shutdown_signal.write().await.take() {
         let _ = tx.send(());
     }
 
     // Mark as not running
-    *server.running.write().await = false;
+    *server_impl.running.write().await = false;
 
-    // Clear server instance
-    *NETWORK_STATE.server.write().await = None;
+    // Update server entity's state
+    if let Some(server_entity) = NETWORK_STATE.server_entity.read().await.as_ref() {
+        if let Ok(state_comp) = server_entity.get_component::<ServerState>().await {
+            let mut modified = state_comp;
+            modified.is_running = false;
+            let _ = server_entity.remove_component::<ServerState>().await;
+            let _ = server_entity.add_component(modified).await;
+        }
 
-    // Update core/server state
-    if let Ok(core_server) = playground_core_server::get_server_instance() {
-        *core_server.is_running.write().await = false;
+        // Stop the server entity
+        let _ = server_api::stop_server(server_entity.downgrade()).await;
     }
+
+    // Clear server state
+    *NETWORK_STATE.server_impl.write().await = None;
+    *NETWORK_STATE.server_entity.write().await = None;
 
     success_response(None)
 }
@@ -250,33 +263,40 @@ async fn handle_send_to(payload: Bytes) -> VTableResponse {
         connection: ConnectionId,
         message: Message,
     }
-    
+
     let params: SendToPayload = match bincode::deserialize(&payload) {
         Ok(p) => p,
         Err(e) => return error_response(format!("Failed to deserialize payload: {}", e)),
     };
-    
-    let server = match NETWORK_STATE.server.read().await.as_ref() {
+
+    let server_impl = match NETWORK_STATE.server_impl.read().await.as_ref() {
         Some(s) => s.clone(),
         None => return error_response("Server not running".to_string()),
     };
-    
+
     // Queue message in batcher
     #[cfg(feature = "batching")]
-    server.batcher.queue_message(params.connection, params.message).await;
-    
+    server_impl.batcher.queue_message(params.connection, params.message).await;
+
     #[cfg(not(feature = "batching"))]
     {
         // Direct send without batching
-        // Implementation would go here
+        if let Some(sender) = NETWORK_STATE.connection_senders.read().await.get(&params.connection) {
+            let data = bincode::serialize(&params.message).unwrap_or_default();
+            let _ = sender.send(data).await;
+        }
     }
-    
-    // Update stats
-    {
-        let mut stats = server.stats.write().await;
-        stats.total_messages_sent += 1;
+
+    // Update stats in server entity
+    if let Some(server_entity) = NETWORK_STATE.server_entity.read().await.as_ref() {
+        if let Ok(stats_comp) = server_entity.get_component::<ServerStatsComponent>().await {
+            let mut modified = stats_comp;
+            modified.stats.total_messages_sent += 1;
+            let _ = server_entity.remove_component::<ServerStatsComponent>().await;
+            let _ = server_entity.add_component(modified).await;
+        }
     }
-    
+
     success_response(None)
 }
 
@@ -285,19 +305,27 @@ async fn handle_broadcast(payload: Bytes) -> VTableResponse {
         Ok(m) => m,
         Err(e) => return error_response(format!("Failed to deserialize message: {}", e)),
     };
-    
-    let server = match NETWORK_STATE.server.read().await.as_ref() {
+
+    let server_impl = match NETWORK_STATE.server_impl.read().await.as_ref() {
         Some(s) => s.clone(),
         None => return error_response("Server not running".to_string()),
     };
-    
+
     // Get all connections and send to each
-    let connections = server.websocket.get_all_connections().await;
+    let connections = server_impl.websocket.get_all_connections().await;
     for conn in connections {
         #[cfg(feature = "batching")]
-        server.batcher.queue_message(conn.id, message.clone()).await;
+        server_impl.batcher.queue_message(conn.id, message.clone()).await;
+
+        #[cfg(not(feature = "batching"))]
+        {
+            if let Some(sender) = NETWORK_STATE.connection_senders.read().await.get(&conn.id) {
+                let data = bincode::serialize(&message).unwrap_or_default();
+                let _ = sender.send(data).await;
+            }
+        }
     }
-    
+
     success_response(None)
 }
 
@@ -308,24 +336,32 @@ async fn handle_publish(payload: Bytes) -> VTableResponse {
         channel: ChannelId,
         message: Message,
     }
-    
+
     let params: PublishPayload = match bincode::deserialize(&payload) {
         Ok(p) => p,
         Err(e) => return error_response(format!("Failed to deserialize payload: {}", e)),
     };
-    
-    let server = match NETWORK_STATE.server.read().await.as_ref() {
+
+    let server_impl = match NETWORK_STATE.server_impl.read().await.as_ref() {
         Some(s) => s.clone(),
         None => return error_response("Server not running".to_string()),
     };
-    
+
     // Get subscribers and send to each
-    let subscribers = server.channel_manager.get_subscribers(params.channel.0).await;
+    let subscribers = server_impl.channel_manager.get_subscribers(params.channel.0).await;
     for conn_id in subscribers {
         #[cfg(feature = "batching")]
-        server.batcher.queue_message(conn_id, params.message.clone()).await;
+        server_impl.batcher.queue_message(conn_id, params.message.clone()).await;
+
+        #[cfg(not(feature = "batching"))]
+        {
+            if let Some(sender) = NETWORK_STATE.connection_senders.read().await.get(&conn_id) {
+                let data = bincode::serialize(&params.message).unwrap_or_default();
+                let _ = sender.send(data).await;
+            }
+        }
     }
-    
+
     success_response(None)
 }
 
@@ -338,18 +374,18 @@ async fn handle_subscribe(payload: Bytes) -> VTableResponse {
         connection: ConnectionId,
         channel: ChannelId,
     }
-    
+
     let params: SubscribePayload = match bincode::deserialize(&payload) {
         Ok(p) => p,
         Err(e) => return error_response(format!("Failed to deserialize payload: {}", e)),
     };
-    
-    let server = match NETWORK_STATE.server.read().await.as_ref() {
+
+    let server_impl = match NETWORK_STATE.server_impl.read().await.as_ref() {
         Some(s) => s.clone(),
         None => return error_response("Server not running".to_string()),
     };
-    
-    match server.channel_manager.subscribe(params.channel.0, params.connection).await {
+
+    match server_impl.channel_manager.subscribe(params.channel.0, params.connection).await {
         Ok(_) => success_response(None),
         Err(e) => error_response(format!("Failed to subscribe: {}", e)),
     }
@@ -362,18 +398,18 @@ async fn handle_unsubscribe(payload: Bytes) -> VTableResponse {
         connection: ConnectionId,
         channel: ChannelId,
     }
-    
+
     let params: UnsubscribePayload = match bincode::deserialize(&payload) {
         Ok(p) => p,
         Err(e) => return error_response(format!("Failed to deserialize payload: {}", e)),
     };
-    
-    let server = match NETWORK_STATE.server.read().await.as_ref() {
+
+    let server_impl = match NETWORK_STATE.server_impl.read().await.as_ref() {
         Some(s) => s.clone(),
         None => return error_response("Server not running".to_string()),
     };
-    
-    match server.channel_manager.unsubscribe(params.channel.0, params.connection).await {
+
+    match server_impl.channel_manager.unsubscribe(params.channel.0, params.connection).await {
         Ok(_) => success_response(None),
         Err(e) => error_response(format!("Failed to unsubscribe: {}", e)),
     }
@@ -382,26 +418,58 @@ async fn handle_unsubscribe(payload: Bytes) -> VTableResponse {
 // Server event implementations
 
 async fn handle_on_connection(payload: Bytes) -> VTableResponse {
-    let connection: ConnectionInfo = match bincode::deserialize(&payload) {
-        Ok(c) => c,
-        Err(e) => return error_response(format!("Failed to deserialize connection: {}", e)),
+    let address = match std::str::from_utf8(&payload) {
+        Ok(a) => a.to_string(),
+        Err(e) => return error_response(format!("Invalid address: {}", e)),
     };
-    
-    let server = match NETWORK_STATE.server.read().await.as_ref() {
-        Some(s) => s.clone(),
-        None => return error_response("Server not running".to_string()),
+
+    // Create connection entity
+    let conn_entity = match server_api::accept_connection(address.clone()).await {
+        Ok(entity) => entity,
+        Err(e) => return error_response(format!("Failed to create connection entity: {}", e)),
     };
-    
-    // Update stats
-    {
-        let mut stats = server.stats.write().await;
-        stats.total_connections += 1;
-        stats.active_connections += 1;
+
+    // Get connection ID from the entity
+    let conn_id = if let Ok(conn) = conn_entity.get_component::<ServerConnection>().await {
+        conn.id
+    } else {
+        return error_response("Failed to get connection component".to_string());
+    };
+
+    // Store connection entity mapping
+    NETWORK_STATE.connection_entities.write().await.insert(conn_id, conn_entity.clone());
+
+    // Update server stats
+    if let Some(server_entity) = NETWORK_STATE.server_entity.read().await.as_ref() {
+        if let Ok(stats_comp) = server_entity.get_component::<ServerStatsComponent>().await {
+            let mut modified = stats_comp;
+            modified.stats.total_connections += 1;
+            modified.stats.active_connections += 1;
+            let _ = server_entity.remove_component::<ServerStatsComponent>().await;
+            let _ = server_entity.add_component(modified).await;
+        }
     }
-    
-    // Store connection
-    server.websocket.store_connection(connection).await;
-    
+
+    // Store in WebSocket handler
+    if let Some(server_impl) = NETWORK_STATE.server_impl.read().await.as_ref() {
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs();
+        let connection_info = ConnectionInfo {
+            id: conn_id,
+            established_at: now,
+            last_activity: now,
+            bytes_sent: 0,
+            bytes_received: 0,
+            messages_sent: 0,
+            messages_received: 0,
+            status: ConnectionStatus::Connected,
+            metadata: std::collections::HashMap::new(),
+        };
+        server_impl.websocket.store_connection(connection_info).await;
+    }
+
     success_response(None)
 }
 
@@ -410,36 +478,50 @@ async fn handle_on_disconnection(payload: Bytes) -> VTableResponse {
         Ok(i) => i,
         Err(e) => return error_response(format!("Failed to deserialize id: {}", e)),
     };
-    
-    let server = match NETWORK_STATE.server.read().await.as_ref() {
-        Some(s) => s.clone(),
-        None => return error_response("Server not running".to_string()),
-    };
-    
-    // Update stats
-    {
-        let mut stats = server.stats.write().await;
-        stats.active_connections = stats.active_connections.saturating_sub(1);
+
+    // Remove connection entity
+    if let Some(conn_entity) = NETWORK_STATE.connection_entities.write().await.remove(&id) {
+        let _ = server_api::disconnect_connection(conn_entity.downgrade()).await;
     }
-    
-    // Remove connection
-    server.websocket.remove_connection_by_core_id(id).await;
-    
+
+    // Remove connection sender
+    NETWORK_STATE.connection_senders.write().await.remove(&id);
+
+    // Update server stats
+    if let Some(server_entity) = NETWORK_STATE.server_entity.read().await.as_ref() {
+        if let Ok(stats_comp) = server_entity.get_component::<ServerStatsComponent>().await {
+            let mut modified = stats_comp;
+            modified.stats.active_connections = modified.stats.active_connections.saturating_sub(1);
+            let _ = server_entity.remove_component::<ServerStatsComponent>().await;
+            let _ = server_entity.add_component(modified).await;
+        }
+    }
+
+    // Remove from WebSocket handler
+    if let Some(server_impl) = NETWORK_STATE.server_impl.read().await.as_ref() {
+        server_impl.websocket.remove_connection_by_core_id(id).await;
+    }
+
     success_response(None)
 }
 
 // Client operation implementations
 
 async fn handle_client_initialize(payload: Bytes) -> VTableResponse {
-    let _config: ClientConfig = match bincode::deserialize(&payload) {
+    let config: ClientConfig = match bincode::deserialize(&payload) {
         Ok(c) => c,
         Err(e) => return error_response(format!("Failed to deserialize config: {}", e)),
     };
-    
-    // Client connections are already initialized via Lazy
-    // Just access to ensure initialization
-    let _ = &*NETWORK_STATE;
-    
+
+    // Create client entity with components
+    let client_entity = match client_api::initialize_client(config).await {
+        Ok(entity) => entity,
+        Err(e) => return error_response(format!("Failed to create client entity: {}", e)),
+    };
+
+    // Store client entity
+    *NETWORK_STATE.client_entity.write().await = Some(client_entity.clone());
+
     success_response(None)
 }
 
@@ -448,18 +530,38 @@ async fn handle_client_connect(payload: Bytes) -> VTableResponse {
         Ok(a) => a,
         Err(e) => return error_response(format!("Invalid address: {}", e)),
     };
-    
+
+    // Get client entity
+    let client_entity = match NETWORK_STATE.client_entity.read().await.as_ref() {
+        Some(entity) => entity.clone(),
+        None => return error_response("Client not initialized".to_string()),
+    };
+
     // Parse WebSocket URL
     let url = match url::Url::parse(address) {
         Ok(u) => u,
         Err(e) => return error_response(format!("Invalid URL: {}", e)),
     };
-    
+
     // Connect WebSocket client
     match tokio_tungstenite::connect_async(&url).await {
         Ok((_ws_stream, _)) => {
-            // Store connection for client use
-            // Implementation would handle the WebSocket stream
+            // Update client state
+            if let Ok(state_comp) = client_entity.get_component::<ClientStateComponent>().await {
+                let mut modified = state_comp;
+                modified.state = ClientState::Connected;
+                modified.server_address = Some(address.to_string());
+                modified.connected_at = Some(
+                    std::time::SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .unwrap_or_default()
+                        .as_secs()
+                );
+                let _ = client_entity.remove_component::<ClientStateComponent>().await;
+                let _ = client_entity.add_component(modified).await;
+            }
+
+            // TODO: Store WebSocket stream for client use
             success_response(None)
         }
         Err(e) => error_response(format!("Failed to connect: {}", e)),
@@ -467,20 +569,59 @@ async fn handle_client_connect(payload: Bytes) -> VTableResponse {
 }
 
 async fn handle_client_disconnect() -> VTableResponse {
-    // Close WebSocket connection
-    // Implementation would close the active connection
+    // Get client entity
+    let client_entity = match NETWORK_STATE.client_entity.read().await.as_ref() {
+        Some(entity) => entity.clone(),
+        None => return error_response("Client not initialized".to_string()),
+    };
+
+    // Update client state
+    if let Ok(state_comp) = client_entity.get_component::<ClientStateComponent>().await {
+        let mut modified = state_comp;
+        modified.state = ClientState::Disconnected;
+        modified.server_address = None;
+        modified.connected_at = None;
+        let _ = client_entity.remove_component::<ClientStateComponent>().await;
+        let _ = client_entity.add_component(modified).await;
+    }
+
+    // TODO: Close WebSocket connection
     success_response(None)
 }
 
 async fn handle_client_send(_payload: Bytes) -> VTableResponse {
-    // Send data through WebSocket
-    // Implementation would send through active connection
+    // Get client entity
+    let client_entity = match NETWORK_STATE.client_entity.read().await.as_ref() {
+        Some(entity) => entity.clone(),
+        None => return error_response("Client not initialized".to_string()),
+    };
+
+    // Check if connected
+    if let Ok(state) = client_entity.get_component::<ClientStateComponent>().await {
+        if state.state != ClientState::Connected {
+            return error_response("Client not connected".to_string());
+        }
+    }
+
+    // TODO: Send data through WebSocket
     success_response(None)
 }
 
 async fn handle_client_receive() -> VTableResponse {
-    // Receive data from WebSocket
-    // Implementation would receive from active connection
+    // Get client entity
+    let client_entity = match NETWORK_STATE.client_entity.read().await.as_ref() {
+        Some(entity) => entity.clone(),
+        None => return error_response("Client not initialized".to_string()),
+    };
+
+    // Check if connected
+    if let Ok(state) = client_entity.get_component::<ClientStateComponent>().await {
+        if state.state != ClientState::Connected {
+            return error_response("Client not connected".to_string());
+        }
+    }
+
+    // TODO: Receive data from WebSocket
     success_response(Some(Bytes::new()))
 }
 
@@ -489,10 +630,20 @@ async fn handle_client_update(payload: Bytes) -> VTableResponse {
         Ok(dt) => dt,
         Err(e) => return error_response(format!("Failed to deserialize delta_time: {}", e)),
     };
-    
-    // Update client state
-    // Implementation would update internal state
+
+    // Get client entity
+    let client_entity = match NETWORK_STATE.client_entity.read().await.as_ref() {
+        Some(entity) => entity.clone(),
+        None => return error_response("Client not initialized".to_string()),
+    };
+
+    // Update client stats
+    if let Ok(stats_comp) = client_entity.get_component::<ClientStatsComponent>().await {
+        let mut modified = stats_comp;
+        modified.stats.total_frames += 1;
+        let _ = client_entity.remove_component::<ClientStatsComponent>().await;
+        let _ = client_entity.add_component(modified).await;
+    }
+
     success_response(None)
 }
-
-// Input operation implementations removed - they belong in systems/input

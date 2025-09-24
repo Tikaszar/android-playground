@@ -1,84 +1,73 @@
 # Current Session - Active Work
 
-## Session 62: COMPLETED
+## Session 63: Systems/networking ECS Rewrite
 
 ### Session Goal
-Complete rewrite of core/server and core/client to use ECS components instead of singleton pattern
+Complete rewrite of systems/networking to work with the new ECS-based core/server and core/client
 
 ### Work Completed This Session
 
-#### 1. Core/server Complete Rewrite
-- Removed singleton Server struct
-- Created ECS components:
-  - ServerConnection - Connection entities with metadata
-  - ServerChannel - Channel entities for pub/sub
-  - MessageQueue - Batching support component
-  - ServerConfigComponent - Server configuration
-  - ServerStatsComponent - Server statistics
-  - ServerState - Server runtime state
-- API functions return Entity handles
-- All features properly gated
-- Type aliases (Float, Int, UInt) used consistently
+#### 1. Systems/networking Complete Rewrite
+- Created new state management module (`state.rs`):
+  - Stores Entity references instead of singletons
+  - `server_entity`, `client_entity`, `connection_entities`
+  - Keeps network implementation details separate
 
-#### 2. Core/client Complete Rewrite
-- Removed singleton Client struct
-- Created ECS components:
-  - ClientConfigComponent - Client configuration
-  - ClientStateComponent - Client runtime state
-  - ClientStatsComponent - Client statistics
-  - InputStateComponent - Input handling (feature-gated)
-  - RenderTargetComponent - Render targets (feature-gated)
-  - AudioStateComponent - Audio state (feature-gated)
-- API functions return Entity handles
-- All features properly gated
-- Type aliases used consistently
+- Rewrote vtable_handlers.rs:
+  - Works with ECS entities and components
+  - No more singleton access patterns
+  - Proper component modification through get/remove/add
+  - Fixed ClientState enum usage (not struct)
+  - ConnectionInfo properly initialized with all fields
 
-#### 3. Architecture Compliance
-- Everything is an ECS component (no singletons)
-- Uses impl_component_data! macro for all components
-- API functions work with Entity/EntityRef handles
-- No implementation logic in core (data only)
-- No TODO comments (per rules)
-- Proper feature gating throughout
-- Connections, channels, render targets are all entities
+- Updated registration.rs:
+  - Uses world.vtable.register() instead of non-existent functions
+  - Removed all Server/Client singleton imports
+  - VTable registration through ECS world
 
-### Architecture Pattern Established
+- Fixed all compilation issues:
+  - Entity cloning for moves
+  - Component access patterns
+  - Struct field mismatches
+  - Missing semicolons
+
+#### 2. Architecture Pattern Maintained
 
 ```rust
-// Core packages define components
-pub struct ServerConnection {
-    pub id: ConnectionId,
-    pub status: ConnectionStatus,
-    // ... data fields only
-}
-impl_component_data!(ServerConnection);
-
-// API creates entities with components
-pub async fn accept_connection(address: String) -> CoreResult<Entity> {
-    let world = get_world().await?;
-    let conn_entity = world.spawn_entity().await?;
-    conn_entity.add_component(ServerConnection::new(ConnectionId::new())).await?;
-    Ok(conn_entity)
+// Network state bridges ECS with implementation
+pub struct NetworkState {
+    pub server_entity: Shared<Option<Entity>>,
+    pub server_impl: Shared<Option<Handle<NetworkServer>>>,
+    pub client_entity: Shared<Option<Entity>>,
+    pub connection_entities: Shared<HashMap<ConnectionId, Entity>>,
 }
 
-// Systems implement the actual logic via VTable
+// VTable handlers work with entities
+let server_entity = server_api::start_server(config).await?;
+// Store entity and create actual network server
+*NETWORK_STATE.server_entity.write().await = Some(server_entity.clone());
+// Network implementation details stay internal
 ```
 
-### Files Changed
-- core/server/src/lib.rs - Complete rewrite
-- core/server/src/api.rs - ECS-based API
-- core/server/src/types.rs - Added new() for IDs
-- core/server/src/components/* - All new components
-- Removed: server.rs, operations.rs (old singleton)
+#### 3. ECS Compliance
+- Everything uses Entity handles
+- Components accessed through world operations
+- No direct component mutation
+- Proper Entity/EntityRef usage for API calls
 
-- core/client/src/lib.rs - Complete rewrite
-- core/client/src/api.rs - ECS-based API
-- core/client/src/types.rs - Added type aliases
-- core/client/src/components/* - All new components
-- Removed: client.rs, operations.rs (old singleton)
+### Files Changed
+- systems/networking/src/state.rs - NEW state management
+- systems/networking/src/vtable_handlers.rs - Complete rewrite for ECS
+- systems/networking/src/registration.rs - Updated for VTable system
+- systems/networking/src/lib.rs - Added state module export
+
+### Build Status
+- systems/networking: ✅ COMPILES
+- All core/* packages: ✅ COMPILE
+- systems/ecs, systems/console: ✅ COMPILE
+- systems/webgl, systems/ui: ❌ STILL BROKEN (next priority)
 
 ### Next Steps
-1. Fix systems/webgl to use new core/rendering and core/client
+1. Fix systems/webgl to query ECS for rendering components
 2. Fix systems/ui compilation errors
-3. Update systems/networking to use new core/server
-4. Rewrite all plugins to use core/* with features
+3. Begin plugin rewrites to use core/* with features

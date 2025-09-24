@@ -1,4 +1,5 @@
 pub mod types;
+pub mod state;
 pub mod server;
 pub mod websocket;
 pub mod channel_manager;

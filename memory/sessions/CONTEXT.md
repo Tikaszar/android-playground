@@ -1,57 +1,55 @@
 # Context - Session Continuity
 
-## Session 62 Complete ✅
-Core/server and core/client ECS rewrite:
-1. ✅ Removed all singleton patterns
-2. ✅ Created proper ECS components
-3. ✅ API functions use Entity/EntityRef
-4. ✅ No implementation logic in core
-5. ✅ All packages compile successfully
+## Session 63 Complete ✅
+Systems/networking ECS rewrite:
+1. ✅ Created state management for Entity references
+2. ✅ Rewrote vtable_handlers for ECS entities
+3. ✅ Updated registration for VTable system
+4. ✅ All compilation errors fixed
+5. ✅ Systems/networking now compiles successfully
 
 ## Key Accomplishments
-- Complete ECS transformation of core/server and core/client
-- Everything is a component (connections, channels, clients, render targets)
-- Proper architecture compliance - data only in core
-- Feature gating throughout for optional capabilities
-- Type aliases (Float, Int, UInt) used consistently
+- Complete ECS transformation of systems/networking
+- Proper separation of ECS entities from network implementation
+- Entity-based state management replaces singletons
+- VTable registration through world.vtable
+- Component access follows get/remove/add pattern
 
 ## Pattern Established
 ```rust
-// All core packages now follow this pattern:
-// 1. Define components with data only
-pub struct SomeComponent {
-    pub data: DataType,
-}
-impl_component_data!(SomeComponent);
-
-// 2. API functions create entities
-pub async fn create_thing() -> CoreResult<Entity> {
-    let entity = world.spawn_entity().await?;
-    entity.add_component(SomeComponent::new()).await?;
-    Ok(entity)
+// Systems layer pattern for ECS integration:
+// 1. Store Entity references in state
+pub struct NetworkState {
+    pub server_entity: Shared<Option<Entity>>,
+    pub server_impl: Shared<Option<Handle<NetworkServer>>>, // Internal
 }
 
-// 3. Systems implement logic via VTable
+// 2. Use core API to create entities
+let entity = server_api::start_server(config).await?;
+
+// 3. Manage implementation internally
+let server_impl = handle(NetworkServer { /* actual network */ });
+
+// 4. Bridge ECS components with implementation
 ```
 
 ## Next Session Tasks
 1. Fix systems/webgl to query ECS for rendering
 2. Fix systems/ui compilation errors
-3. Update systems/networking for new core/server
+3. Update systems/physics for ECS
 4. Begin plugin rewrites to use core/*
 
 ## Important Context
-- Build status: core/* ✅ ALL COMPILE
+- Build status: core/* ✅, systems/networking ✅, systems/ecs ✅, systems/console ✅
 - systems/webgl: ❌ BROKEN (needs ECS queries)
-- systems/ui: ❌ BROKEN (needs rewrite)
-- systems/networking: ⚠️ Needs update for new core/server
+- systems/ui: ❌ BROKEN (needs complete rewrite)
 - plugins/*: ❌ BROKEN (need complete rewrites)
 
 ## Outstanding Issues
 - systems/webgl needs to query ECS for components
 - systems/ui needs complete rewrite
-- systems/networking needs to use new core/server API
 - All 9 plugins need rewriting to use core/*
+- Systems/physics needs implementation
 
 ## Notes for Next Session
-With core/server and core/client now properly using ECS, the systems layer needs updating to work with the new component-based architecture. Focus should be on systems/webgl first as it's needed for rendering.
+With systems/networking now properly using ECS, focus should shift to systems/webgl as it's needed for rendering. The pattern established in networking (Entity references + internal implementation) should be applied.
