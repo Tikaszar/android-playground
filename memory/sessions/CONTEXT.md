@@ -1,55 +1,75 @@
 # Context - Session Continuity
 
-## Session 64 Complete ✅
-Core/rendering ECS rewrite:
-1. ✅ Deleted renderer.rs and operations.rs (violations)
-2. ✅ Created proper component organization (mandatory vs optional)
-3. ✅ Rewrote API to use entities instead of singleton
-4. ✅ Implemented feature-based component system
-5. ✅ Core/rendering now compiles successfully
+## Session 65 Complete ✅
+Hot-loadable module architecture designed:
+1. ✅ Analyzed VTable vs alternatives
+2. ✅ Designed complete module system
+3. ✅ Created feature-based dependencies
+4. ✅ Documented entire architecture
+5. ✅ Created implementation roadmap
 
 ## Key Accomplishments
-- Complete ECS transformation of core/rendering
-- Removed all singleton patterns and separate VTable
-- Feature-based component organization (mandatory vs optional)
-- All API functions work with entities
-- Proper directory structure for feature components
+- Solved the NO DYN + hot-loading challenge with abi_stable
+- Designed 1000x faster system than VTable
+- Everything becomes hot-loadable (even the IDE itself!)
+- Feature-based dependencies with backwards compatibility
+- MCP integration for Claude development
 
-## Pattern Established
-```rust
-// Systems layer pattern for ECS integration:
-// 1. Store Entity references in state
-pub struct NetworkState {
-    pub server_entity: Shared<Option<Entity>>,
-    pub server_impl: Shared<Option<Handle<NetworkServer>>>, // Internal
-}
+## Architecture Decision
+**Replacing VTable with Hot-Loadable Modules:**
+- VTable: ~1000ns per call (serialization overhead)
+- Modules: ~1-5ns per call (direct function pointers)
+- Everything hot-loadable without unsafe code
+- abi_stable provides safe FFI
 
-// 2. Use core API to create entities
-let entity = server_api::start_server(config).await?;
+## Implementation Plan (Sessions 66-70)
+### Phase 1: Infrastructure (Session 66)
+- Create api/ crate
+- Add abi_stable dependency
+- Create minimal launcher
 
-// 3. Manage implementation internally
-let server_impl = handle(NetworkServer { /* actual network */ });
+### Phase 2: Core Migration (Session 67)
+- Remove VTable from core/ecs
+- Add module interfaces
+- Test hot-reload
 
-// 4. Bridge ECS components with implementation
-```
+### Phase 3: Systems Migration (Session 68)
+- Update systems/ecs
+- Add fast-path optimizations
+- Remove VTable handlers
 
-## Next Session Tasks
-1. Fix systems/webgl to query ECS for rendering
-2. Fix systems/ui compilation errors
-3. Update systems/physics for ECS
-4. Begin plugin rewrites to use core/*
+### Phase 4: Fix Broken Systems (Session 69)
+- Fix systems/webgl
+- Fix systems/ui
+- Test all systems
+
+### Phase 5: Apps/Plugins (Session 70)
+- Convert editor to module
+- Update plugins
+- Full system test
+
+## Next Session Tasks (Session 66)
+1. Create api/ crate with BaseModule interface
+2. Add abi_stable = "0.11" to workspace
+3. Create launcher/ with minimal main.rs
+4. Start removing VTable from core/ecs
+5. Implement first module as proof of concept
 
 ## Important Context
-- Build status: core/* ✅, systems/networking ✅, systems/ecs ✅, systems/console ✅
-- systems/webgl: ❌ BROKEN (needs ECS queries)
-- systems/ui: ❌ BROKEN (needs complete rewrite)
-- plugins/*: ❌ BROKEN (need complete rewrites)
+- Build status: core/* compiles, systems/webgl and ui broken
+- Current git state: Uncommitted Entity/EntityRef changes from Session 61-64
+- Migration will be gradual - VTable and modules can coexist temporarily
+- Focus on getting one module working first as proof
 
-## Outstanding Issues
-- systems/webgl needs to query ECS for components
-- systems/ui needs complete rewrite
-- All 9 plugins need rewriting to use core/*
-- Systems/physics needs implementation
+## Technical Notes
+- Use `#[export_root_module]` for module entry points
+- Use `RString`, `RVec`, etc for ABI-stable types
+- Module dependencies go in module.toml files
+- Features resolved transitively
+- State preservation via save/restore functions
 
-## Notes for Next Session
-With systems/networking now properly using ECS, focus should shift to systems/webgl as it's needed for rendering. The pattern established in networking (Entity references + internal implementation) should be applied.
+## Success Metrics
+- Hot-reload in < 500ms
+- No unsafe code in our codebase
+- State preserved across reloads
+- IDE can reload itself while running

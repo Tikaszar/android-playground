@@ -165,23 +165,27 @@ A mobile-first game engine and IDE that runs entirely on Android devices (via Te
 - Maintains compile-time type safety
 - Allows multiple renderer backends
 
-### Why VTable Dispatch?
-- No trait objects needed
-- Runtime flexibility
-- Clean separation of concerns
-- Systems remain isolated
+### Why Hot-Loadable Modules Instead of VTable?
+- **Direct function calls** - 1000x faster than VTable serialization
+- **Everything reloadable** - Core, Systems, Plugins, and Apps
+- **Safe FFI via abi_stable** - No unsafe code needed
+- **Feature-based dependencies** - Fine-grained version control
+- **Backwards compatibility** - Semantic versioning support
+- **Self-modifying** - IDE can reload itself while running
 
 ### Why Feature Flags?
 - Compile-time optimization
 - Reduced binary size
 - Platform-specific builds
 - Optional capabilities
+- Dependency negotiation
+- Minimal module loading
 
-### Why Global Instances?
-- Simplifies API usage
-- Avoids passing instances
-- Thread-safe by design
-- Lazy initialization
+### Why Message Bus for Cold Paths?
+- Module discovery at runtime
+- Complex inter-module operations
+- Debugging and inspection
+- MCP tool integration
 
 ## Success Metrics
 

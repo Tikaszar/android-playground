@@ -1,146 +1,149 @@
 # Roadmap - Path from Current to Target
 
-## Immediate Priority: Fix systems/networking
+## Immediate Priority: Implement Hot-Loadable Module System
 
-### Task 1: Remove unsafe usage ⚠️ CRITICAL
-- Replace `static mut` with `OnceCell`
-- Use pattern from systems/console
-- Store only implementation state, not Server/Client instances
-- Access core instances through API functions
+### Phase 1: Create Module Infrastructure
+1. **Add abi_stable dependency** to workspace
+   - Version 0.11 for safe FFI
+   - No unsafe code needed
 
-### Task 2: Complete client implementation
-- Implement WebSocket client operations
-- Use existing WebSocketHandler
-- Store client connections properly
-- Update core/client state fields
+2. **Create api/ crate** with module interfaces
+   - BaseModule trait (all modules)
+   - CoreModule trait (core/*)
+   - SystemModule trait (systems/*)
+   - PluginModule trait (plugins/*)
+   - AppModule trait (apps/*)
 
-### Task 3: Remove non-networking operations
-- Remove rendering handlers (belong in systems/webgl)
-- Remove audio handlers (belong in systems/audio)
-- Remove input handlers (belong in systems/input)
-- Only handle networking operations
+3. **Create minimal launcher**
+   - Just loads modules from config
+   - No knowledge of engine internals
+   - File watching for hot-reload
 
-### Task 4: Test VTable integration
-- Verify server operations work
-- Test client connections
-- Check channel operations
-- Validate error handling
+### Phase 2: Migrate Core to Modules
+1. **Remove VTable from core packages**
+   - Delete vtable.rs files
+   - Remove VTable fields from structs
+   - Convert delegation to direct calls
 
-## Next Priority: Fix systems/webgl
+2. **Add module interfaces to core/**
+   - Each package exports module interface
+   - Implement save/restore state
+   - Declare feature dependencies
 
-### Task 1: Implement client VTable handlers
-- Register with core/client
-- Handle rendering operations
-- Update render targets
-- Manage WebGL resources
+3. **Create core/modules** for management
+   - Module creation from templates
+   - Build via cargo
+   - Load/unload at runtime
+   - Dependency tracking
 
-### Task 2: Remove direct dependencies
-- No imports from other systems
-- Use core/client data fields
-- Communicate via VTable/ECS
+4. **Create core/mcp** for debugging
+   - MCP server integration
+   - Tool registration
+   - Claude development support
 
-## Architecture Fixes Needed
+### Phase 3: Migrate Systems to Modules
+1. **Update systems to use module interface**
+   - Remove VTable handlers
+   - Implement module exports
+   - Direct implementation (no delegation)
 
-### Systems Layer
-1. **systems/ui** - Complete rewrite needed
-   - Remove all trait-based code
-   - Implement VTable handlers
-   - Use core/ui contracts
+2. **Add fast-path optimizations**
+   - Function pointer tables for hot paths
+   - Message bus for cold paths
+   - Hybrid approach for flexibility
 
-2. **systems/logic** - Complete rewrite needed
-   - No longer API gateway
-   - Should be game logic system
-   - Or remove entirely
+3. **Remove systems/logic** (deprecated)
+   - Already identified as unnecessary
+   - Functionality moved elsewhere
 
-3. **systems/physics** - Complete rewrite needed
-   - Implement core/physics contracts
-   - 2D physics first
-   - Mobile-optimized
+### Phase 4: Fix Broken Systems
+1. **Fix systems/webgl compilation**
+   - Update to query ECS for components
+   - Remove singleton access
+   - Implement module interface
 
-### Plugins Layer
-All 9 IDE plugins need rewrite to use core/* only:
-- chat-assistant
-- debugger
-- editor-core
-- file-browser
-- lsp-client
-- terminal
-- theme-manager
-- ui-framework
-- version-control
+2. **Fix systems/ui compilation**
+   - Complete rewrite for new architecture
+   - Remove trait-based code
+   - Implement module interface
+
+### Phase 5: Migrate Plugins and Apps
+1. **Update all plugins** to use core/* only
+   - Remove systems/* dependencies
+   - Use message bus for communication
+   - Add module interfaces
+
+2. **Convert apps to modules**
+   - Editor becomes hot-loadable
+   - Game becomes hot-loadable
+   - Self-modifying IDE capability
+
+## Next Priority: Core ECS Improvements
+
+### Critical Features
+1. **Resource System** - Global data without entities
+2. **Component Events** - Change detection
+3. **Entity Hierarchy** - Parent/child relationships
+4. **Batch Operations** - Bulk entity/component operations
+5. **Query Builder** - Better query API
+
+### Important Enhancements
+1. **Event System** - Inter-system communication
+2. **Component Bundles** - Group common components
+3. **System Ordering** - Explicit dependencies
+4. **Commands Buffer** - Deferred operations
 
 ## Milestones
 
-### Milestone 1: Core Compliance ✅ COMPLETE
-- All core packages follow data vs logic pattern
-- VTable dispatch working
-- Feature flags implemented
+### Milestone 1: Module System Complete (Session 65-70)
+- [ ] All packages use module interface
+- [ ] Hot-reload working for everything
+- [ ] MCP integration complete
+- [ ] Claude can develop within IDE
 
-### Milestone 2: Systems Compliance (IN PROGRESS)
-- [ ] systems/networking fixed
-- [ ] systems/webgl fixed
-- [ ] systems/ui rewritten
-- [ ] systems/logic removed or rewritten
-- [ ] systems/physics implemented
+### Milestone 2: Systems Fixed (Session 71-75)
+- [ ] systems/webgl compiles and works
+- [ ] systems/ui rewritten and works
+- [ ] All systems hot-loadable
+- [ ] Performance optimized
 
-### Milestone 3: Plugin Compliance
+### Milestone 3: Plugins Updated (Session 76-80)
 - [ ] All plugins use core/* only
-- [ ] No direct system dependencies
-- [ ] Feature flags used properly
+- [ ] Plugin hot-reload working
+- [ ] IDE plugins functional
+- [ ] Game plugins ready
 
-### Milestone 4: Working IDE
-- [ ] Editor functional
-- [ ] Terminal working
-- [ ] File browser operational
-- [ ] Build and run from IDE
+### Milestone 4: Working IDE (Session 81-85)
+- [ ] Editor fully functional
+- [ ] Self-modifying capability
+- [ ] Conversational interface
+- [ ] Mobile optimized
 
-### Milestone 5: Game Features
-- [ ] Basic ECS game
-- [ ] Physics integration
+### Milestone 5: Game Features (Session 86-90)
+- [ ] Basic ECS game working
+- [ ] Physics integrated
 - [ ] Multiplayer support
 - [ ] Asset loading
 
-### Milestone 6: Production Ready
+### Milestone 6: Production Ready (Session 91-100)
 - [ ] APK packaging
 - [ ] Play Store ready
 - [ ] Documentation complete
 - [ ] Performance optimized
 
-## Dependencies
-
-```
-Core Compliance (✅)
-    ↓
-Systems Compliance
-    ├── systems/networking (current)
-    ├── systems/webgl
-    ├── systems/console (✅)
-    └── systems/ecs (✅)
-    ↓
-Plugin Compliance
-    ├── IDE plugins
-    └── Game plugins
-    ↓
-Working IDE
-    ↓
-Game Features
-    ↓
-Production
-```
-
 ## Success Criteria
 
-### For Current Task (systems/networking)
-- [ ] NO unsafe code
-- [ ] Client operations implemented
-- [ ] Only networking operations
-- [ ] All tests passing
+### For Module System
+- [ ] Zero unsafe code (abi_stable handles it)
+- [ ] Sub-second hot-reload
+- [ ] State preserved across reloads
+- [ ] Backwards compatibility via versions
 
 ### For Architecture
-- [ ] All violations fixed
-- [ ] Compile-time error detection
-- [ ] Zero runtime failures
-- [ ] Clean separation of concerns
+- [ ] No VTable overhead (direct calls)
+- [ ] Clean core/systems separation
+- [ ] Everything hot-loadable
+- [ ] MCP debugging support
 
 ### For Project
 - [ ] Runs on Android/Termux
@@ -148,52 +151,33 @@ Production
 - [ ] < 100MB memory
 - [ ] Battery efficient
 
-## Timeline Estimates
-
-### Short Term (1-2 sessions)
-- Fix systems/networking
-- Fix systems/webgl
-- Basic testing
-
-### Medium Term (5-10 sessions)
-- Rewrite remaining systems
-- Update all plugins
-- IDE functional
-
-### Long Term (20+ sessions)
-- Game features
-- Performance optimization
-- Production packaging
-- Documentation
-
-## Risk Factors
+## Risk Mitigation
 
 ### Technical Risks
-- Plugin rewrites may be complex
-- Performance on older devices
-- Battery usage optimization
-- Network latency handling
+- **Module compatibility** - Use semantic versioning
+- **State preservation** - Comprehensive save/restore
+- **Performance overhead** - Fast path for hot operations
+- **Build times** - Incremental compilation
 
 ### Architecture Risks
-- System isolation may limit features
-- VTable overhead
-- Feature flag complexity
-- Compile time growth
+- **Dependency cycles** - Detection and prevention
+- **Feature explosion** - Careful feature design
+- **Version conflicts** - Compatibility checking
+- **Module size** - Lazy loading
 
 ## Alternative Approaches
 
-### If VTable overhead too high
-- Direct function pointers
-- Compile-time dispatch
-- Macro-based routing
+### If abi_stable has issues
+- Consider safer-ffi crate
+- Build custom solution
+- Use WASM modules
 
-### If compile times too long
-- Reduce feature flags
-- Split into smaller crates
-- Use workspace optimization
+### If hot-reload too slow
+- Pre-compile modules
+- Use incremental linking
+- Cache built modules
 
-### If memory usage too high
-- More aggressive cleanup
-- Smaller buffers
-- Lazy initialization
-- Resource pooling
+### If state preservation fails
+- Add migration system
+- Version state formats
+- Provide rollback
