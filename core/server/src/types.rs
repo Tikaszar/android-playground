@@ -39,6 +39,14 @@ pub enum MessagePriority {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct ConnectionId(pub usize);
 
+impl ConnectionId {
+    pub fn new() -> Self {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        static COUNTER: AtomicUsize = AtomicUsize::new(1);
+        Self(COUNTER.fetch_add(1, Ordering::Relaxed))
+    }
+}
+
 /// Information about a connection (generic, not protocol-specific)
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ConnectionInfo {
@@ -69,6 +77,14 @@ pub enum ConnectionStatus {
 /// Channel identifier for logical message grouping
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct ChannelId(pub u16);
+
+impl ChannelId {
+    pub fn new() -> Self {
+        use std::sync::atomic::{AtomicU16, Ordering};
+        static COUNTER: AtomicU16 = AtomicU16::new(1);
+        Self(COUNTER.fetch_add(1, Ordering::Relaxed))
+    }
+}
 
 /// Information about a channel
 #[derive(Debug, Clone, Serialize, Deserialize)]

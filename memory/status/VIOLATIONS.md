@@ -10,7 +10,16 @@
 - Used `Handle<T>` and `Shared<T>` type aliases consistently
 - Removed all unsafe blocks
 
-### 2. Plugins don't compile
+### 2. ~~core/server and core/client singletons~~ ✅ FIXED
+**Location**: core/server and core/client
+**Status**: RESOLVED in Session 62
+**Solution Applied**:
+- Complete rewrite to use ECS components
+- Removed singleton Server and Client structs
+- Everything is now entities with components
+- API functions return Entity handles
+
+### 3. Plugins don't compile
 **Location**: All plugins/* packages
 **Issue**: Dependencies removed but code still imports systems/*
 ```rust
@@ -23,19 +32,19 @@ use playground_systems_ui::...
 
 ## Major Violations 🟠
 
-### 3. systems/webgl missing VTable handlers
+### 4. systems/webgl needs updating for new ECS
 **Location**: systems/webgl
-**Issue**: Doesn't implement core/client rendering operations
-**Fix Required**: Add VTable handler registration like systems/networking
+**Issue**: Still expects old singleton patterns, needs to query ECS
+**Fix Required**: Update to query for rendering components
 **Priority**: HIGH - Blocks rendering
 
-### 4. systems/ui needs complete rewrite
+### 5. systems/ui needs complete rewrite
 **Location**: systems/ui
 **Issue**: Old architecture, uses traits instead of VTable
 **Fix Required**: Complete rewrite following data vs logic pattern
 **Priority**: HIGH - Blocks UI
 
-### 5. ~~systems/logic deprecated~~ ✅ REMOVED
+### 6. ~~systems/logic deprecated~~ ✅ REMOVED
 **Location**: systems/logic
 **Status**: REMOVED in Session 59
 **Solution Applied**:

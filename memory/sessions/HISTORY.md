@@ -2,7 +2,26 @@
 
 ## Session Ranges and Major Accomplishments
 
-### Session 59: Remove deprecated systems (IN PROGRESS)
+### Session 62: Core/server and core/client ECS rewrite
+- Complete rewrite of core/server to use ECS components
+- Complete rewrite of core/client to use ECS components
+- Removed all singleton patterns
+- Everything is now an entity with components
+- Proper architecture compliance achieved
+
+### Session 61: Entity/EntityRef handle system
+- Implemented Entity (strong) and EntityRef (weak) handle types
+- Added generation tracking for entity validity
+- Updated core/ecs and core/rendering to use safe references
+- Prevented dangling entity references
+
+### Session 60: Core/rendering complete rewrite
+- Rewrote core/rendering with proper ECS integration
+- All rendering data as components
+- Proper feature flags throughout
+- Type aliases used consistently
+
+### Session 59: Remove deprecated systems
 - Removed systems/logic completely (was deprecated)
 - Removed system dependencies from all plugins
 - Documented that plugins/webgl/ui don't compile

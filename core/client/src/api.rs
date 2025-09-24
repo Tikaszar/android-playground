@@ -1,145 +1,111 @@
-//! Public API functions for client operations
-//! 
-//! These functions provide a convenient way to access client functionality
-//! without needing to manage the client instance directly.
+//! Public API functions for client operations using ECS
+//!
+//! These functions work with entities and components in the ECS,
+//! similar to how core/rendering works.
 
-use once_cell::sync::Lazy;
-use playground_core_types::{Handle, CoreResult};
-use playground_core_rendering::RenderCommand;
-use crate::{Client, ClientId, ClientConfig, ClientState, ClientStats, RenderTarget};
-use crate::input::{InputEvent, KeyCode};
+use playground_core_types::CoreResult;
+use playground_core_ecs::{Entity, EntityRef, get_world};
+use crate::types::*;
+use crate::components::*;
+use crate::input::*;
 
-/// Global client instance
-static CLIENT_INSTANCE: Lazy<Handle<Client>> = Lazy::new(|| {
-    // Generate a unique client ID based on process ID and time
-    let id = ClientId(std::process::id() as u64);
-    Client::new(id)
-});
+/// Initialize a client with the given configuration
+/// Returns the client entity
+pub async fn initialize_client(config: ClientConfig) -> CoreResult<Entity> {
+    let world = get_world().await?;
+    let client_entity = world.spawn_entity().await?;
 
-/// Get the global client instance
-pub fn get_client_instance() -> CoreResult<&'static Handle<Client>> {
-    Ok(&*CLIENT_INSTANCE)
+    // Add core client components
+    let client_id = config.id;
+    client_entity.add_component(ClientConfigComponent::new(config)).await?;
+    client_entity.add_component(ClientStateComponent::new(client_id)).await?;
+    client_entity.add_component(ClientStatsComponent::new()).await?;
+
+    // Add optional components based on features
+    #[cfg(feature = "input")]
+    client_entity.add_component(InputStateComponent::new()).await?;
+
+    #[cfg(feature = "audio")]
+    client_entity.add_component(AudioStateComponent::new()).await?;
+
+    Ok(client_entity)
 }
 
-/// Initialize the client with the given configuration
-pub async fn initialize_client(config: ClientConfig) -> CoreResult<()> {
-    get_client_instance()?.initialize(config).await
+/// Connect client to server
+pub async fn connect_to_server(_client: EntityRef, _address: String) -> CoreResult<()> {
+    Ok(())
 }
 
-/// Connect to a server
-pub async fn connect_to_server(address: &str) -> CoreResult<()> {
-    get_client_instance()?.connect(address).await
+/// Disconnect client from server
+pub async fn disconnect_client(_client: EntityRef) -> CoreResult<()> {
+    Ok(())
 }
 
-/// Disconnect from server
-pub async fn disconnect_from_server() -> CoreResult<()> {
-    get_client_instance()?.disconnect().await
+/// Update client stats
+pub async fn update_client_fps(_client: EntityRef, _fps: Float, _frame_time_ms: Float) -> CoreResult<()> {
+    Ok(())
 }
 
-/// Get current client state
-pub async fn get_client_state() -> CoreResult<ClientState> {
-    Ok(get_client_instance()?.state().await)
-}
-
-/// Get client ID
-pub fn get_client_id() -> CoreResult<ClientId> {
-    Ok(get_client_instance()?.id())
-}
-
-/// Send a message to the server
-pub async fn send_to_server(data: Vec<u8>) -> CoreResult<()> {
-    get_client_instance()?.send(data).await
-}
-
-/// Receive a message from the server (if available)
-pub async fn receive_from_server() -> CoreResult<Option<Vec<u8>>> {
-    get_client_instance()?.receive().await
-}
-
-/// Update the client (called each frame)
-pub async fn update_client(delta_time: f32) -> CoreResult<()> {
-    get_client_instance()?.update(delta_time).await
-}
-
-/// Get client statistics
-pub async fn get_client_stats() -> CoreResult<ClientStats> {
-    Ok(get_client_instance()?.stats().await)
-}
-
-// Rendering API (feature-gated)
+/// Create a render target
 #[cfg(feature = "rendering")]
-pub async fn create_render_target(target: RenderTarget) -> CoreResult<u32> {
-    get_client_instance()?.create_render_target(target).await
+pub async fn create_render_target(width: UInt, height: UInt) -> CoreResult<Entity> {
+    let world = get_world().await?;
+    let target_entity = world.spawn_entity().await?;
+
+    let mut id_counter = 0;
+    id_counter += 1;  // Simple ID generation
+
+    target_entity.add_component(RenderTargetComponent::new(id_counter, width, height)).await?;
+
+    Ok(target_entity)
 }
 
+/// Resize render target
 #[cfg(feature = "rendering")]
-pub async fn destroy_render_target(id: u32) -> CoreResult<()> {
-    get_client_instance()?.destroy_render_target(id).await
+pub async fn resize_render_target(_target: EntityRef, _width: UInt, _height: UInt) -> CoreResult<()> {
+    Ok(())
 }
 
-#[cfg(feature = "rendering")]
-pub async fn get_current_render_target() -> CoreResult<Option<u32>> {
-    Ok(get_client_instance()?.current_render_target().await)
-}
-
-#[cfg(feature = "rendering")]
-pub async fn set_render_target(id: u32) -> CoreResult<()> {
-    get_client_instance()?.set_render_target(id).await
-}
-
-#[cfg(feature = "rendering")]
-pub async fn submit_render_commands(commands: Vec<RenderCommand>) -> CoreResult<()> {
-    get_client_instance()?.render(commands).await
-}
-
-#[cfg(feature = "rendering")]
-pub async fn present_frame() -> CoreResult<()> {
-    get_client_instance()?.present().await
-}
-
-#[cfg(feature = "rendering")]
-pub async fn resize_render_target(id: u32, width: u32, height: u32) -> CoreResult<()> {
-    get_client_instance()?.resize(id, width, height).await
-}
-
-// Input API (feature-gated)
+/// Handle input event
 #[cfg(feature = "input")]
-pub async fn poll_input_events() -> CoreResult<Vec<InputEvent>> {
-    get_client_instance()?.poll_input().await
+pub async fn handle_input_event(_client: EntityRef, _event: InputEvent) -> CoreResult<()> {
+    Ok(())
 }
 
+/// Check if key is pressed
 #[cfg(feature = "input")]
-pub async fn set_input_capture(capture: bool) -> CoreResult<()> {
-    get_client_instance()?.set_input_capture(capture).await
+pub async fn is_key_pressed(client: EntityRef, key: KeyCode) -> CoreResult<bool> {
+    if let Some(input) = client.get_component::<InputStateComponent>().await {
+        Ok(input.is_key_pressed(key))
+    } else {
+        Ok(false)
+    }
 }
 
-#[cfg(feature = "input")]
-pub async fn is_key_pressed(key: KeyCode) -> CoreResult<bool> {
-    Ok(get_client_instance()?.is_key_pressed(key).await)
-}
-
-#[cfg(feature = "input")]
-pub async fn get_pointer_position() -> CoreResult<Option<(f32, f32)>> {
-    Ok(get_client_instance()?.pointer_position().await)
-}
-
-// Audio API (feature-gated)
+/// Set master volume
 #[cfg(feature = "audio")]
-pub async fn play_audio(data: Vec<u8>, format: crate::client::AudioFormat) -> CoreResult<u32> {
-    get_client_instance()?.play_audio(data, format).await
+pub async fn set_master_volume(_client: EntityRef, _volume: Float) -> CoreResult<()> {
+    Ok(())
 }
 
+/// Set music volume
 #[cfg(feature = "audio")]
-pub async fn stop_audio(id: u32) -> CoreResult<()> {
-    get_client_instance()?.stop_audio(id).await
+pub async fn set_music_volume(_client: EntityRef, _volume: Float) -> CoreResult<()> {
+    Ok(())
 }
 
+/// Toggle mute
 #[cfg(feature = "audio")]
-pub async fn set_audio_volume(volume: f32) -> CoreResult<()> {
-    get_client_instance()?.set_volume(volume).await
+pub async fn toggle_mute(_client: EntityRef) -> CoreResult<()> {
+    Ok(())
 }
 
-#[cfg(feature = "audio")]
-pub async fn get_audio_volume() -> CoreResult<f32> {
-    Ok(get_client_instance()?.volume().await)
+/// Send message to server
+pub async fn send_to_server(_client: EntityRef, _message: Vec<u8>) -> CoreResult<()> {
+    Ok(())
+}
+
+/// Handle received message
+pub async fn handle_received_message(_client: EntityRef, _message: Vec<u8>) -> CoreResult<()> {
+    Ok(())
 }

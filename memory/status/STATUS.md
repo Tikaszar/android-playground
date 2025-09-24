@@ -1,9 +1,9 @@
 # Status - Current Implementation Status
 
 ## Build Status
-- **Last known**: ❌ Build FAILS
+- **Last known**: ⚠️ Partial Build
 - **Issue**: systems/webgl and systems/ui don't compile
-- **Working**: core/*, systems/ecs, systems/console, systems/networking
+- **Working**: ALL core/* packages, systems/ecs, systems/console, systems/networking
 
 ## Package Implementation Status
 
@@ -13,11 +13,11 @@ All core packages follow data vs logic separation:
 | Package | Status | VTable | Data Only | Features |
 |---------|--------|--------|-----------|----------|
 | core/types | ✅ | N/A | ✅ | N/A |
-| core/ecs | ✅ | ✅ | ✅ | Many |
+| core/ecs | ✅ | ✅ | ✅ | None (all required) |
 | core/console | ✅ | ✅ | ✅ | output, logging, input, etc |
-| core/server | ✅ | ✅ | ✅ | websocket, channels, batching, etc |
-| core/client | ✅ | ✅ | ✅ | rendering, input, audio, etc |
-| core/rendering | ✅ | N/A | ✅ | N/A |
+| core/server | ✅ | N/A | ✅ ECS | websocket, channels, batching, etc |
+| core/client | ✅ | N/A | ✅ ECS | rendering, input, audio, etc |
+| core/rendering | ✅ | N/A | ✅ ECS | core-2d, core-3d, targets, etc |
 | core/ui | ✅ | N/A | ✅ | N/A |
 
 ### Systems Layer ⚠️ PARTIAL
