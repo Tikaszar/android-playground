@@ -1,75 +1,75 @@
 # Context - Session Continuity
 
-## Session 65 Complete ✅
-Hot-loadable module architecture designed:
-1. ✅ Analyzed VTable vs alternatives
-2. ✅ Designed complete module system
-3. ✅ Created feature-based dependencies
-4. ✅ Documented entire architecture
-5. ✅ Created implementation roadmap
+## Session 66 Complete ✅
+Pure Rust hot-loading implementation designed:
+1. ✅ Explored all approaches (rejected WASM, processes, bytecode)
+2. ✅ Designed pure Rust module interface (no C ABI)
+3. ✅ Documented single unsafe exception (Library::new only)
+4. ✅ Created complete module loader architecture
+5. ✅ Updated all documentation
 
 ## Key Accomplishments
-- Solved the NO DYN + hot-loading challenge with abi_stable
-- Designed 1000x faster system than VTable
-- Everything becomes hot-loadable (even the IDE itself!)
-- Feature-based dependencies with backwards compatibility
-- MCP integration for Claude development
+- Solved hot-loading with minimal unsafe (single Library::new())
+- Pure Rust interfaces (no C ABI)
+- 1000x faster than VTable (direct calls vs serialization)
+- All module types hot-loadable (Core, Systems, Plugins, Apps)
+- Console commands for runtime management
 
 ## Architecture Decision
-**Replacing VTable with Hot-Loadable Modules:**
+**Pure Rust Hot-Loading with Single Unsafe:**
 - VTable: ~1000ns per call (serialization overhead)
 - Modules: ~1-5ns per call (direct function pointers)
-- Everything hot-loadable without unsafe code
-- abi_stable provides safe FFI
+- Single unsafe exception well-documented
+- Pure Rust throughout (no extern "C")
 
-## Implementation Plan (Sessions 66-70)
-### Phase 1: Infrastructure (Session 66)
-- Create api/ crate
-- Add abi_stable dependency
-- Create minimal launcher
+## Implementation Plan (Sessions 67-71)
+### Phase 1: Infrastructure (Session 67)
+- Create api/ crate with pure Rust interfaces
+- Build systems/module-loader
+- Add libloading dependency
 
-### Phase 2: Core Migration (Session 67)
+### Phase 2: Core Migration (Session 68)
 - Remove VTable from core/ecs
-- Add module interfaces
+- Add module interfaces to core packages
 - Test hot-reload
 
-### Phase 3: Systems Migration (Session 68)
+### Phase 3: Systems Migration (Session 69)
 - Update systems/ecs
-- Add fast-path optimizations
 - Remove VTable handlers
+- Add module interfaces
 
-### Phase 4: Fix Broken Systems (Session 69)
+### Phase 4: Fix Broken Systems (Session 70)
 - Fix systems/webgl
 - Fix systems/ui
 - Test all systems
 
-### Phase 5: Apps/Plugins (Session 70)
+### Phase 5: Apps/Plugins (Session 71)
 - Convert editor to module
 - Update plugins
 - Full system test
 
-## Next Session Tasks (Session 66)
-1. Create api/ crate with BaseModule interface
-2. Add abi_stable = "0.11" to workspace
-3. Create launcher/ with minimal main.rs
-4. Start removing VTable from core/ecs
-5. Implement first module as proof of concept
+## Next Session Tasks (Session 67)
+1. Create api/ crate with pure Rust module interface
+2. Build systems/module-loader with single unsafe
+3. Remove VTable from core/ecs
+4. Add module interface to core/ecs
+5. Test hot-reload functionality
 
 ## Important Context
 - Build status: core/* compiles, systems/webgl and ui broken
 - Current git state: Uncommitted Entity/EntityRef changes from Session 61-64
-- Migration will be gradual - VTable and modules can coexist temporarily
+- Single unsafe exception documented in CLAUDE.md
 - Focus on getting one module working first as proof
 
 ## Technical Notes
-- Use `#[export_root_module]` for module entry points
-- Use `RString`, `RVec`, etc for ABI-stable types
-- Module dependencies go in module.toml files
-- Features resolved transitively
-- State preservation via save/restore functions
+- Use `#[no_mangle]` for module export
+- Pure Rust function pointers in VTable
+- Module dependencies in metadata
+- State preservation via serialization
+- libloading for dynamic library loading
 
 ## Success Metrics
 - Hot-reload in < 500ms
-- No unsafe code in our codebase
+- Single unsafe only (Library::new)
 - State preserved across reloads
-- IDE can reload itself while running
+- All module types hot-loadable

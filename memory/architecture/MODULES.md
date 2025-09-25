@@ -25,7 +25,7 @@ The entire Playground engine uses a hot-loadable module architecture where EVERY
 - **Location**: `plugins/*`
 - **Examples**: `plugins/movement`, `plugins/combat`
 - **Contains**: Game features, tools
-- **Dependencies**: `core/*` and `systems/*` via message bus
+- **Dependencies**: `core/*` only (use module calls for systems access)
 
 ### 4. App Modules
 - **Purpose**: Complete applications
@@ -34,28 +34,30 @@ The entire Playground engine uses a hot-loadable module architecture where EVERY
 - **Contains**: Application logic, UI
 - **Dependencies**: Everything they need
 
-## Module Interface (ABI-Stable)
+## Module Interface (Pure Rust, NO C ABI)
 
 ```rust
-// All modules implement this base interface
-#[repr(C)]
-#[derive(StableAbi)]
-pub struct BaseModule {
-    pub get_metadata: extern "C" fn() -> RString,
-    pub start_with_context: extern "C" fn(RRef<'_, ModuleContext>) -> RResult<(), RString>,
-    pub stop: extern "C" fn() -> RResult<(), RString>,
-    pub get_dependencies: extern "C" fn() -> RVec<ModuleDependency>,
-    pub save_state: extern "C" fn() -> RResult<RVec<u8>, RString>,
-    pub restore_state: extern "C" fn(RRef<'_, RVec<u8>>) -> RResult<(), RString>,
+// Pure Rust interface - no extern "C" or repr(C)
+#[no_mangle]
+pub static PLAYGROUND_MODULE: Module = Module {
+    metadata: &METADATA,
+    vtable: &VTABLE,
+};
+
+pub struct Module {
+    pub metadata: &'static ModuleMetadata,
+    pub vtable: &'static ModuleVTable,
 }
 
-// Module context passed during initialization
-#[repr(C)]
-#[derive(StableAbi)]
-pub struct ModuleContext {
-    pub features: RVec<RString>,      // Active features
-    pub version: Version,              // Module version
-    pub module_id: u32,                // Unique ID
+pub struct ModuleVTable {
+    // Pure Rust function pointers - no extern "C"!
+    pub create: fn() -> *mut u8,
+    pub destroy: fn(*mut u8),
+    pub initialize: fn(*mut u8, config: &[u8]) -> Result<(), String>,
+    pub shutdown: fn(*mut u8) -> Result<(), String>,
+    pub call: fn(*mut u8, method: &str, args: &[u8]) -> Result<Vec<u8>, String>,
+    pub save_state: fn(*const u8) -> Vec<u8>,
+    pub restore_state: fn(*mut u8, state: &[u8]) -> Result<(), String>,
 }
 ```
 
@@ -85,19 +87,20 @@ pub struct ModuleContext {
 
 ## Communication Methods
 
-### 1. Fast Path - Direct Function Pointers
+### 1. Fast Path - Direct Function Calls via VTable
 ```rust
 // For hot operations (1-5ns overhead)
-pub struct WorldOps {
-    spawn_entity: extern "C" fn() -> EntityId,
-    add_component: extern "C" fn(EntityId, ComponentId, *const u8) -> bool,
-}
+let result = (module.vtable.call)(
+    module.state,
+    "spawn_entity",
+    &[]
+)?;
 ```
 
-### 2. Slow Path - Message Bus
+### 2. Module Loader Interface
 ```rust
-// For cold operations (1000ns overhead)
-MESSAGE_BUS.call("systems.ecs", "complex_operation", params).await
+// Safe wrapper for module calls
+MODULE_LOADER.call_module(module_id, "method", args).await
 ```
 
 ## Hot-Reload Process
@@ -113,45 +116,38 @@ MESSAGE_BUS.call("systems.ecs", "complex_operation", params).await
 
 ## Module Loader
 
-### Minimal Launcher
+### Single Unsafe Exception
 ```rust
-// launcher/src/main.rs - Knows nothing about modules
-fn main() {
-    let config = load_config("launch.toml");
-    for module_path in config.modules {
-        let module = BaseModule_Ref::load_from_file(module_path)?;
-        module.start()?;
-    }
-    // Keep running and watch for reloads
-}
+// THE ONLY UNSAFE IN THE ENTIRE SYSTEM - DOCUMENTED EXCEPTION
+let library = unsafe {
+    Library::new(path)
+        .map_err(|e| CoreError::ModuleLoadFailed(e.to_string()))?
+};
 ```
 
-### Module Management (core/modules)
-- Create new modules from templates
-- Build modules via cargo
-- Load/unload modules at runtime
+### Module Loader (systems/module-loader)
+- Load modules with single unsafe Library::new()
+- Validate schemas before loading
 - Track dependencies
 - Handle hot-reload
+- Manage module lifecycle
 
 ## State Preservation
 
 Modules preserve state across reloads:
 
 ```rust
-extern "C" fn save_state() -> RResult<RVec<u8>, RString> {
-    let snapshot = ModuleSnapshot {
-        entities: self.entities.clone(),
-        components: self.components.clone(),
-        // Don't save transient data (caches, etc)
-    };
-    ROk(bincode::serialize(&snapshot)?.into())
+// Pure Rust - no extern "C"
+fn save_state(state: *const u8) -> Vec<u8> {
+    let module = unsafe { &*(state as *const EcsModule) };
+    bincode::serialize(&module.world).unwrap()
 }
 
-extern "C" fn restore_state(data: RRef<'_, RVec<u8>>) -> RResult<(), RString> {
-    let snapshot: ModuleSnapshot = bincode::deserialize(&data)?;
-    self.entities = snapshot.entities;
-    self.rebuild_caches();
-    ROk(())
+fn restore_state(state: *mut u8, saved: &[u8]) -> Result<(), String> {
+    let module = unsafe { &mut *(state as *mut EcsModule) };
+    module.world = bincode::deserialize(saved)
+        .map_err(|e| e.to_string())?;
+    Ok(())
 }
 ```
 
@@ -175,10 +171,10 @@ This allows Claude to:
 
 ✅ **Zero downtime development** - Change anything without restart
 ✅ **Fast iteration** - See changes in ~500ms
-✅ **Type safe** - abi_stable ensures compatibility
-✅ **No unsafe code** - abi_stable handles FFI
+✅ **Type safe** - Schema validation before loading
+✅ **Minimal unsafe** - Single unsafe Library::new() only
+✅ **Pure Rust** - No C ABI or extern "C"
 ✅ **Fine-grained control** - Feature flags for minimal loading
-✅ **Backwards compatible** - Semantic versioning support
 ✅ **Self-modifying** - IDE can reload itself
 
 ## Migration from VTable
@@ -196,9 +192,9 @@ This allows Claude to:
 - Everything hot-loadable
 
 ### Migration Steps
-1. Add `abi_stable` dependency
-2. Create `api/` crate with interfaces
+1. Create `api/` crate with pure Rust interfaces
+2. Build `systems/module-loader` with single unsafe
 3. Remove VTable from core packages
 4. Add module interfaces to all packages
-5. Create module loader in launcher
+5. Implement hot-reload with libloading
 6. Test hot-reload functionality

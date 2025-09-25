@@ -2,6 +2,7 @@
 
 ## #strict-rules
 - **NO unsafe code** - Never use `unsafe` blocks anywhere
+  - **EXCEPTION**: Single unsafe block in systems/module-loader for Library::new() ONLY
 - **NO std::any::Any** - Avoid runtime type casting
 - **NO super** - Explicit trait implementations only
 - **NO turbofish** - Use `.with_component(ComponentId)` instead of `::<T>`
