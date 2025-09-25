@@ -1,6 +1,40 @@
 # Patterns - Code Patterns and Examples
 
-## VTable Handler Pattern
+## Module Pattern (NEW - Replaces VTable)
+
+### Pure Rust Module Interface
+```rust
+// NO extern "C", NO repr(C) - Pure Rust!
+#[no_mangle]
+pub static PLAYGROUND_MODULE: Module = Module {
+    metadata: &METADATA,
+    vtable: &VTABLE,
+};
+
+static VTABLE: ModuleVTable = ModuleVTable {
+    create: module_create,
+    destroy: module_destroy,
+    call: module_call,
+    save_state: module_save_state,
+    restore_state: module_restore_state,
+};
+
+// Pure Rust function pointers
+fn module_call(state: *mut u8, method: &str, args: &[u8]) -> Result<Vec<u8>, String> {
+    // Implementation
+}
+```
+
+### Module Loader (Single Unsafe)
+```rust
+// THE ONLY UNSAFE - DOCUMENTED EXCEPTION
+let library = unsafe { Library::new(path)? };
+
+// Everything else is safe
+let module: Symbol<*const Module> = library.get(b"PLAYGROUND_MODULE")?;
+```
+
+## VTable Handler Pattern (DEPRECATED - Being Replaced)
 
 ### Correct Pattern (from systems/console)
 ```rust

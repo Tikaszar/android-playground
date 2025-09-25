@@ -3,21 +3,20 @@
 ## Immediate Priority: Implement Hot-Loadable Module System
 
 ### Phase 1: Create Module Infrastructure
-1. **Add abi_stable dependency** to workspace
-   - Version 0.11 for safe FFI
-   - No unsafe code needed
+1. **Add libloading dependency** to workspace
+   - For dynamic library loading
+   - Single unsafe exception documented
 
-2. **Create api/ crate** with module interfaces
-   - BaseModule trait (all modules)
-   - CoreModule trait (core/*)
-   - SystemModule trait (systems/*)
-   - PluginModule trait (plugins/*)
-   - AppModule trait (apps/*)
+2. **Create api/ crate** with pure Rust interfaces
+   - Module struct (no traits, no dyn)
+   - ModuleVTable with pure Rust function pointers
+   - ModuleMetadata for dependencies
+   - No C ABI or extern "C"
 
-3. **Create minimal launcher**
-   - Just loads modules from config
-   - No knowledge of engine internals
-   - File watching for hot-reload
+3. **Create systems/module-loader**
+   - Single unsafe for Library::new()
+   - Schema validation before loading
+   - Hot-reload support for all module types
 
 ### Phase 2: Migrate Core to Modules
 1. **Remove VTable from core packages**
@@ -44,13 +43,13 @@
 ### Phase 3: Migrate Systems to Modules
 1. **Update systems to use module interface**
    - Remove VTable handlers
-   - Implement module exports
+   - Implement pure Rust module exports
    - Direct implementation (no delegation)
 
-2. **Add fast-path optimizations**
-   - Function pointer tables for hot paths
-   - Message bus for cold paths
-   - Hybrid approach for flexibility
+2. **Optimize module calls**
+   - Direct function calls via vtable
+   - Serialization for type erasure
+   - ~1-5ns call overhead
 
 3. **Remove systems/logic** (deprecated)
    - Already identified as unnecessary
@@ -70,7 +69,7 @@
 ### Phase 5: Migrate Plugins and Apps
 1. **Update all plugins** to use core/* only
    - Remove systems/* dependencies
-   - Use message bus for communication
+   - Use module loader for system access
    - Add module interfaces
 
 2. **Convert apps to modules**
@@ -134,10 +133,10 @@
 ## Success Criteria
 
 ### For Module System
-- [ ] Zero unsafe code (abi_stable handles it)
+- [ ] Single unsafe only (Library::new)
 - [ ] Sub-second hot-reload
 - [ ] State preserved across reloads
-- [ ] Backwards compatibility via versions
+- [ ] Pure Rust interfaces (no C ABI)
 
 ### For Architecture
 - [ ] No VTable overhead (direct calls)
@@ -167,10 +166,10 @@
 
 ## Alternative Approaches
 
-### If abi_stable has issues
-- Consider safer-ffi crate
-- Build custom solution
-- Use WASM modules
+### If libloading has issues
+- Consider dlopen crate
+- Build custom loader
+- Accept more unsafe if needed
 
 ### If hot-reload too slow
 - Pre-compile modules

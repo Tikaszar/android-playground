@@ -1,11 +1,19 @@
 # Architecture - Complete Engine Architecture
 
-## Core Architectural Pattern (Sessions 52-57)
+## Core Architectural Pattern
 
-### The Current Architecture
+### Current Architecture (Being Replaced)
 ```
 Apps/Plugins → core/* packages (contracts only) → [VTable dispatch] → systems/* (implementations)
 ```
+
+### New Module-Based Architecture (Session 66+)
+```
+Apps/Plugins → core/* packages → [Module Loader] → systems/* (hot-loadable modules)
+```
+- Single unsafe exception (Library::new only)
+- Pure Rust interfaces (no C ABI)
+- Direct function calls (~1-5ns overhead)
 
 ## Data vs Logic Separation Pattern
 
@@ -167,11 +175,11 @@ pub async fn initialize() -> CoreResult<()> {
 
 ## Architectural Invariants
 
-1. **NO unsafe** - Use OnceCell, Lazy, not static mut
-2. **NO dyn** - Use concrete types with VTable dispatch
+1. **NO unsafe** - EXCEPTION: Single Library::new() in module loader only
+2. **NO dyn** - Use concrete types with module dispatch
 3. **NO Any** - Use serialization for type erasure
 4. **NO turbofish** - Use ComponentId not generics
 5. **Core is stateless** - Only data fields, no logic
-6. **Systems are replaceable** - Same contracts, different implementations
+6. **Systems are hot-loadable** - Runtime module replacement
 7. **Compile-time safety** - Missing features caught at compile time
-8. **Runtime dispatch** - VTable provides polymorphism without dyn
+8. **Runtime dispatch** - Modules provide polymorphism without dyn

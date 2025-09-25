@@ -168,9 +168,9 @@ A mobile-first game engine and IDE that runs entirely on Android devices (via Te
 ### Why Hot-Loadable Modules Instead of VTable?
 - **Direct function calls** - 1000x faster than VTable serialization
 - **Everything reloadable** - Core, Systems, Plugins, and Apps
-- **Safe FFI via abi_stable** - No unsafe code needed
-- **Feature-based dependencies** - Fine-grained version control
-- **Backwards compatibility** - Semantic versioning support
+- **Single unsafe exception** - Only Library::new() needed
+- **Pure Rust interfaces** - No C ABI or extern "C"
+- **State preservation** - Via serialization
 - **Self-modifying** - IDE can reload itself while running
 
 ### Why Feature Flags?
