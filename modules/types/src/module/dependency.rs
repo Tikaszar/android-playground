@@ -1,9 +1,7 @@
 //! Dependency on another module
 
-use serde::{Deserialize, Serialize};
-
 /// Dependency on another module
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone)]
 pub struct ModuleDependency {
     /// Name of the dependency
     pub name: &'static str,

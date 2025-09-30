@@ -1,38 +1,28 @@
-//! Core ECS - Foundation for the entire engine
-//! 
-//! This provides the fundamental ECS infrastructure that all other packages build upon.
-//! Apps and Plugins import this PLUS the specific core/* packages they need.
-//! 
-//! Example usage:
-//! ```rust
-//! use playground_core_ecs::{World, Entity, Component, initialize_world};
-//! use playground_core_server::api as networking;  // Additional import for networking
-//! use playground_core_ui::api as ui;              // Additional import for UI
-//! ```
+//! Core ECS Module - EXPORTS ONLY
+//!
+//! This provides the fundamental ECS infrastructure with Event System.
+//! All functionality is implemented by systems/ecs ViewModel.
 
-// Core ECS modules (always available)
-pub mod entity;
-pub mod entity_ref;
-pub mod generation;
-pub mod component;
+// Public API exports
 pub mod error;
-pub mod world;
-pub mod registry;
-pub mod messaging;
-pub mod query;
-pub mod storage;
-pub mod system;
-pub mod module;
+pub mod model;
+pub mod view;
 
-// Re-export core ECS types (always available)
-pub use entity::*;
-pub use entity_ref::{Entity, EntityRef};
-pub use generation::Generation;
-pub use component::*;
-pub use error::*;
-pub use world::{World, get_world};  // Explicit to avoid ambiguous glob
-pub use registry::*;
-pub use messaging::*;
-pub use query::*;
-pub use storage::*;
-pub use system::*;
+// Module exports (symbols for loader)
+mod module_exports;
+
+// Re-exports for convenience
+pub use error::{EcsError, EcsResult};
+
+// Re-export all model types
+pub use model::{
+    // Entity types
+    EntityId, Generation, Entity, EntityRef,
+    // Component types
+    Component, ComponentId, ComponentData,
+    // Event types
+    Event, EventId, Priority, Subscription, SubscriptionId,
+    // World
+    World,
+};
+

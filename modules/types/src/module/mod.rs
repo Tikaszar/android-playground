@@ -1,7 +1,7 @@
 //! Module types and interfaces
 
 mod base;
-mod dependency;
+pub mod dependency;  // Make public for metadata.rs
 mod lifecycle;
 mod r#type;
 

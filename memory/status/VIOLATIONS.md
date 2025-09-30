@@ -1,14 +1,14 @@
-# Violations - MVVM Implementation Requirements (Session 68)
+# Violations - MVVM Implementation Requirements (Session 69)
 
-## Resolved in Session 68 ✅
+## Resolved in Session 69 ✅
 
-### 1. modules/* Infrastructure Complete
+### 1. core/ecs MVVM Implementation Complete
 **Status**: ✅ IMPLEMENTED
-- Removed obsolete api/ and systems/module-loader/
-- Created proper modules/* infrastructure
-- NO traits - concrete base classes only
-- One struct per file
-- Proper Rust module organization
+- Rewrote core/ecs from scratch with MVVM pattern
+- Model layer: Pure data structures
+- View layer: API contracts only
+- Event System replaces Messaging (Pre/Post events)
+- Compiles successfully as dylib
 
 ## Pending - Core/Systems MVVM Conversion 🟡
 

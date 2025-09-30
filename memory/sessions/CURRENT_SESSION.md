@@ -1,71 +1,46 @@
-# Current Session - Session 68: MVVM Implementation
+# Current Session - Session 69: core/ecs MVVM Rewrite
 
 ## Session Goal
-Implement the MVVM-based module system infrastructure designed in Session 67.
+Rewrite core/ecs with MVVM pattern and Event System.
 
 ## Work Completed This Session
 
-### 1. Cleaned Up Previous Work
-- Removed obsolete api/ directory
-- Removed systems/module-loader/ directory
-- Started fresh with proper MVVM implementation
+### 1. Complete core/ecs Rewrite ✅
+- Removed old core/ecs implementation
+- Created new MVVM structure:
+  - Model: Pure data structures
+  - View: API contracts only
+  - Module exports: PLAYGROUND_MODULE and PLAYGROUND_VIEW_API
 
-### 2. Implemented modules/* Infrastructure ✅
+### 2. Event System Implementation ✅
+- Replaced Messaging with Event System
+- Pre-events (cancellable)
+- Post-events (notifications)
+- Priority-based subscriptions
+- Common event IDs predefined
 
-#### modules/types ✅
-- Created MVVM base types (Model, View, ViewModel)
-- **NO traits** - Used concrete base classes only
-- **Proper Rust structure** - Subdirectories with mod.rs
-- **One struct per file** - Clean separation
-- Structure:
-  ```
-  modules/types/src/
-  ├── model/     (base.rs, data.rs)
-  ├── view/      (base.rs, api.rs, function.rs)
-  ├── viewmodel/ (base.rs, function.rs, impl.rs)
-  └── module/    (base.rs, lifecycle.rs, type.rs, dependency.rs)
-  ```
+### 3. Fixed modules/types Issues ✅
+- Changed ViewAPI to use static slice instead of Vec
+- Added Copy/Clone to ModuleLifecycle
+- Fixed all compilation errors
 
-#### modules/loader ✅
-- **THE single unsafe block** - All unsafe operations in one place
-- Loads dynamic libraries (.so/.dll)
-- Extracts module symbols
-- Initializes modules
-
-#### modules/binding ✅
-- Direct View-ViewModel function binding
-- No serialization overhead
-- Runtime binding registry
-- Handles pending bindings
-
-#### modules/resolver ✅
-- Reads Cargo.toml module declarations
-- Resolves System modules for Core modules
-- Validates feature requirements
-- Proper structure with config/ subdirectory
-
-#### modules/registry ✅
-- Runtime module orchestration
-- Hot-reload support
-- Module lifecycle management
-- Proper structure with info/ subdirectory
-
-### 3. Fixed Architecture Violations
-- **NO traits** - Replaced with concrete base classes
-- **One struct per file** - Properly separated all types
-- **Proper module organization** - Using Rust standard subdirectories
-- **Clean lib.rs files** - Only modules and re-exports
+### 4. Architecture Compliance ✅
+- NO unsafe code
+- NO dyn/Any
+- One struct per file
+- lib.rs/mod.rs exports only
+- Direct function binding ready
 
 ## Key Implementation Details
 
-1. **Single unsafe block** in modules/loader/src/loader.rs
-2. **Concrete base classes** instead of traits (NO dyn)
-3. **Proper Rust module structure** with subdirectories
-4. **Direct function pointers** for ~1-5ns overhead
+1. **Event System > Messaging**
+2. **MVVM separation enforced**
+3. **Compiles as dylib**
+4. **~1-5ns overhead via direct binding**
 
-## Next Session (69)
+## Next Session (70)
 
-1. Convert core/ecs to MVVM pattern
-2. Split into model/ and view/ directories
-3. Remove VTable code
-4. Create corresponding systems/ecs ViewModel
+1. Create systems/ecs with ViewModel implementation
+2. Implement all View functions
+3. Test View-ViewModel binding
+4. Verify hot-reload capability

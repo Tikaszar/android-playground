@@ -25,10 +25,11 @@
 
 ## Phase 2: Convert Core Modules to MVVM
 
-### 2.1 core/ecs
+### 2.1 core/ecs ✅ COMPLETE (Session 69)
 - Split into model/ and view/
 - Model: World, Entity, Component data
 - View: spawn_entity, query, etc APIs
+- Event System replaces Messaging
 
 ### 2.2 core/console
 - Model: Terminal state, Dashboard data

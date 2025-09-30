@@ -1,6 +1,7 @@
 //! Module lifecycle function pointers
 
 /// Pure Rust function pointers for module lifecycle
+#[derive(Copy, Clone)]
 pub struct ModuleLifecycle {
     /// Initialize module with configuration
     pub initialize: fn(config: &[u8]) -> Result<(), String>,

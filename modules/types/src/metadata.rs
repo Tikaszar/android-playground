@@ -1,10 +1,9 @@
 //! Module metadata structure
 
 use crate::module::dependency::ModuleDependency;
-use serde::{Deserialize, Serialize};
 
 /// Metadata for a module
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone)]
 pub struct ModuleMetadata {
     /// Module name (e.g., "playground-core-ecs")
     pub name: &'static str,

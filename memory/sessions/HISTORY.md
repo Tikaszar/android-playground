@@ -25,6 +25,14 @@
 - One struct per file throughout
 - Direct function pointer binding for minimal overhead
 
+### Session 69: core/ecs MVVM Rewrite
+- Complete rewrite of core/ecs with MVVM pattern
+- Event System replaces Messaging (Pre/Post events with Pub-Sub)
+- Model layer: Pure data structures only
+- View layer: API contracts that bind to ViewModel
+- Compiles successfully as dylib (.dll/.so)
+- Ready for systems/ecs ViewModel implementation
+
 ### Session 66: Pure Rust Hot-Loading Implementation
 - Finalized pure Rust hot-loading design (no C ABI)
 - Single unsafe exception for Library::new() documented

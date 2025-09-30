@@ -4,5 +4,5 @@ use super::function::ViewFunction;
 
 /// Collection of View API functions
 pub struct ViewAPI {
-    pub functions: Vec<(&'static str, ViewFunction)>,
+    pub functions: &'static [(&'static str, ViewFunction)],
 }
