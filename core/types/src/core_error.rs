@@ -102,7 +102,16 @@ pub enum CoreError {
     
     #[error("Cancelled: {0}")]
     Cancelled(String),
-    
+
+    #[error("Module not found: {0}")]
+    ModuleNotFound(String),
+
+    #[error("Module load failed: {0}")]
+    ModuleLoadFailed(String),
+
+    #[error("Module call failed: {0}")]
+    ModuleCallFailed(String),
+
     #[error("Generic error: {0}")]
     Generic(String),
 }

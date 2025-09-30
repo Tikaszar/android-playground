@@ -5,8 +5,7 @@
 
 use std::sync::{Arc, Weak};
 use crate::{
-    EntityId, Generation, World, Component, ComponentData,
-    CoreResult,
+    EntityId, Generation, World,
 };
 use playground_core_types::Handle;
 
@@ -22,13 +21,14 @@ pub struct EntityRef {
 }
 
 impl EntityRef {
-    /// Check if this entity reference is still valid
-    pub async fn is_valid(&self) -> bool {
-        if let Some(world) = self.world.upgrade() {
-            world.validate_entity(self.id, self.generation).await.unwrap_or(false)
-        } else {
-            false
-        }
+    /// Get the entity ID (use with caution)
+    pub fn id(&self) -> EntityId {
+        self.id
+    }
+
+    /// Get the generation
+    pub fn generation(&self) -> Generation {
+        self.generation
     }
 
     /// Try to upgrade to a strong Entity handle
@@ -40,23 +40,9 @@ impl EntityRef {
         })
     }
 
-    /// Get the entity ID (use with caution)
-    pub fn id(&self) -> EntityId {
-        self.id
-    }
-
-    /// Get the generation
-    pub fn generation(&self) -> Generation {
-        self.generation
-    }
-
-    /// Try to get a component from this entity
-    pub async fn get_component<T: ComponentData>(&self) -> Option<T> {
-        if let Some(entity) = self.upgrade() {
-            entity.get_component::<T>().await.ok()
-        } else {
-            None
-        }
+    /// Check if the weak reference is still valid (world exists)
+    pub fn is_valid(&self) -> bool {
+        self.world.upgrade().is_some()
     }
 }
 
@@ -71,8 +57,8 @@ impl Eq for EntityRef {}
 
 /// A strong reference to an entity
 ///
-/// This handle keeps the World alive and provides direct access to
-/// the entity's components. Convert to EntityRef for storage in components.
+/// This handle keeps the World alive and provides the entity ID
+/// and generation. Operations are performed via the module system.
 #[derive(Clone)]
 pub struct Entity {
     pub(crate) id: EntityId,
@@ -81,6 +67,11 @@ pub struct Entity {
 }
 
 impl Entity {
+    /// Create a new entity handle (used by systems/ecs module)
+    pub fn new(id: EntityId, generation: Generation, world: Handle<World>) -> Self {
+        Self { id, generation, world }
+    }
+
     /// Get the entity ID (use with caution, prefer passing Entity handles)
     pub fn id(&self) -> EntityId {
         self.id
@@ -91,6 +82,11 @@ impl Entity {
         self.generation
     }
 
+    /// Get a reference to the world
+    pub fn world(&self) -> &Handle<World> {
+        &self.world
+    }
+
     /// Create a weak reference to this entity
     pub fn downgrade(&self) -> EntityRef {
         EntityRef {
@@ -98,38 +94,6 @@ impl Entity {
             generation: self.generation,
             world: Arc::downgrade(&self.world),
         }
-    }
-
-    /// Check if this entity is still valid
-    pub async fn is_valid(&self) -> bool {
-        self.world.validate_entity(self.id, self.generation).await.unwrap_or(false)
-    }
-
-    /// Add a component to this entity
-    pub async fn add_component<T: ComponentData>(&self, component: T) -> CoreResult<()> {
-        let component = Component::new(component).await?;
-        self.world.add_component_internal(self.id, component).await
-    }
-
-    /// Get a component from this entity
-    pub async fn get_component<T: ComponentData>(&self) -> CoreResult<T> {
-        let component = self.world.get_component_internal(self.id, T::component_id()).await?;
-        component.deserialize::<T>().await
-    }
-
-    /// Remove a component from this entity
-    pub async fn remove_component<T: ComponentData>(&self) -> CoreResult<()> {
-        self.world.remove_component_internal(self.id, T::component_id()).await
-    }
-
-    /// Check if this entity has a component
-    pub async fn has_component<T: ComponentData>(&self) -> bool {
-        self.world.has_component(self.id, T::component_id()).await
-    }
-
-    /// Despawn this entity
-    pub async fn despawn(self) -> CoreResult<()> {
-        self.world.despawn_entity_internal(self.id).await
     }
 }
 

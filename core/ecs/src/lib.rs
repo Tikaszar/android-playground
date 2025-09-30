@@ -17,12 +17,12 @@ pub mod generation;
 pub mod component;
 pub mod error;
 pub mod world;
-pub mod vtable;
 pub mod registry;
 pub mod messaging;
 pub mod query;
 pub mod storage;
 pub mod system;
+pub mod module;
 
 // Re-export core ECS types (always available)
 pub use entity::*;
@@ -30,8 +30,7 @@ pub use entity_ref::{Entity, EntityRef};
 pub use generation::Generation;
 pub use component::*;
 pub use error::*;
-pub use world::*;
-pub use vtable::*;
+pub use world::{World, get_world};  // Explicit to avoid ambiguous glob
 pub use registry::*;
 pub use messaging::*;
 pub use query::*;

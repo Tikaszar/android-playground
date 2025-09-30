@@ -6,6 +6,7 @@ edition = "2021"
 [dependencies]
 # Core dependencies only - no other core/* or systems/* packages!
 playground-core-types = { path = "../types" }
+playground-api = { path = "../../api" }
 bytes = { workspace = true }
 thiserror = { workspace = true }
 serde = { workspace = true }

@@ -1,152 +1,85 @@
-# Violations - Current Architecture Violations
+# Violations - MVVM Implementation Requirements (Session 67)
 
-## Critical Violations 🔴
+## Critical - Uncommitted Changes 🔴
 
-### 1. ~~core/rendering singleton pattern~~ ✅ FIXED
-**Location**: core/rendering
-**Status**: RESOLVED in Session 64
-**Solution Applied**:
-- Deleted renderer.rs and operations.rs
-- Removed singleton RENDERER_INSTANCE
-- Removed separate VTable
-- Everything is now entities with components
-- API functions take EntityRef parameters
+### 1. Session 66 Partial Implementation
+**Location**: Working directory
+**Issue**: Half-implemented module system
+**Files**:
+- api/ directory (should be modules/)
+- systems/module-loader/ (wrong location)
+- core/ecs partially modified
+**Fix**: Revert all changes, start fresh with MVVM
 
-### 2. ~~unsafe usage in systems/networking~~ ✅ FIXED
-**Location**: systems/networking/src/vtable_handlers.rs
-**Status**: RESOLVED in Session 58
-**Solution Applied**:
-- Replaced `static mut` with `Lazy<NetworkState>`
-- Used `Handle<T>` and `Shared<T>` type aliases consistently
-- Removed all unsafe blocks
+## Major - Architecture Changes Needed 🟠
 
-### 2. ~~core/server and core/client singletons~~ ✅ FIXED
-**Location**: core/server and core/client
-**Status**: RESOLVED in Session 62
-**Solution Applied**:
-- Complete rewrite to use ECS components
-- Removed singleton Server and Client structs
-- Everything is now entities with components
-- API functions return Entity handles
+### 2. Remove ALL VTable Code
+**Location**: All core/* packages
+**Fix Required**:
+- Delete vtable.rs files
+- Remove VTable fields from structs
+- Replace with MVVM View APIs
 
-### 3. Plugins don't compile
-**Location**: All plugins/* packages
-**Issue**: Dependencies removed but code still imports systems/*
-```rust
-// VIOLATION: All plugin source files still have:
-use playground_systems_logic::...
-use playground_systems_ui::...
+### 3. Split Core Modules into Model/View
+**Location**: core/ecs, core/console, core/rendering
+**Fix Required**:
 ```
-**Fix Required**: Complete rewrite to use core/* only with feature flags
-**Priority**: CRITICAL - Nothing compiles
-
-## Major Violations 🟠
-
-### 4. ~~systems/networking needs updating for new ECS~~ ✅ FIXED
-**Location**: systems/networking
-**Status**: RESOLVED in Session 63
-**Solution Applied**:
-- Complete rewrite to use ECS entities
-- Created state management for Entity references
-- VTable registration through world.vtable
-- All compilation errors fixed
-
-### 5. systems/webgl needs updating for new ECS
-**Location**: systems/webgl
-**Issue**: Still expects old singleton patterns, needs to query ECS
-**Fix Required**: Update to query for rendering components
-**Priority**: HIGH - Blocks rendering
-
-### 6. systems/ui needs complete rewrite
-**Location**: systems/ui
-**Issue**: Old architecture, uses traits instead of VTable
-**Fix Required**: Complete rewrite following data vs logic pattern
-**Priority**: HIGH - Blocks UI
-
-### 6. ~~systems/logic deprecated~~ ✅ REMOVED
-**Location**: systems/logic
-**Status**: REMOVED in Session 59
-**Solution Applied**:
-- Deleted systems/logic directory
-- Removed from workspace
-- Removed all dependencies
-
-## Minor Violations 🟡
-
-### 6. Incomplete client implementation
-**Location**: systems/networking/src/vtable_handlers.rs:466-529
-**Issue**: Client operations mostly stubbed
-```rust
-async fn handle_client_send(_payload: Bytes) -> VTableResponse {
-    // Send data through WebSocket
-    // Implementation would send through active connection
-    success_response(None)
-}
+core/ecs/
+├── model/
+│   ├── world.rs
+│   └── entity.rs
+└── view/
+    ├── spawn_entity.rs
+    └── query.rs
 ```
-**Fix Required**: Implement actual WebSocket client
-**Priority**: HIGH - Needed for testing
 
-### 7. ~~Non-networking operations in networking~~ ✅ FIXED
-**Location**: systems/networking/src/vtable_handlers.rs
-**Status**: RESOLVED in Session 58
-**Solution Applied**:
-- Removed `handle_render_operations` (belongs in systems/webgl)
-- Removed `handle_audio_operations` (belongs in systems/audio)
-- Removed `handle_input_operations` (belongs in systems/input)
-- Updated registration.rs to remove VTable registrations
+### 4. Convert Systems to ViewModel
+**Location**: systems/ecs, systems/console, systems/webgl
+**Fix Required**:
+```
+systems/ecs/
+└── viewmodel/
+    ├── spawn_entity.rs
+    └── query.rs
+```
 
-### 8. Error handling inconsistent
-**Location**: Various vtable_handlers
-**Issue**: Some operations return generic errors or silently succeed
-**Fix Required**: Consistent error messages with context
-**Priority**: LOW - Quality issue
+## Build System Changes 🟡
 
-## Code Smell Issues 💭
+### 5. Add Cargo.toml Metadata
+**Location**: All apps/*, plugins/*
+**Fix Required**:
+```toml
+[[package.metadata.modules.core]]
+name = "playground-core-rendering"
+features = ["shaders"]
+systems = ["playground-systems-webgl"]
+```
 
-### 9. NetworkServer duplicates Server fields
-**Location**: systems/networking/src/server.rs
-**Issue**: Some fields duplicate what's in core/server
-**Analysis**: This is actually OK - NetworkServer holds implementation-specific state
-**Action**: No fix needed, but document better
+### 6. Add build.rs Validation
+**Location**: All apps/*
+**Fix Required**: Compile-time feature checking
 
-### 10. Global state management
-**Location**: Various systems
-**Issue**: Different patterns for managing global state
-**Fix Required**: Standardize on OnceCell pattern
-**Priority**: LOW - Consistency issue
+### 7. Set Module Compilation
+**Location**: All core/*, systems/*, plugins/*, apps/*
+**Fix Required**:
+```toml
+[lib]
+crate-type = ["cdylib"]
+```
 
-## Documentation Violations 📝
+## Implementation Order
 
-### 11. Outdated architecture docs
-**Location**: README.md, old ROADMAP.md
-**Issue**: Still reference old architecture
-**Fix Required**: Update to reflect current architecture
-**Priority**: LOW - Documentation debt
+1. **First**: Revert uncommitted changes
+2. **Second**: Create modules/* infrastructure
+3. **Third**: Convert core/ecs to Model+View
+4. **Fourth**: Convert systems/ecs to ViewModel
+5. **Fifth**: Test basic loading and binding
+6. **Sixth**: Convert remaining modules
 
-## Summary by Component
+## Success Criteria
 
-| Component | Critical | Major | Minor | Total |
-|-----------|----------|-------|-------|-------|
-| systems/networking | 0 ✅ | 0 ✅ | 0 ✅ | 0 ✅ |
-| systems/webgl | 0 | 1 | 0 | 1 |
-| systems/ui | 0 | 1 | 0 | 1 |
-| plugins/* | 1 | 0 | 0 | 1 |
-| Documentation | 0 | 0 | 1 | 1 |
-| Module System | 0 | 0 | 1 | 1 |
-
-**Total**: 1 Critical (plugins), 2 Major (webgl, ui), 2 Minor violations
-
-## New Architectural Items
-
-### Module System Implementation
-**Status**: Designed, not implemented
-**Note**: Single unsafe exception documented for Library::new()
-**Priority**: HIGH - Foundation for all hot-loading
-
-## Fix Order
-
-1. **First**: Fix systems/webgl compilation (Blocks everything)
-2. **Second**: Fix systems/ui compilation (Blocks plugins)
-3. **Third**: Rewrite all plugins to use core/* (Major effort)
-4. **Fourth**: Complete client implementation (For testing)
-5. **Later**: Documentation updates
+- ✅ Zero VTable code remaining
+- ✅ All modules follow MVVM pattern
+- ✅ Compile-time validation working
+- ✅ Direct function calls (~1-5ns)
+- ✅ Hot-reload functional

@@ -1,69 +1,54 @@
-# Current Session - Active Work
+# Current Session - Session 67: MVVM Architecture Design
 
-## Session 66: Pure Rust Hot-Loading Implementation
+## Session Goal
+Design and document MVVM-based module system that eliminates VTable while maintaining hot-loading and compile-time safety.
 
-### Session Goal
-Implement pure Rust hot-loading system with single unsafe exception for Library::new(), supporting all module types (Core, Systems, Plugins, Apps) with runtime reload capability.
+## Work Completed This Session
 
-### Work Completed This Session
+### 1. Designed MVVM Architecture
+- **Model**: Data structures (core/*/model/)
+- **View**: API contracts (core/*/view/)
+- **ViewModel**: Implementation (systems/*/viewmodel/)
+- Core modules = Model + View
+- System modules = ViewModel only
 
-#### 1. Design Iterations
-- Explored multiple approaches (WASM, separate processes, bytecode)
-- Rejected all approaches that violated core rules
-- Settled on libloading with single unsafe exception
+### 2. App-Driven Module Loading
+- Apps declare which Core modules they need
+- Apps declare which Systems implement them
+- Features declared at Core level
+- Unused modules don't load
 
-#### 2. Pure Rust Module Interface
-- Designed pure Rust interface (no C ABI, no extern "C")
-- Module exports single static PLAYGROUND_MODULE
-- VTable uses pure Rust function pointers
-- All communication through serialization
+### 3. Compile-Time Safety
+- build.rs validates Systems provide required features
+- Plugin requirements checked against App declarations
+- Missing features = compile error
+- Type mismatches = compile error
 
-#### 3. Single Unsafe Exception
-- Documented exception in CLAUDE.md
-- Only unsafe is Library::new() in module loader
-- Everything else wrapped in safe abstractions
-- Extensive validation before unsafe call
-
-#### 4. Module System Architecture
-- Support for all module types (Core, Systems, Plugins, Apps)
-- Hot-reload preserves state across reloads
-- Dependency tracking and validation
-- Console commands for runtime management
-
-#### 5. Documentation Updated
-- Updated `memory/architecture/MODULES.md` - Pure Rust design
-- Updated `CLAUDE.md` - Documented unsafe exception
-- Clear migration path from VTable
-
-### Key Decisions
-
-1. **Single unsafe exception** - Only Library::new() allowed
-2. **Pure Rust interfaces** - No C ABI or extern "C"
-3. **Use libloading** - For dynamic library loading
-4. **All module types hot-loadable** - Core, Systems, Plugins, Apps
-5. **State preservation** - Via serialization
-6. **Schema validation** - Before loading modules
-7. **Console commands** - Runtime module management
-
-### Architecture Highlights
-
-```
-systems/module-loader (with single unsafe)
-    ↓ loads
-api/ (pure Rust interfaces)
-    ↓ implement
-modules/
-    ├── core/*     (data/contracts)
-    ├── systems/*  (implementations)
-    ├── plugins/*  (features)
-    └── apps/*     (applications)
-
-All hot-loadable at runtime!
+### 4. Cargo.toml Module Declaration
+```toml
+[[package.metadata.modules.core]]
+name = "playground-core-rendering"
+features = ["shaders", "textures"]
+systems = ["playground-systems-vulkan", "playground-systems-webgl"]
 ```
 
-### Next Steps (Session 67)
-1. Create `api/` crate with pure Rust interfaces
-2. Build `systems/module-loader` implementation
-3. Remove VTable from core/ecs
-4. Add module interface to first core package
-5. Test hot-reload functionality
+### 5. No Runtime Indirection
+- Direct function calls via binding
+- ~1-5ns overhead (no VTable)
+- Binding happens once at load time
+- After binding, just function pointers
+
+## Key Design Decisions
+
+1. **MVVM instead of VTable** - Clean separation with compile-time safety
+2. **Apps control everything** - Declare Core, Systems, and features
+3. **Cargo.toml driven** - No separate config files
+4. **Compile-time validation** - All errors before runtime
+5. **modules/* infrastructure** - Not loadable, enables loading
+
+## Next Session (68)
+
+1. Revert uncommitted changes from Session 66
+2. Create modules/* infrastructure
+3. Start with modules/types for MVVM base
+4. Implement modules/loader with single unsafe

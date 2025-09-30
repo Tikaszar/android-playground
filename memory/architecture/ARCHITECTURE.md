@@ -1,91 +1,81 @@
-# Architecture - Complete Engine Architecture
+# Architecture - MVVM-Based Module System
 
-## Core Architectural Pattern
+## Core Architectural Pattern (Session 67)
 
-### Current Architecture (Being Replaced)
+### MVVM Architecture
 ```
-Apps/Plugins → core/* packages (contracts only) → [VTable dispatch] → systems/* (implementations)
-```
-
-### New Module-Based Architecture (Session 66+)
-```
-Apps/Plugins → core/* packages → [Module Loader] → systems/* (hot-loadable modules)
-```
-- Single unsafe exception (Library::new only)
-- Pure Rust interfaces (no C ABI)
-- Direct function calls (~1-5ns overhead)
-
-## Data vs Logic Separation Pattern
-
-### Abstract Base Class Pattern
-- **core/** packages = Abstract base classes (data fields ONLY, no logic)
-- **systems/** packages = Concrete implementations (ALL the logic)
-- **VTable** = Runtime method dispatch between them
-
-This pattern allows polymorphic behavior without `dyn` trait objects, maintaining compile-time type safety while achieving runtime dispatch.
-
-### Example Structure
-```rust
-// core/server/src/server.rs - Data ONLY
-pub struct Server {
-    pub vtable: VTable,
-    pub config: Shared<ServerConfig>,
-    pub stats: Shared<ServerStats>,
-    pub connections: Shared<HashMap<ConnectionId, ConnectionInfo>>,
-    // ... just data fields
-}
-
-// systems/networking/src/vtable_handlers.rs - Logic ONLY
-pub async fn handle_server_operations(operation: String, payload: Bytes) -> VTableResponse {
-    match operation.as_str() {
-        "start" => handle_server_start(payload).await,
-        "stop" => handle_server_stop().await,
-        // ... actual implementation
-    }
-}
+Apps → Plugins → Core (Model+View) → [Module Binding] → Systems (ViewModel)
 ```
 
-## VTable Dispatch System
+**Key Components:**
+- **Model** = Data structures (core/*/model/)
+- **View** = API contracts (core/*/view/)
+- **ViewModel** = Implementation (systems/*/viewmodel/)
+- **Binding** = Compile-time linking of View to ViewModel
 
-### How VTable Works
-1. Core packages create global instances with VTable
-2. Systems register handlers during initialization
-3. Core methods delegate through VTable to systems
-4. Systems perform work and update core's data fields
+## MVVM Separation Pattern
 
-### VTable Command Flow
-```rust
-// 1. App calls core API
-playground_core_server::start_server(config).await
+### Strict Module Types
+- **Core modules** = Model (data) + View (API contracts)
+- **System modules** = ViewModel (implementation only)
+- **Plugin modules** = High-level features (use Core APIs)
+- **App modules** = Applications (use Plugin APIs, declare Systems)
 
-// 2. Core delegates through VTable
-server.vtable.send_command("server", "start", payload).await
+### No Runtime Indirection
+- Direct function calls via compile-time binding
+- ~1-5ns overhead (no VTable, no serialization)
+- Compile-time errors for missing implementations
 
-// 3. System handler receives and processes
-handle_server_operations("start", payload).await
+### Module Structure Example
+```
+core/ecs/
+├── model/
+│   ├── world.rs          # Data structure
+│   └── entity.rs         # Data structure
+└── view/
+    ├── spawn_entity.rs   # API contract
+    └── query.rs          # API contract
 
-// 4. System updates core's data fields
-let server = playground_core_server::get_server_instance()?;
-*server.is_running.write().await = true;
+systems/ecs/
+└── viewmodel/
+    ├── spawn_entity.rs   # Implementation
+    └── query.rs          # Implementation
 ```
 
-## Feature Flag System
+## Module Declaration System
 
-### Compile-Time Capabilities
-Core packages use Cargo features to determine available capabilities:
-- `websocket`, `tcp`, `udp`, `ipc` - Transport protocols
-- `channels` - Channel-based messaging
-- `batching` - Message batching
-- `compression`, `encryption` - Data processing
-- `rendering`, `input`, `audio` - Client capabilities
+### Apps Declare Everything
+```toml
+# apps/editor/Cargo.toml
+[[package.metadata.modules.core]]
+name = "playground-core-rendering"
+features = ["shaders", "textures"]
+systems = [
+    "playground-systems-vulkan",
+    "playground-systems-webgl"  # Fallback
+]
+```
 
-### Feature-Gated Code
-```rust
-#[cfg(feature = "channels")]
-pub channels: Shared<HashMap<ChannelId, ChannelInfo>>,
+### Compile-Time Validation
+- build.rs validates System provides required features
+- Missing features = compile error
+- Wrong System = compile error
+- Plugin requirements checked against App declarations
 
-#[cfg(feature = "rendering")]
-pub render_targets: Shared<HashMap<u32, RenderTarget>>,
+## Module Loading from Cargo.toml
+
+### App-Driven Loading
+- Apps/Plugins declare Core modules in Cargo.toml
+- Apps declare which Systems implement Core modules
+- Features specified at Core level, apply to any System
+- Only declared modules load (unused Core/Systems don't load)
+
+### System Feature Validation
+```toml
+# systems/webgl/Cargo.toml
+[package.metadata.provides]
+core = "playground-core-rendering"
+features = ["shaders", "textures", "2d", "basic-3d"]
 ```
 
 ## Package Layers

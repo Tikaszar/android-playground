@@ -1,182 +1,113 @@
-# Roadmap - Path from Current to Target
+# Roadmap - MVVM Implementation Path (Session 67)
 
-## Immediate Priority: Implement Hot-Loadable Module System
+## Immediate Priority: Remove Uncommitted Changes
 
-### Phase 1: Create Module Infrastructure
-1. **Add libloading dependency** to workspace
-   - For dynamic library loading
-   - Single unsafe exception documented
+### Current State
+- Partial api/ implementation (should be modules/)
+- Partial systems/module-loader (wrong location)
+- core/ecs changes started but incomplete
 
-2. **Create api/ crate** with pure Rust interfaces
-   - Module struct (no traits, no dyn)
-   - ModuleVTable with pure Rust function pointers
-   - ModuleMetadata for dependencies
-   - No C ABI or extern "C"
+### Step 1: Clean Working Directory
+1. Revert all uncommitted changes
+2. Start fresh with MVVM design
+3. No half-implementations
 
-3. **Create systems/module-loader**
-   - Single unsafe for Library::new()
-   - Schema validation before loading
-   - Hot-reload support for all module types
+## Phase 1: Create modules/* Infrastructure
 
-### Phase 2: Migrate Core to Modules
-1. **Remove VTable from core packages**
-   - Delete vtable.rs files
-   - Remove VTable fields from structs
-   - Convert delegation to direct calls
+### 1.1 modules/types
+- Define Model, View, ViewModel base types
+- Create module metadata structures
+- Pure Rust interfaces (no C ABI)
 
-2. **Add module interfaces to core/**
-   - Each package exports module interface
-   - Implement save/restore state
-   - Declare feature dependencies
+### 1.2 modules/loader
+- Single unsafe for Library::new()
+- Load .so/.dll files
+- No runtime type checking
 
-3. **Create core/modules** for management
-   - Module creation from templates
-   - Build via cargo
-   - Load/unload at runtime
-   - Dependency tracking
+### 1.3 modules/binding
+- Connect View to ViewModel
+- Compile-time validation
+- Direct function pointers
 
-4. **Create core/mcp** for debugging
-   - MCP server integration
-   - Tool registration
-   - Claude development support
+### 1.4 modules/resolver
+- Read Cargo.toml metadata
+- Resolve dependencies
+- Validate features at compile time
 
-### Phase 3: Migrate Systems to Modules
-1. **Update systems to use module interface**
-   - Remove VTable handlers
-   - Implement pure Rust module exports
-   - Direct implementation (no delegation)
+## Phase 2: Convert Core Modules to MVVM
 
-2. **Optimize module calls**
-   - Direct function calls via vtable
-   - Serialization for type erasure
-   - ~1-5ns call overhead
+### 2.1 core/ecs
+- Split into model/ and view/
+- Model: World, Entity, Component data
+- View: spawn_entity, query, etc APIs
 
-3. **Remove systems/logic** (deprecated)
-   - Already identified as unnecessary
-   - Functionality moved elsewhere
+### 2.2 core/console
+- Model: Terminal state, Dashboard data
+- View: write, read, clear APIs
 
-### Phase 4: Fix Broken Systems
-1. **Fix systems/webgl compilation**
-   - Update to query ECS for components
-   - Remove singleton access
-   - Implement module interface
+### 2.3 core/rendering
+- Model: Window, RenderTarget data
+- View: create_window, render_frame APIs
 
-2. **Fix systems/ui compilation**
-   - Complete rewrite for new architecture
-   - Remove trait-based code
-   - Implement module interface
+## Phase 3: Convert System Modules to ViewModel
 
-### Phase 5: Migrate Plugins and Apps
-1. **Update all plugins** to use core/* only
-   - Remove systems/* dependencies
-   - Use module loader for system access
-   - Add module interfaces
+### 3.1 systems/ecs
+- Implement core/ecs View APIs
+- No data storage
+- Pure logic implementation
 
-2. **Convert apps to modules**
-   - Editor becomes hot-loadable
-   - Game becomes hot-loadable
-   - Self-modifying IDE capability
+### 3.2 systems/console
+- Implement core/console View APIs
+- Terminal handling logic
 
-## Next Priority: Core ECS Improvements
+### 3.3 systems/webgl
+- Implement core/rendering View APIs
+- WebGL-specific logic
 
-### Critical Features
-1. **Resource System** - Global data without entities
-2. **Component Events** - Change detection
-3. **Entity Hierarchy** - Parent/child relationships
-4. **Batch Operations** - Bulk entity/component operations
-5. **Query Builder** - Better query API
+## Phase 4: Update Build System
 
-### Important Enhancements
-1. **Event System** - Inter-system communication
-2. **Component Bundles** - Group common components
-3. **System Ordering** - Explicit dependencies
-4. **Commands Buffer** - Deferred operations
+### 4.1 Cargo.toml Metadata
+- Add package.metadata.modules sections
+- Declare Core, Systems, features
 
-## Milestones
+### 4.2 build.rs Validation
+- Check Systems provide required features
+- Compile-time errors for mismatches
 
-### Milestone 1: Module System Complete (Session 65-70)
-- [ ] All packages use module interface
-- [ ] Hot-reload working for everything
-- [ ] MCP integration complete
-- [ ] Claude can develop within IDE
+### 4.3 Module Compilation
+- Set crate-type = ["cdylib"] for modules
+- Configure proper exports
 
-### Milestone 2: Systems Fixed (Session 71-75)
-- [ ] systems/webgl compiles and works
-- [ ] systems/ui rewritten and works
-- [ ] All systems hot-loadable
-- [ ] Performance optimized
+## Phase 5: Test Infrastructure
 
-### Milestone 3: Plugins Updated (Session 76-80)
-- [ ] All plugins use core/* only
-- [ ] Plugin hot-reload working
-- [ ] IDE plugins functional
-- [ ] Game plugins ready
+### 5.1 Basic Loading
+- Load core/ecs + systems/ecs
+- Verify binding works
+- Test API calls
 
-### Milestone 4: Working IDE (Session 81-85)
-- [ ] Editor fully functional
-- [ ] Self-modifying capability
-- [ ] Conversational interface
-- [ ] Mobile optimized
+### 5.2 Hot-Reload
+- Change systems/ecs
+- Reload without restart
+- Verify state preserved
 
-### Milestone 5: Game Features (Session 86-90)
-- [ ] Basic ECS game working
-- [ ] Physics integrated
-- [ ] Multiplayer support
-- [ ] Asset loading
-
-### Milestone 6: Production Ready (Session 91-100)
-- [ ] APK packaging
-- [ ] Play Store ready
-- [ ] Documentation complete
-- [ ] Performance optimized
+### 5.3 System Swapping
+- Load systems/webgl
+- Swap to systems/vulkan
+- Verify seamless transition
 
 ## Success Criteria
 
-### For Module System
-- [ ] Single unsafe only (Library::new)
-- [ ] Sub-second hot-reload
-- [ ] State preserved across reloads
-- [ ] Pure Rust interfaces (no C ABI)
+- ✅ NO VTable indirection
+- ✅ Compile-time validation
+- ✅ Direct function calls (~1-5ns)
+- ✅ Hot-reload working
+- ✅ MVVM separation enforced
 
-### For Architecture
-- [ ] No VTable overhead (direct calls)
-- [ ] Clean core/systems separation
-- [ ] Everything hot-loadable
-- [ ] MCP debugging support
+## Timeline
 
-### For Project
-- [ ] Runs on Android/Termux
-- [ ] 60fps performance
-- [ ] < 100MB memory
-- [ ] Battery efficient
-
-## Risk Mitigation
-
-### Technical Risks
-- **Module compatibility** - Use semantic versioning
-- **State preservation** - Comprehensive save/restore
-- **Performance overhead** - Fast path for hot operations
-- **Build times** - Incremental compilation
-
-### Architecture Risks
-- **Dependency cycles** - Detection and prevention
-- **Feature explosion** - Careful feature design
-- **Version conflicts** - Compatibility checking
-- **Module size** - Lazy loading
-
-## Alternative Approaches
-
-### If libloading has issues
-- Consider dlopen crate
-- Build custom loader
-- Accept more unsafe if needed
-
-### If hot-reload too slow
-- Pre-compile modules
-- Use incremental linking
-- Cache built modules
-
-### If state preservation fails
-- Add migration system
-- Version state formats
-- Provide rollback
+- Session 67: Design complete ✅
+- Session 68: modules/* infrastructure
+- Session 69: Core modules conversion
+- Session 70: System modules conversion
+- Session 71: Build system and testing
+- Session 72: Plugin conversion
