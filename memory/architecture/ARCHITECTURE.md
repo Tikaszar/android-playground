@@ -1,6 +1,6 @@
 # Architecture - MVVM-Based Module System
 
-## Core Architectural Pattern (Session 67)
+## Core Architectural Pattern (Sessions 67-68)
 
 ### MVVM Architecture
 ```
@@ -11,7 +11,14 @@ Apps → Plugins → Core (Model+View) → [Module Binding] → Systems (ViewMod
 - **Model** = Data structures (core/*/model/)
 - **View** = API contracts (core/*/view/)
 - **ViewModel** = Implementation (systems/*/viewmodel/)
-- **Binding** = Compile-time linking of View to ViewModel
+- **Binding** = Direct function pointer linking at load time
+
+## Implementation (Session 68)
+- **modules/types** - MVVM base types (NO traits, concrete classes only)
+- **modules/loader** - THE single unsafe block for Library::new()
+- **modules/binding** - Direct View-ViewModel function binding
+- **modules/resolver** - Cargo.toml module declarations
+- **modules/registry** - Runtime module orchestration
 
 ## MVVM Separation Pattern
 

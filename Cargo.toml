@@ -1,8 +1,12 @@
 [workspace]
 resolver = "2"
 members = [
-    # Module API
-    "api",
+    # Module infrastructure
+    "modules/types",
+    "modules/loader",
+    "modules/binding",
+    "modules/resolver",
+    "modules/registry",
 
     # Core layer
     "core/types",
@@ -12,9 +16,8 @@ members = [
     "core/console",
     "core/rendering",
     "core/ui",
-    
+
     # Systems layer
-    "systems/module-loader",
     "systems/ecs",
     "systems/ui",
     "systems/networking",

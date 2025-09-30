@@ -1,0 +1,19 @@
+[package]
+name = "playground-modules-types"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+# Serialization for state preservation
+serde = { version = "1.0", features = ["derive"] }
+bincode = "1.3"
+
+# Async runtime
+tokio = { version = "1.41", features = ["sync"] }
+
+# Error handling
+thiserror = "1.0"
+anyhow = "1.0"
+
+# Semantic versioning
+semver = "1.0"
