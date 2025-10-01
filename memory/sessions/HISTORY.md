@@ -33,6 +33,14 @@
 - Compiles successfully as dylib (.dll/.so)
 - Ready for systems/ecs ViewModel implementation
 
+### Session 70: Fix modules/loader and modules/binding Compilation
+- Added Copy+Clone derives to ViewAPI and ViewModelImpl
+- Fixed symbol extraction in loader to use .clone()
+- Fixed function pointer dereferencing in binding registry
+- Removed unused imports and variables
+- Deleted leftover core/ecs/src.old directory
+- Both modules/loader and modules/binding compile successfully
+
 ### Session 66: Pure Rust Hot-Loading Implementation
 - Finalized pure Rust hot-loading design (no C ABI)
 - Single unsafe exception for Library::new() documented

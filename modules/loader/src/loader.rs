@@ -7,9 +7,9 @@ use playground_modules_types::{
 };
 use libloading::{Library, Symbol};
 use std::collections::HashMap;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use tokio::sync::RwLock;
-use tracing::{debug, info};
+use tracing::info;
 
 /// Module loader responsible for loading and managing modules
 pub struct ModuleLoader {
@@ -94,19 +94,18 @@ impl ModuleLoader {
 
             // 4. Get View API for Core modules
             let view_api = if module.module_type == ModuleType::Core {
-                let view_symbol: Symbol<*const ViewAPI> =
-                    library.get(b"PLAYGROUND_VIEW_API\0").ok().map(|s| &**s).cloned()
+                library.get(b"PLAYGROUND_VIEW_API\0")
+                    .ok()
+                    .map(|s: Symbol<*const ViewAPI>| (&**s).clone())
             } else {
                 None
             };
 
             // 5. Get ViewModel implementation for System modules
             let viewmodel_impl = if module.module_type == ModuleType::System {
-                let vm_symbol: Symbol<*const ViewModelImpl> = library
-                    .get(b"PLAYGROUND_VIEWMODEL_IMPL\0")
+                library.get(b"PLAYGROUND_VIEWMODEL_IMPL\0")
                     .ok()
-                    .map(|s| &**s)
-                    .cloned()
+                    .map(|s: Symbol<*const ViewModelImpl>| (&**s).clone())
             } else {
                 None
             };
@@ -158,14 +157,13 @@ impl ModuleLoader {
     pub async fn hot_reload(&self, name: &str) -> ModuleResult<()> {
         info!("Hot-reloading module: {}", name);
 
-        // Get the module path
-        let module_path = {
+        // Verify module exists before unloading
+        {
             let modules = self.modules.read().await;
-            let module = modules
+            modules
                 .get(name)
                 .ok_or_else(|| ModuleError::NotFound(name.to_string()))?;
-            module.path.clone()
-        };
+        }
 
         // Unload the old version
         self.unload_module(name).await?;

@@ -1,20 +1,21 @@
 # Context - Session Continuity
 
-## Session 69 Complete ✅
-core/ecs MVVM rewrite complete:
-1. ✅ Model layer - Pure data structures
-2. ✅ View layer - API contracts only
-3. ✅ Event System - Pre/Post events replacing Messaging
-4. ✅ Module exports - PLAYGROUND_MODULE and PLAYGROUND_VIEW_API
-5. ✅ Compiles as dylib
+## Session 70 Complete ✅
+modules/loader and modules/binding compilation fixed:
+1. ✅ Added Copy+Clone to ViewAPI and ViewModelImpl
+2. ✅ Fixed loader symbol extraction with .clone()
+3. ✅ Fixed binding function pointer dereferencing
+4. ✅ Removed unused imports
+5. ✅ Both packages compile successfully
 
 ## Current State
+- modules/* infrastructure complete and compiling
 - core/ecs fully implemented with MVVM
 - Event System with Pub-Sub model
 - Direct function binding ready (~1-5ns)
 - No VTable, no serialization overhead
 
-## Next Session (70) Tasks
+## Next Session (71) Tasks
 1. **Create systems/ecs ViewModel** - Implement View contracts
 2. **Bind View to ViewModel** - Test module binding
 3. **Verify hot-reload** - Test state preservation
@@ -22,7 +23,6 @@ core/ecs MVVM rewrite complete:
 
 ## Important Notes
 - Event System > Messaging
-- Pre-events are cancellable
-- Post-events are notifications
-- Priority-based event handling
-- Direct function pointers, not VTable
+- ViewAPI and ViewModelImpl are Copy+Clone (static data only)
+- Direct function pointers via dereferencing
+- Single unsafe block in modules/loader

@@ -1,22 +1,25 @@
-# Roadmap - MVVM Implementation Path (Sessions 67-68)
+# Roadmap - MVVM Implementation Path (Sessions 67-70)
 
-## Phase 1: Create modules/* Infrastructure ✅ COMPLETE (Session 68)
+## Phase 1: Create modules/* Infrastructure ✅ COMPLETE (Sessions 68-70)
 
 ### 1.1 modules/types ✅
 - Defined Model, View, ViewModel base types (concrete classes, NO traits)
 - Created module metadata structures
 - Pure Rust interfaces (no C ABI)
 - Proper Rust module organization (subdirectories with mod.rs)
+- ViewAPI and ViewModelImpl are Copy+Clone (Session 70)
 
 ### 1.2 modules/loader ✅
 - Single unsafe block for ALL operations
 - Load .so/.dll files
 - No runtime type checking
+- Compiles successfully (Session 70)
 
 ### 1.3 modules/binding ✅
 - Connect View to ViewModel
 - Direct function pointer binding
 - Runtime binding (not compile-time)
+- Compiles successfully (Session 70)
 
 ### 1.4 modules/resolver ✅
 - Read Cargo.toml metadata
@@ -96,8 +99,9 @@
 ## Timeline
 
 - Session 67: Design complete ✅
-- Session 68: modules/* infrastructure
-- Session 69: Core modules conversion
-- Session 70: System modules conversion
-- Session 71: Build system and testing
-- Session 72: Plugin conversion
+- Session 68: modules/* infrastructure ✅
+- Session 69: core/ecs MVVM conversion ✅
+- Session 70: Fixed modules/loader and modules/binding compilation ✅
+- Session 71: systems/ecs ViewModel implementation (NEXT)
+- Session 72: Build system and testing
+- Session 73: Plugin conversion

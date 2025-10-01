@@ -99,7 +99,7 @@ impl BindingRegistry {
         // Create function map for direct calls
         let mut functions = HashMap::new();
         for (name, func) in viewmodel.functions {
-            functions.insert(name.to_string(), func);
+            functions.insert(name.to_string(), *func);
         }
 
         // Store the binding
