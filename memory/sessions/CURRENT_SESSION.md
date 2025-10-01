@@ -1,45 +1,60 @@
-# Current Session - Session 71: Complete core/ecs Model Layer
+# Current Session - Session 72: Create core/ecs View Layer
 
 ## Session Goal
-Complete the Model layer for core/ecs with all required data structures.
+Create the View layer for core/ecs with all API contracts for systems/ecs to implement.
 
 ## Work Completed This Session
 
-### 1. Fixed ComponentData trait ✅
-- Made all methods async (component_id, component_name, serialize, deserialize)
-- Updated Component to use .await for trait calls
-- Fixed Rust 2024 compatibility (#[unsafe(no_mangle)])
+### 1. Implemented Complete View Layer ✅
+Created all 7 View modules with comprehensive API surface:
 
-### 2. Removed ComponentData trait ✅
-- Deleted component_data.rs entirely
-- Created ComponentRef following entity/event pattern
-- Simplified Component to pure data with helper functions
-- Component::from_serializable() and to_deserializable() for convenience
+#### Entity Operations (entity.rs)
+- spawn_entity, spawn_batch, despawn_entity, despawn_batch
+- clone_entity, exists, is_alive, get_all_entities
+- Added: get_entity, get_generation, spawn_entity_with_id
 
-### 3. Created EventRef ✅
-- Following EntityRef/ComponentRef pattern
-- Changed Event.source from Option<Entity> to EntityRef
-- NO Options anywhere - use Handle/Shared or Weak directly
+#### Component Operations (component.rs)
+- add_component(s), remove_component(s), get_component(s)
+- has_component(s), replace_component, get_all_components
+- Added: clear_components, get_entities_with_component(s), count_components
 
-### 4. Created Query, Storage, System modules ✅
-- **query/** - QueryId, Query, QueryRef, QueryFilter
-- **storage/** - StorageId, Storage, StorageRef
-- **system/** - SystemId, System, SystemRef
-- All follow the same pattern (Id, Data, Ref types)
+#### Event Operations (event.rs)
+- emit_event, emit_batch, subscribe_pre/post, unsubscribe
+- process_event_queue, clear_event_queue, get_pending_events
+- Added: get_subscriptions, emit_event_with_priority, process_high_priority_events
 
-### 5. Completed World ✅
-- Created WorldRef
-- Added storage fields for query/storage/system to World
-- World now contains all ECS data
+#### Query Operations (query.rs)
+- create_query, execute_query, execute_query_batch, query_count
+- delete_query, update_query, get_query, get_all_queries
+- Added: execute_query_with_components, query_entities, clone_query
 
-## Key Decisions
+#### Storage Operations (storage.rs)
+- create_storage, save/load_world, save/load_entities
+- clear_storage, storage_exists, delete_storage
+- Added: snapshots, export/import_json, get_storage_size
 
-1. **Traits with generics allowed** - Use `<T: Trait>` NOT `Box<dyn Trait>`
-2. **Consistent pattern** - Every module has Id, Data, Ref types
-3. **NO Options** - Use Handle/Shared or Weak directly
-4. **Model = Pure Data** - NO logic, NO async
+#### System Operations (system.rs)
+- register/unregister_system, run_system(s), schedule_systems
+- enable/disable_system, get_system_stats
+- Added: get/update_system_dependencies, get_dependent_systems
 
-## Next Session (72)
+#### World Operations (world.rs)
+- initialize/shutdown_world, clear_world, step, get_stats
+- resource management (insert/get/remove/has)
+- Added: reset/lock/unlock_world, validate_world, get_world_metadata
 
-1. Create core/ecs View layer (trait definitions for APIs)
-2. Continue with systems/ecs ViewModel implementation
+### 2. Key Implementation Details
+- All functions are async stubs returning ModuleNotFound errors
+- NO dyn, NO unsafe, NO function pointers
+- Simple API contracts for compile-time checking
+- Systems/ecs will provide actual implementations
+
+### 3. Issues Noted
+- WorldStats and SystemStats structs in View (should be in Model)
+- WorldMetadata struct in View (should be in Model)
+- These data types belong in Model layer, not View
+
+## Next Session (73)
+1. Move data types (WorldStats, SystemStats, WorldMetadata) to Model
+2. Implement systems/ecs ViewModel layer
+3. Test module binding between View and ViewModel

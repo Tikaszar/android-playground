@@ -1,27 +1,25 @@
 # Context - Session Continuity
 
-## Session 71 Complete ✅
-core/ecs Model layer complete:
-1. ✅ Removed ComponentData trait
-2. ✅ Created ComponentRef, EventRef, WorldRef
-3. ✅ Created query/, storage/, system/ modules
-4. ✅ World contains all storage
-5. ✅ All 7 modules follow same pattern
+## Session 72 Complete ✅
+core/ecs View layer complete:
+1. ✅ Created all 7 View modules (entity, component, event, query, storage, system, world)
+2. ✅ Comprehensive API surface - all operations covered
+3. ✅ Simple async stubs, NO dyn/unsafe/function pointers
+4. ⚠️ Data types in wrong layer (WorldStats, SystemStats, WorldMetadata in View)
 
 ## Current State
 - modules/* infrastructure complete
 - core/ecs/model complete (7 modules)
-- Traits with generics allowed (NO dyn, NO Box)
-- Consistent pattern: Id, Data, Ref types
-- NO Options - use Handle/Shared or Weak
+- core/ecs/view complete (7 modules)
+- View = API contracts only (async functions)
+- Model = Pure data structures
 
-## Next Session (72) Tasks
-1. **Create core/ecs View layer** - Trait definitions for APIs
-2. **systems/ecs ViewModel** - Implement traits
+## Next Session (73) Tasks
+1. **Fix data types** - Move WorldStats, SystemStats, WorldMetadata to Model
+2. **systems/ecs ViewModel** - Implement View contracts
 3. **Test module binding**
 
 ## Important Notes
-- Traits allowed with `<T: Trait>` NOT `Box<dyn Trait>`
-- Model = Pure data, NO logic, NO async
-- Every module: Id, Data, Ref
-- World has storage for all modules
+- Data types belong in Model, not View
+- View should only have API function contracts
+- Systems/ecs will provide actual implementations
