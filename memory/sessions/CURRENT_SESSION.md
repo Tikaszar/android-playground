@@ -56,11 +56,45 @@ Compared core/ecs/view API contracts with systems/ecs/viewmodel implementations:
 - Confirmed World Model structure (no resources field - will stub those functions)
 - Confirmed module_exports.rs pattern for function registration
 
+### 3. Component Module Complete ✅ (14/14 functions)
+- Implemented 9 missing functions:
+  - add_components, remove_components (batch operations)
+  - get_components, has_components (multi-query operations)
+  - clear_components, count_components (utility operations)
+  - replace_component (upsert operation)
+  - get_entities_with_component, get_entities_with_components (search operations)
+- Fixed lifetime issues in existing functions by copying args before async blocks
+- Updated mod.rs exports
+
+### 4. Entity Module Progress ✅ (7/11 functions)
+- Implemented 2 missing functions:
+  - spawn_batch, despawn_batch (batch operations)
+- Fixed lifetime issues in existing functions (clone, despawn, exists, is_alive)
+- Updated mod.rs exports
+- **Remaining**: get_entity, get_generation, get_all_entities, spawn_entity_with_id
+
+### 5. Core Model Improvements ✅
+- Added serde::Serialize and serde::Deserialize derives to Component struct
+- Enabled serde feature for bytes crate in workspace Cargo.toml
+- Entity serialization strategy: use (EntityId, Generation) tuples instead of full Entity struct
+
+## Implementation Pattern Established
+```rust
+pub fn function_name(args: &[u8]) -> Pin<Box<dyn Future<Output = ModuleResult<Vec<u8>>> + Send>> {
+    let args = args.to_vec();  // Copy args before async block (lifetime fix)
+    Box::pin(async move {
+        let args: ArgsStruct = bincode::deserialize(&args)?;
+        let world = crate::state::get_world()?;
+        // ... implementation ...
+        Ok(bincode::serialize(&result)?)
+    })
+}
+```
+
 ## Next Steps
-1. Implement Priority 1 entity/component operations
-2. Implement Priority 2 event system operations
-3. Implement Priority 3-4 system/world operations
-4. Stub Priority 5 resource operations
+1. Complete remaining 4 entity functions (get_entity, get_generation, get_all_entities, spawn_entity_with_id)
+2. Fix event module (serde_bytes issues)
+3. Fix query/storage/system stub errors (ModuleError::NotImplemented → Generic)
+4. Implement remaining Priority 2-5 functions
 5. Update module_exports.rs with all function registrations
-6. Update all mod.rs files with new exports
-7. Test compilation
+6. Test full compilation

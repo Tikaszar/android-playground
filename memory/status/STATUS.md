@@ -1,10 +1,10 @@
 # Status - Current Implementation Status
 
 ## Build Status
-- **Last known**: ✅ core/ecs Model+View complete and compiling (Session 73)
-- **Session 74**: Implementing systems/ecs ViewModel layer (58/101 functions done)
-- **Working**: modules/*, core/ecs (Model+View complete)
-- **In Progress**: systems/ecs/viewmodel (48 functions remaining)
+- **Last known**: ✅ Component and Entity modules compiling (Session 74)
+- **Session 74**: Implementing systems/ecs ViewModel layer (67/101 functions done)
+- **Working**: modules/*, core/ecs (Model+View+serde support complete)
+- **In Progress**: systems/ecs/viewmodel (34 functions remaining + stub fixes)
 
 ## Package Implementation Status
 
@@ -33,7 +33,7 @@
 
 | Package | ViewModel | Status | Notes |
 |---------|-----------|--------|-------|
-| systems/ecs | 🔄 | In Progress | Session 74: 58/101 functions done, 48 remaining |
+| systems/ecs | 🔄 | In Progress | Session 74: Component 14/14 ✅, Entity 7/11 🔄, Event/World/Resources pending |
 | systems/console | ✅ | ✅ | None |
 | systems/networking | ✅ | ✅ | ECS rewrite complete (Session 63) |
 | systems/webgl | 🔴 | ❌ | DOESN'T COMPILE - Missing imports, trait errors |

@@ -1,5 +1,46 @@
 # Patterns - Code Patterns and Examples
 
+## ViewModel Implementation Pattern (Session 74)
+
+### Async Function Pattern with Lifetime Safety
+```rust
+use playground_modules_types::{ModuleResult, ModuleError};
+use std::pin::Pin;
+use std::future::Future;
+
+pub fn function_name(args: &[u8]) -> Pin<Box<dyn Future<Output = ModuleResult<Vec<u8>>> + Send>> {
+    let args = args.to_vec();  // CRITICAL: Copy args before async to avoid lifetime issues
+    Box::pin(async move {
+        // Deserialize arguments
+        let args: ArgsStruct = bincode::deserialize(&args)
+            .map_err(|e| ModuleError::DeserializationError(e.to_string()))?;
+
+        // Get World from global state
+        let world = crate::state::get_world()
+            .map_err(|e| ModuleError::Generic(e))?;
+
+        // Perform operations on World data
+        let result = {
+            let data = world.some_field.read().await;
+            // ... computation ...
+        };
+
+        // Serialize and return
+        let result = bincode::serialize(&result)
+            .map_err(|e| ModuleError::SerializationError(e.to_string()))?;
+
+        Ok(result)
+    })
+}
+```
+
+### Key Requirements
+1. **Copy args first**: `let args = args.to_vec();` before `Box::pin(async move {...})`
+2. **Use bincode**: For all serialization/deserialization
+3. **Return ModuleResult<Vec<u8>>**: Consistent return type
+4. **Access World via state::get_world()**: No direct World references
+5. **Serialize simple types**: Use (EntityId, Generation) tuples instead of Entity structs
+
 ## Module Pattern (IMPLEMENTED Sessions 68-70 - Replaces VTable)
 
 ### Pure Rust Module Interface
