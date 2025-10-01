@@ -8,6 +8,6 @@ pub fn query_entities(args: &[u8]) -> Pin<Box<dyn Future<Output = ModuleResult<V
     let args = args.to_vec();
     Box::pin(async move {
         // TODO: Implement query_entities
-        Err(ModuleError::NotImplemented("query_entities".to_string()))
+        Err(ModuleError::Generic("query_entities".to_string()))
     })
 }

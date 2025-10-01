@@ -8,6 +8,6 @@ pub fn create_storage(args: &[u8]) -> Pin<Box<dyn Future<Output = ModuleResult<V
     let args = args.to_vec();
     Box::pin(async move {
         // TODO: Implement create_storage
-        Err(ModuleError::NotImplemented("create_storage".to_string()))
+        Err(ModuleError::Generic("create_storage".to_string()))
     })
 }

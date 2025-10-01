@@ -8,6 +8,6 @@ pub fn load_world(args: &[u8]) -> Pin<Box<dyn Future<Output = ModuleResult<Vec<u
     let args = args.to_vec();
     Box::pin(async move {
         // TODO: Implement load_world
-        Err(ModuleError::NotImplemented("load_world".to_string()))
+        Err(ModuleError::Generic("load_world".to_string()))
     })
 }

@@ -8,6 +8,6 @@ pub fn schedule_systems(args: &[u8]) -> Pin<Box<dyn Future<Output = ModuleResult
     let args = args.to_vec();
     Box::pin(async move {
         // TODO: Implement schedule_systems
-        Err(ModuleError::NotImplemented("schedule_systems".to_string()))
+        Err(ModuleError::Generic("schedule_systems".to_string()))
     })
 }

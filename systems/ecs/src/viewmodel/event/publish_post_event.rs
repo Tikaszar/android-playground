@@ -1,7 +1,7 @@
 //! Publish a post-event (notification after state change)
 
 use playground_modules_types::{ModuleResult, ModuleError};
-use playground_core_ecs::{EventId, Event};
+use playground_core_ecs::{EventId, Event, Priority};
 use bytes::Bytes;
 use std::pin::Pin;
 use std::future::Future;
@@ -14,33 +14,38 @@ struct PublishPostEventArgs {
 }
 
 /// Publish a post-event (notification after state change)
+/// Post-events are added to the queue for asynchronous processing
 pub fn publish_post_event(args: &[u8]) -> Pin<Box<dyn Future<Output = ModuleResult<Vec<u8>>> + Send>> {
+    let args = args.to_vec();
     Box::pin(async move {
         // Deserialize args
-        let args: PublishPostEventArgs = bincode::deserialize(args)
+        let args: PublishPostEventArgs = bincode::deserialize(&args)
             .map_err(|e| ModuleError::DeserializationError(e.to_string()))?;
 
         // Get World
         let world = crate::state::get_world()
             .map_err(|e| ModuleError::Generic(e))?;
 
-        // Create event with Bytes
-        let event = Event::new(args.event_id, Bytes::from(args.data));
+        // Create event with Normal priority (post-events are notifications)
+        let event = Event::new(args.event_id, Bytes::from(args.data))
+            .with_priority(Priority::Normal);
 
-        // Add to event queue for processing
+        // Add to event queue for deferred processing
         {
             let mut event_queue = world.event_queue.write().await;
             event_queue.push(event);
         }
 
-        // Get post-event handlers for this event
-        let _handler_ids = {
+        // Get post-event handler subscriptions for metrics
+        let subscription_count = {
             let post_handlers = world.post_handlers.read().await;
-            post_handlers.get(&args.event_id).cloned().unwrap_or_default()
+            post_handlers.get(&args.event_id).map_or(0, |v| v.len())
         };
 
-        // For now, we don't actually execute handlers (would need handler registry)
+        // Serialize subscription count as confirmation
+        let result = bincode::serialize(&subscription_count)
+            .map_err(|e| ModuleError::SerializationError(e.to_string()))?;
 
-        Ok(Vec::new())
+        Ok(result)
     })
 }

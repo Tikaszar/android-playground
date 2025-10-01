@@ -8,6 +8,6 @@ pub fn is_system_enabled(args: &[u8]) -> Pin<Box<dyn Future<Output = ModuleResul
     let args = args.to_vec();
     Box::pin(async move {
         // TODO: Implement is_system_enabled
-        Err(ModuleError::NotImplemented("is_system_enabled".to_string()))
+        Err(ModuleError::Generic("is_system_enabled".to_string()))
     })
 }

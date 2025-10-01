@@ -14,6 +14,7 @@ impl SubscriptionId {
 }
 
 /// Event subscription information
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
 pub struct Subscription {
     /// Unique subscription ID
     pub id: SubscriptionId,

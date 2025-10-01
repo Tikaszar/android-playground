@@ -6,7 +6,7 @@ use playground_core_types::{Handle, handle, Shared, shared};
 use crate::model::{
     entity::{EntityId, Generation},
     component::{Component, ComponentId},
-    event::{EventId, Event, SubscriptionId},
+    event::{EventId, Event, SubscriptionId, Subscription},
     query::{QueryId, QueryFilter},
     storage::StorageId,
     system::SystemId,
@@ -34,6 +34,9 @@ pub struct World {
 
     /// Next subscription ID
     pub next_subscription_id: AtomicU32,
+
+    /// Subscription storage: subscription_id -> subscription details
+    pub subscriptions: Shared<HashMap<SubscriptionId, Subscription>>,
 
     /// Query storage: query_id -> filter
     pub queries: Shared<HashMap<QueryId, QueryFilter>>,
@@ -65,6 +68,7 @@ impl World {
             pre_handlers: shared(HashMap::new()),
             post_handlers: shared(HashMap::new()),
             next_subscription_id: AtomicU32::new(1),
+            subscriptions: shared(HashMap::new()),
             queries: shared(HashMap::new()),
             next_query_id: AtomicU32::new(1),
             storages: shared(HashMap::new()),

@@ -8,7 +8,7 @@ use crate::model::{
 use std::sync::Weak;
 
 /// Event to be dispatched
-#[derive(Clone)]
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
 pub struct Event {
     /// Event identifier
     pub id: EventId,

@@ -8,6 +8,6 @@ pub fn load_entities(args: &[u8]) -> Pin<Box<dyn Future<Output = ModuleResult<Ve
     let args = args.to_vec();
     Box::pin(async move {
         // TODO: Implement load_entities
-        Err(ModuleError::NotImplemented("load_entities".to_string()))
+        Err(ModuleError::Generic("load_entities".to_string()))
     })
 }

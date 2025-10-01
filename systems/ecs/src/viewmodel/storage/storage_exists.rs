@@ -8,6 +8,6 @@ pub fn storage_exists(args: &[u8]) -> Pin<Box<dyn Future<Output = ModuleResult<V
     let args = args.to_vec();
     Box::pin(async move {
         // TODO: Implement storage_exists
-        Err(ModuleError::NotImplemented("storage_exists".to_string()))
+        Err(ModuleError::Generic("storage_exists".to_string()))
     })
 }

@@ -8,6 +8,6 @@ pub fn delete_snapshot(args: &[u8]) -> Pin<Box<dyn Future<Output = ModuleResult<
     let args = args.to_vec();
     Box::pin(async move {
         // TODO: Implement delete_snapshot
-        Err(ModuleError::NotImplemented("delete_snapshot".to_string()))
+        Err(ModuleError::Generic("delete_snapshot".to_string()))
     })
 }

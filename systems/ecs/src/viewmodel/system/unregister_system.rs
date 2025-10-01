@@ -8,6 +8,6 @@ pub fn unregister_system(args: &[u8]) -> Pin<Box<dyn Future<Output = ModuleResul
     let args = args.to_vec();
     Box::pin(async move {
         // TODO: Implement unregister_system
-        Err(ModuleError::NotImplemented("unregister_system".to_string()))
+        Err(ModuleError::Generic("unregister_system".to_string()))
     })
 }

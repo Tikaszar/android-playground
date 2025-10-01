@@ -8,6 +8,6 @@ pub fn query_count(args: &[u8]) -> Pin<Box<dyn Future<Output = ModuleResult<Vec<
     let args = args.to_vec();
     Box::pin(async move {
         // TODO: Implement query_count
-        Err(ModuleError::NotImplemented("query_count".to_string()))
+        Err(ModuleError::Generic("query_count".to_string()))
     })
 }

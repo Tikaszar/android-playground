@@ -8,6 +8,6 @@ pub fn query_has_results(args: &[u8]) -> Pin<Box<dyn Future<Output = ModuleResul
     let args = args.to_vec();
     Box::pin(async move {
         // TODO: Implement query_has_results
-        Err(ModuleError::NotImplemented("query_has_results".to_string()))
+        Err(ModuleError::Generic("query_has_results".to_string()))
     })
 }

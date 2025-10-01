@@ -8,6 +8,6 @@ pub fn get_system_dependencies(args: &[u8]) -> Pin<Box<dyn Future<Output = Modul
     let args = args.to_vec();
     Box::pin(async move {
         // TODO: Implement get_system_dependencies
-        Err(ModuleError::NotImplemented("get_system_dependencies".to_string()))
+        Err(ModuleError::Generic("get_system_dependencies".to_string()))
     })
 }

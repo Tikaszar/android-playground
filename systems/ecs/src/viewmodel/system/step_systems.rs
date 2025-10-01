@@ -8,6 +8,6 @@ pub fn step_systems(args: &[u8]) -> Pin<Box<dyn Future<Output = ModuleResult<Vec
     let args = args.to_vec();
     Box::pin(async move {
         // TODO: Implement step_systems
-        Err(ModuleError::NotImplemented("step_systems".to_string()))
+        Err(ModuleError::Generic("step_systems".to_string()))
     })
 }

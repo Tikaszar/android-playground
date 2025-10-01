@@ -8,6 +8,6 @@ pub fn list_snapshots(args: &[u8]) -> Pin<Box<dyn Future<Output = ModuleResult<V
     let args = args.to_vec();
     Box::pin(async move {
         // TODO: Implement list_snapshots
-        Err(ModuleError::NotImplemented("list_snapshots".to_string()))
+        Err(ModuleError::Generic("list_snapshots".to_string()))
     })
 }

@@ -8,6 +8,6 @@ pub fn run_system(args: &[u8]) -> Pin<Box<dyn Future<Output = ModuleResult<Vec<u
     let args = args.to_vec();
     Box::pin(async move {
         // TODO: Implement run_system
-        Err(ModuleError::NotImplemented("run_system".to_string()))
+        Err(ModuleError::Generic("run_system".to_string()))
     })
 }

@@ -1,13 +1,13 @@
 //! Despawn multiple entities in batch
 
 use playground_modules_types::{ModuleResult, ModuleError};
-use playground_core_ecs::{Entity, EntityId};
+use playground_core_ecs::{EntityId, Generation};
 use std::pin::Pin;
 use std::future::Future;
 
 #[derive(serde::Deserialize)]
 struct DespawnBatchArgs {
-    entities: Vec<Entity>,
+    entities: Vec<(EntityId, Generation)>,
 }
 
 /// Despawn multiple entities in batch
@@ -27,9 +27,9 @@ pub fn despawn_batch(args: &[u8]) -> Pin<Box<dyn Future<Output = ModuleResult<Ve
             let mut entities = world.entities.write().await;
             let mut components = world.components.write().await;
 
-            for entity in args.entities {
-                entities.remove(&entity.id);
-                components.remove(&entity.id);
+            for (entity_id, _generation) in args.entities {
+                entities.remove(&entity_id);
+                components.remove(&entity_id);
             }
         }
 

@@ -8,6 +8,6 @@ pub fn clone_query(args: &[u8]) -> Pin<Box<dyn Future<Output = ModuleResult<Vec<
     let args = args.to_vec();
     Box::pin(async move {
         // TODO: Implement clone_query
-        Err(ModuleError::NotImplemented("clone_query".to_string()))
+        Err(ModuleError::Generic("clone_query".to_string()))
     })
 }

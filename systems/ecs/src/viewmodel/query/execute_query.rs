@@ -8,6 +8,6 @@ pub fn execute_query(args: &[u8]) -> Pin<Box<dyn Future<Output = ModuleResult<Ve
     let args = args.to_vec();
     Box::pin(async move {
         // TODO: Implement execute_query
-        Err(ModuleError::NotImplemented("execute_query".to_string()))
+        Err(ModuleError::Generic("execute_query".to_string()))
     })
 }

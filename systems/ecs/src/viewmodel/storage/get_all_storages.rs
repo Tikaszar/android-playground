@@ -8,6 +8,6 @@ pub fn get_all_storages(args: &[u8]) -> Pin<Box<dyn Future<Output = ModuleResult
     let args = args.to_vec();
     Box::pin(async move {
         // TODO: Implement get_all_storages
-        Err(ModuleError::NotImplemented("get_all_storages".to_string()))
+        Err(ModuleError::Generic("get_all_storages".to_string()))
     })
 }

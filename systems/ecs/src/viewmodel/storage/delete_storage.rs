@@ -8,6 +8,6 @@ pub fn delete_storage(args: &[u8]) -> Pin<Box<dyn Future<Output = ModuleResult<V
     let args = args.to_vec();
     Box::pin(async move {
         // TODO: Implement delete_storage
-        Err(ModuleError::NotImplemented("delete_storage".to_string()))
+        Err(ModuleError::Generic("delete_storage".to_string()))
     })
 }

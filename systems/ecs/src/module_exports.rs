@@ -32,7 +32,7 @@ static LIFECYCLE: ModuleLifecycle = ModuleLifecycle {
 
 // Module export for hot-loading
 #[unsafe(no_mangle)]
-pub static PLAYGROUND_MODULE: Module = Module {
+pub static PLAYGROUND_MODULE_SYSTEMS_ECS: Module = Module {
     metadata: &METADATA,
     module_type: ModuleType::System,
     lifecycle: LIFECYCLE,

@@ -8,6 +8,6 @@ pub fn export_json(args: &[u8]) -> Pin<Box<dyn Future<Output = ModuleResult<Vec<
     let args = args.to_vec();
     Box::pin(async move {
         // TODO: Implement export_json
-        Err(ModuleError::NotImplemented("export_json".to_string()))
+        Err(ModuleError::Generic("export_json".to_string()))
     })
 }

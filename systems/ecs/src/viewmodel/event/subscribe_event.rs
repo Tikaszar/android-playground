@@ -15,9 +15,10 @@ struct SubscribeEventArgs {
 
 /// Subscribe to events with a specific priority
 pub fn subscribe_event(args: &[u8]) -> Pin<Box<dyn Future<Output = ModuleResult<Vec<u8>>> + Send>> {
+    let args = args.to_vec();
     Box::pin(async move {
         // Deserialize args
-        let args: SubscribeEventArgs = bincode::deserialize(args)
+        let args: SubscribeEventArgs = bincode::deserialize(&args)
             .map_err(|e| ModuleError::DeserializationError(e.to_string()))?;
 
         // Get World
