@@ -1,7 +1,8 @@
 //! Spawn a new entity with components
 
 use playground_modules_types::{ModuleResult, ModuleError};
-use playground_core_ecs::{EntityId, Generation};
+use playground_core_ecs::{EntityId, Generation, Component};
+use std::collections::HashMap;
 use std::pin::Pin;
 use std::future::Future;
 use std::sync::atomic::Ordering;
@@ -10,8 +11,9 @@ use std::sync::atomic::Ordering;
 pub fn spawn_entity(args: &[u8]) -> Pin<Box<dyn Future<Output = ModuleResult<Vec<u8>>> + Send>> {
     let args = args.to_vec();
     Box::pin(async move {
-        // For now, spawn without components (would need custom deserialization)
-        // Components can be added separately via add_component
+        // Deserialize components
+        let components: Vec<Component> = bincode::deserialize(&args)
+            .map_err(|e| ModuleError::DeserializationError(e.to_string()))?;
 
         // Get World
         let world = crate::state::get_world()
@@ -27,7 +29,14 @@ pub fn spawn_entity(args: &[u8]) -> Pin<Box<dyn Future<Output = ModuleResult<Vec
             entities.insert(entity_id, generation);
         }
 
-        // No components to store initially (can be added via add_component)
+        // Store components
+        if !components.is_empty() {
+            let mut components_map = world.components.write().await;
+            let entity_components = components_map.entry(entity_id).or_insert_with(HashMap::new);
+            for component in components {
+                entity_components.insert(component.component_id, component);
+            }
+        }
 
         // Create result with IDs only
         #[derive(serde::Serialize)]
