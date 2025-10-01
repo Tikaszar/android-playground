@@ -41,6 +41,32 @@
 - Deleted leftover core/ecs/src.old directory
 - Both modules/loader and modules/binding compile successfully
 
+### Session 71: Complete core/ecs Model Layer
+- Created all 7 Model modules with complete data structures
+- Entity: EntityId, Generation, Entity, EntityRef
+- Component: ComponentId, Component, ComponentRef
+- Event: EventId, Event, EventRef, Priority, Subscription, SubscriptionId
+- Query: QueryId, Query, QueryRef, QueryFilter
+- Storage: StorageId, Storage, StorageRef
+- System: SystemId, System, SystemRef
+- World: World, WorldRef
+- All types follow consistent pattern (Id, Data, Ref)
+
+### Session 72: Complete core/ecs View Layer
+- Created all 7 View modules with comprehensive API contracts
+- Entity, Component, Event, Query, Storage, System, World operations
+- All functions are async stubs (NO dyn, NO unsafe, NO function pointers)
+- Simple error returns for missing ViewModel implementation
+- Identified issue: Data types (WorldStats, SystemStats, WorldMetadata) in View
+
+### Session 73: Fix Data Layer Placement
+- Moved WorldStats, SystemStats, WorldMetadata to Model layer
+- Created proper subdirectory structure (model/world/, model/system/)
+- Updated all module exports (mod.rs files + lib.rs)
+- Cleaned View layer to contain ONLY API contracts
+- Verified core/ecs compiles successfully
+- MVVM separation now correct
+
 ### Session 66: Pure Rust Hot-Loading Implementation
 - Finalized pure Rust hot-loading design (no C ABI)
 - Single unsafe exception for Library::new() documented

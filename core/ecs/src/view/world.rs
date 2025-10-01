@@ -6,7 +6,7 @@
 
 use playground_core_types::Handle;
 use bytes::Bytes;
-use crate::{EcsResult, EcsError, model::World};
+use crate::{EcsResult, EcsError, model::{World, WorldStats, WorldMetadata}};
 
 /// Initialize the world
 pub async fn initialize_world() -> EcsResult<Handle<World>> {
@@ -103,13 +103,4 @@ pub async fn validate_world(_world: &World) -> EcsResult<Vec<String>> {
 /// Get world metadata (creation time, last modified, etc)
 pub async fn get_world_metadata(_world: &World) -> EcsResult<WorldMetadata> {
     Err(EcsError::ModuleNotFound("get_world_metadata not implemented - systems/ecs required".to_string()))
-}
-
-/// World metadata
-#[derive(Debug, Clone)]
-pub struct WorldMetadata {
-    pub created_at: u64,
-    pub last_modified: u64,
-    pub version: String,
-    pub name: String,
 }

@@ -1,60 +1,39 @@
-# Current Session - Session 72: Create core/ecs View Layer
+# Current Session - Session 73: Fix Data Layer Placement
 
 ## Session Goal
-Create the View layer for core/ecs with all API contracts for systems/ecs to implement.
+Move data types from View to Model layer, ensuring proper MVVM separation.
 
 ## Work Completed This Session
 
-### 1. Implemented Complete View Layer ✅
-Created all 7 View modules with comprehensive API surface:
+### 1. Fixed Data Type Placement ✅
+Moved statistics and metadata types from View to Model:
 
-#### Entity Operations (entity.rs)
-- spawn_entity, spawn_batch, despawn_entity, despawn_batch
-- clone_entity, exists, is_alive, get_all_entities
-- Added: get_entity, get_generation, spawn_entity_with_id
+#### Created in Model Layer
+- `WorldStats` → `core/ecs/src/model/world/world_stats.rs`
+  - entity_count, component_count, system_count, event_count
+  - storage_count, query_count, total_memory_bytes
+- `WorldMetadata` → `core/ecs/src/model/world/world_metadata.rs`
+  - created_at, last_modified, version, name
+- `SystemStats` → `core/ecs/src/model/system/system_stats.rs`
+  - execution_count, total_time_ms, average_time_ms, last_execution_time_ms
 
-#### Component Operations (component.rs)
-- add_component(s), remove_component(s), get_component(s)
-- has_component(s), replace_component, get_all_components
-- Added: clear_components, get_entities_with_component(s), count_components
+#### Updated Exports
+- Added to `core/ecs/src/model/world/mod.rs` - WorldStats, WorldMetadata
+- Added to `core/ecs/src/model/system/mod.rs` - SystemStats
+- Added to `core/ecs/src/model/mod.rs` - All three types
+- Added to `core/ecs/src/lib.rs` - Public exports
 
-#### Event Operations (event.rs)
-- emit_event, emit_batch, subscribe_pre/post, unsubscribe
-- process_event_queue, clear_event_queue, get_pending_events
-- Added: get_subscriptions, emit_event_with_priority, process_high_priority_events
+#### Cleaned View Layer
+- Removed struct definitions from `view/world.rs` and `view/system.rs`
+- Added imports of data types from model
+- View layer now contains ONLY API contracts (no data types)
 
-#### Query Operations (query.rs)
-- create_query, execute_query, execute_query_batch, query_count
-- delete_query, update_query, get_query, get_all_queries
-- Added: execute_query_with_components, query_entities, clone_query
+### 2. Verification ✅
+- core/ecs compiles successfully
+- Proper MVVM separation maintained
+- Data types in Model, API contracts in View
 
-#### Storage Operations (storage.rs)
-- create_storage, save/load_world, save/load_entities
-- clear_storage, storage_exists, delete_storage
-- Added: snapshots, export/import_json, get_storage_size
-
-#### System Operations (system.rs)
-- register/unregister_system, run_system(s), schedule_systems
-- enable/disable_system, get_system_stats
-- Added: get/update_system_dependencies, get_dependent_systems
-
-#### World Operations (world.rs)
-- initialize/shutdown_world, clear_world, step, get_stats
-- resource management (insert/get/remove/has)
-- Added: reset/lock/unlock_world, validate_world, get_world_metadata
-
-### 2. Key Implementation Details
-- All functions are async stubs returning ModuleNotFound errors
-- NO dyn, NO unsafe, NO function pointers
-- Simple API contracts for compile-time checking
-- Systems/ecs will provide actual implementations
-
-### 3. Issues Noted
-- WorldStats and SystemStats structs in View (should be in Model)
-- WorldMetadata struct in View (should be in Model)
-- These data types belong in Model layer, not View
-
-## Next Session (73)
-1. Move data types (WorldStats, SystemStats, WorldMetadata) to Model
-2. Implement systems/ecs ViewModel layer
-3. Test module binding between View and ViewModel
+## Next Session (74)
+1. Implement systems/ecs ViewModel layer
+2. Test module binding between View and ViewModel
+3. Begin hot-reload testing

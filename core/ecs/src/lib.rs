@@ -27,8 +27,8 @@ pub use model::{
     // Storage types
     Storage, StorageId, StorageRef,
     // System types
-    System, SystemId, SystemRef,
+    System, SystemId, SystemRef, SystemStats,
     // World
-    World, WorldRef,
+    World, WorldRef, WorldStats, WorldMetadata,
 };
 

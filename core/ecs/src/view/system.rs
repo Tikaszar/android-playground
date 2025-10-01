@@ -6,7 +6,7 @@
 
 use crate::{
     EcsResult, EcsError,
-    model::{World, System, SystemId, QueryId},
+    model::{World, System, SystemId, QueryId, SystemStats},
 };
 
 /// Register a new system
@@ -73,15 +73,6 @@ pub async fn step_systems(_world: &World, _delta_time: f32) -> EcsResult<()> {
 /// Get system execution statistics
 pub async fn get_system_stats(_world: &World, _system_id: SystemId) -> EcsResult<SystemStats> {
     Err(EcsError::ModuleNotFound("get_system_stats not implemented - systems/ecs required".to_string()))
-}
-
-/// Statistics for system execution
-#[derive(Debug, Clone)]
-pub struct SystemStats {
-    pub execution_count: u64,
-    pub total_time_ms: f64,
-    pub average_time_ms: f64,
-    pub last_execution_time_ms: f64,
 }
 
 /// Get system dependencies

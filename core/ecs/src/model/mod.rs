@@ -14,5 +14,5 @@ pub use component::{Component, ComponentId, ComponentRef};
 pub use event::{Event, EventId, EventRef, Priority, Subscription, SubscriptionId};
 pub use query::{Query, QueryId, QueryRef, QueryFilter};
 pub use storage::{Storage, StorageId, StorageRef};
-pub use system::{System, SystemId, SystemRef};
-pub use world::{World, WorldRef};
+pub use system::{System, SystemId, SystemRef, SystemStats};
+pub use world::{World, WorldRef, WorldStats, WorldMetadata};
