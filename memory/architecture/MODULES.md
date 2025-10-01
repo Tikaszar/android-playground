@@ -1,21 +1,30 @@
-# Module Architecture - MVVM-Based Hot-Loading (Sessions 67-70)
+# Module Architecture - MVVM-Based Hot-Loading (Sessions 67-71)
 
 ## Overview
 
 The entire engine uses MVVM pattern with hot-loadable modules where Core provides Model+View, Systems provide ViewModel, and everything can reload at runtime.
 
-## Implementation Status (Sessions 68-70)
+## Implementation Status (Sessions 68-71)
 
 ### modules/* Infrastructure ✅ COMPLETE
 - **modules/types** - Base types with proper Rust module structure
-  - NO traits (concrete base classes only)
+  - Traits with generics allowed (NO dyn, NO Box)
   - One struct per file
   - Proper subdirectories with mod.rs
   - ViewAPI and ViewModelImpl are Copy+Clone (Session 70)
 - **modules/loader** - Contains THE single unsafe block ✅ COMPILES
-- **modules/binding** - Direct function pointer binding ✅ COMPILES
+- **modules/binding** - Trait-based binding with generics ✅ COMPILES
 - **modules/resolver** - Cargo.toml parsing
 - **modules/registry** - Runtime orchestration
+
+### core/ecs/model ✅ COMPLETE (Session 71)
+- **entity/** - EntityId, Entity, EntityRef, Generation
+- **component/** - ComponentId, Component, ComponentRef (NO ComponentData trait)
+- **event/** - EventId, Event, EventRef, Priority, Subscription, SubscriptionId
+- **query/** - QueryId, Query, QueryRef, QueryFilter
+- **storage/** - StorageId, Storage, StorageRef
+- **system/** - SystemId, System, SystemRef
+- **world/** - World, WorldRef (contains all storage)
 
 ## MVVM Module Types
 

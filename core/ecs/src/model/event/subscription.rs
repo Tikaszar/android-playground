@@ -3,7 +3,7 @@
 use crate::model::event::{EventId, Priority};
 
 /// Subscription ID for tracking
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub struct SubscriptionId(pub u64);
 
 impl SubscriptionId {

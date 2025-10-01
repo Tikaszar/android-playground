@@ -24,7 +24,7 @@ static LIFECYCLE: ModuleLifecycle = ModuleLifecycle {
 };
 
 // Module export for hot-loading
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub static PLAYGROUND_MODULE: Module = Module {
     metadata: &METADATA,
     module_type: ModuleType::Core,
@@ -32,7 +32,7 @@ pub static PLAYGROUND_MODULE: Module = Module {
 };
 
 // View API export for Core modules
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub static PLAYGROUND_VIEW_API: ViewAPI = ViewAPI {
     functions: &[
         // World functions

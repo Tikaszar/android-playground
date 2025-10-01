@@ -19,10 +19,16 @@ pub use model::{
     // Entity types
     EntityId, Generation, Entity, EntityRef,
     // Component types
-    Component, ComponentId, ComponentData,
+    Component, ComponentId, ComponentRef,
     // Event types
-    Event, EventId, Priority, Subscription, SubscriptionId,
+    Event, EventId, EventRef, Priority, Subscription, SubscriptionId,
+    // Query types
+    Query, QueryId, QueryRef, QueryFilter,
+    // Storage types
+    Storage, StorageId, StorageRef,
+    // System types
+    System, SystemId, SystemRef,
     // World
-    World,
+    World, WorldRef,
 };
 

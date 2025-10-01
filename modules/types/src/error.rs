@@ -31,6 +31,12 @@ pub enum ModuleError {
     #[error("State serialization failed: {0}")]
     StateSerializationFailed(String),
 
+    #[error("Serialization error: {0}")]
+    SerializationError(String),
+
+    #[error("Deserialization error: {0}")]
+    DeserializationError(String),
+
     #[error("Generic error: {0}")]
     Generic(String),
 }

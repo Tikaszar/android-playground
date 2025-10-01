@@ -315,32 +315,40 @@ pub async fn register_handlers(server: Handle<Server>) -> CoreResult<()> {
 }
 ```
 
-## Component/Data Pattern
+## Component Pattern (Session 71)
 
-### For Type Erasure Without Any
+### Pure Data Wrapper (NO Trait)
 ```rust
-// Concrete wrapper type
+// Concrete wrapper type - pure data only
 pub struct Component {
-    data: Bytes,
-    component_id: ComponentId,
-    component_name: String,
+    pub data: Bytes,
+    pub component_id: ComponentId,
+    pub component_name: String,
+    pub size_hint: usize,
 }
 
-// Trait for actual types
-pub trait ComponentData: Send + Sync + 'static {
-    fn component_id() -> ComponentId;
-    async fn serialize(&self) -> CoreResult<Bytes>;
-    async fn deserialize(bytes: &Bytes) -> CoreResult<Self> where Self: Sized;
-}
-
-// Usage
+// Helper functions for serialization
 impl Component {
-    pub async fn new<T: ComponentData>(data: T) -> CoreResult<Self> {
+    pub fn from_serializable<T: serde::Serialize + 'static>(value: &T) -> EcsResult<Self> {
+        let data = bincode::serialize(value)?;
         Ok(Self {
-            data: data.serialize().await?,
-            component_id: T::component_id(),
+            data: Bytes::from(data),
+            component_id: ComponentId::from_type_name::<T>(),
             component_name: std::any::type_name::<T>().to_string(),
+            size_hint: data.len(),
         })
+    }
+
+    pub fn to_deserializable<T: serde::de::DeserializeOwned>(&self) -> EcsResult<T> {
+        bincode::deserialize(&self.data)
     }
 }
 ```
+
+### Consistent Model Pattern (All Modules)
+Every ECS module follows this pattern:
+- **{Name}Id** - Simple ID type (Copy, Eq, Hash, Serialize)
+- **{Name}** - Strong reference with Handle<World>
+- **{Name}Ref** - Weak reference with Weak<World>
+- NO Options - use Handle/Shared or Weak directly
+- NO async - pure data only

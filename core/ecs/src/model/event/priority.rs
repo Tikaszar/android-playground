@@ -5,16 +5,18 @@ use serde::{Serialize, Deserialize};
 /// Event handler priority
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 pub enum Priority {
-    /// Highest priority - runs first
-    Critical = 0,
+    /// Pre-event handler (can cancel the event)
+    Pre = 0,
+    /// Highest priority - runs first (for post-event)
+    Critical = 1,
     /// High priority
-    High = 1,
+    High = 2,
     /// Normal priority (default)
-    Normal = 2,
+    Normal = 3,
     /// Low priority
-    Low = 3,
+    Low = 4,
     /// Lowest priority - runs last
-    Minimal = 4,
+    Minimal = 5,
 }
 
 impl Default for Priority {

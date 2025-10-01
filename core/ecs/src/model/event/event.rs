@@ -3,8 +3,9 @@
 use bytes::Bytes;
 use crate::model::{
     event::{EventId, Priority},
-    entity::Entity,
+    entity::{EntityRef, EntityId, Generation},
 };
+use std::sync::Weak;
 
 /// Event to be dispatched
 #[derive(Clone)]
@@ -15,8 +16,8 @@ pub struct Event {
     /// Event data (serialized)
     pub data: Bytes,
 
-    /// Optional source entity
-    pub source: Option<Entity>,
+    /// Source entity reference
+    pub source: EntityRef,
 
     /// Timestamp (milliseconds since epoch)
     pub timestamp: u64,
@@ -31,15 +32,19 @@ impl Event {
         Self {
             id,
             data,
-            source: None,
+            source: EntityRef {
+                id: EntityId::null(),
+                generation: Generation::invalid(),
+                world: Weak::new(),
+            },
             timestamp: 0, // Will be set by dispatcher
             priority: Priority::Normal,
         }
     }
 
     /// Set the source entity
-    pub fn with_source(mut self, entity: Entity) -> Self {
-        self.source = Some(entity);
+    pub fn with_source(mut self, source: EntityRef) -> Self {
+        self.source = source;
         self
     }
 

@@ -14,6 +14,7 @@ use crate::model::{
 pub struct Entity {
     pub id: EntityId,
     pub generation: Generation,
+    #[allow(dead_code)]
     pub world: Handle<World>,
 }
 

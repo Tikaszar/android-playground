@@ -1,39 +1,45 @@
-# Current Session - Session 70: Fix modules/loader and modules/binding
+# Current Session - Session 71: Complete core/ecs Model Layer
 
 ## Session Goal
-Fix compilation errors in modules/loader and modules/binding packages.
+Complete the Model layer for core/ecs with all required data structures.
 
 ## Work Completed This Session
 
-### 1. Fixed modules/types ✅
-- Added `#[derive(Copy, Clone)]` to `ViewAPI`
-- Added `#[derive(Copy, Clone)]` to `ViewModelImpl`
-- Both structs only contain `&'static` data, safe to copy
+### 1. Fixed ComponentData trait ✅
+- Made all methods async (component_id, component_name, serialize, deserialize)
+- Updated Component to use .await for trait calls
+- Fixed Rust 2024 compatibility (#[unsafe(no_mangle)])
 
-### 2. Fixed modules/loader ✅
-- Changed symbol extraction to use `.clone()` instead of move
-- Properly clone ViewAPI and ViewModelImpl from dynamic library
-- Removed unused imports (Path, debug)
-- Fixed hot_reload to not use unused module_path variable
+### 2. Removed ComponentData trait ✅
+- Deleted component_data.rs entirely
+- Created ComponentRef following entity/event pattern
+- Simplified Component to pure data with helper functions
+- Component::from_serializable() and to_deserializable() for convenience
 
-### 3. Fixed modules/binding ✅
-- Dereferenced function pointers: `*func` instead of `func`
-- HashMap now stores `ViewModelFunction` not `&ViewModelFunction`
-- Proper type matching in function map
+### 3. Created EventRef ✅
+- Following EntityRef/ComponentRef pattern
+- Changed Event.source from Option<Entity> to EntityRef
+- NO Options anywhere - use Handle/Shared or Weak directly
 
-### 4. Cleanup ✅
-- Deleted core/ecs/src.old directory (leftover from Session 69)
-- Both packages compile successfully
+### 4. Created Query, Storage, System modules ✅
+- **query/** - QueryId, Query, QueryRef, QueryFilter
+- **storage/** - StorageId, Storage, StorageRef
+- **system/** - SystemId, System, SystemRef
+- All follow the same pattern (Id, Data, Ref types)
 
-## Key Implementation Details
+### 5. Completed World ✅
+- Created WorldRef
+- Added storage fields for query/storage/system to World
+- World now contains all ECS data
 
-1. **Copy+Clone for static structs** - ViewAPI and ViewModelImpl are safe to copy
-2. **Symbol extraction** - Use `.clone()` to copy data from dynamic library
-3. **Function pointers** - Dereference to get owned function pointer
+## Key Decisions
 
-## Next Session (71)
+1. **Traits with generics allowed** - Use `<T: Trait>` NOT `Box<dyn Trait>`
+2. **Consistent pattern** - Every module has Id, Data, Ref types
+3. **NO Options** - Use Handle/Shared or Weak directly
+4. **Model = Pure Data** - NO logic, NO async
 
-1. Create systems/ecs with ViewModel implementation
-2. Implement all View functions
-3. Test View-ViewModel binding
-4. Verify hot-reload capability
+## Next Session (72)
+
+1. Create core/ecs View layer (trait definitions for APIs)
+2. Continue with systems/ecs ViewModel implementation

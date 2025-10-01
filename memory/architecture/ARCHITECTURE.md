@@ -1,6 +1,6 @@
 # Architecture - MVVM-Based Module System
 
-## Core Architectural Pattern (Sessions 67-70)
+## Core Architectural Pattern (Sessions 67-71)
 
 ### MVVM Architecture
 ```
@@ -11,14 +11,15 @@ Apps → Plugins → Core (Model+View) → [Module Binding] → Systems (ViewMod
 - **Model** = Data structures (core/*/model/)
 - **View** = API contracts (core/*/view/)
 - **ViewModel** = Implementation (systems/*/viewmodel/)
-- **Binding** = Direct function pointer linking at load time
+- **Binding** = Trait-based with generics (NO dyn, NO Box)
 
-## Implementation (Sessions 68-70)
-- **modules/types** - MVVM base types (NO traits, concrete classes only, Copy+Clone)
+## Implementation (Sessions 68-71)
+- **modules/types** - MVVM base types (traits with generics, NO dyn)
 - **modules/loader** - THE single unsafe block for Library::new() ✅ COMPILES
-- **modules/binding** - Direct View-ViewModel function binding ✅ COMPILES
+- **modules/binding** - Trait-based binding with concrete types ✅ COMPILES
 - **modules/resolver** - Cargo.toml module declarations
 - **modules/registry** - Runtime module orchestration
+- **core/ecs/model** - Complete ECS Model layer with all data structures ✅ COMPILES
 
 ## MVVM Separation Pattern
 
@@ -36,17 +37,22 @@ Apps → Plugins → Core (Model+View) → [Module Binding] → Systems (ViewMod
 ### Module Structure Example
 ```
 core/ecs/
-├── model/
-│   ├── world.rs          # Data structure
-│   └── entity.rs         # Data structure
+├── model/                # Pure data structures
+│   ├── entity/          # EntityId, Entity, EntityRef, Generation
+│   ├── component/       # ComponentId, Component, ComponentRef
+│   ├── event/           # EventId, Event, EventRef, Priority, Subscription
+│   ├── query/           # QueryId, Query, QueryRef, QueryFilter
+│   ├── storage/         # StorageId, Storage, StorageRef
+│   ├── system/          # SystemId, System, SystemRef
+│   └── world/           # World, WorldRef
 └── view/
-    ├── spawn_entity.rs   # API contract
-    └── query.rs          # API contract
+    ├── spawn_entity.rs   # API contract (trait)
+    └── query.rs          # API contract (trait)
 
 systems/ecs/
 └── viewmodel/
-    ├── spawn_entity.rs   # Implementation
-    └── query.rs          # Implementation
+    ├── spawn_entity.rs   # Implementation (impl trait)
+    └── query.rs          # Implementation (impl trait)
 ```
 
 ## Module Declaration System
@@ -173,10 +179,10 @@ pub async fn initialize() -> CoreResult<()> {
 ## Architectural Invariants
 
 1. **NO unsafe** - EXCEPTION: Single Library::new() in module loader only
-2. **NO dyn** - Use concrete types with module dispatch
+2. **Traits allowed with generics** - Use `<T: Trait>` NOT `Box<dyn Trait>`
 3. **NO Any** - Use serialization for type erasure
-4. **NO turbofish** - Use ComponentId not generics
-5. **Core is stateless** - Only data fields, no logic
-6. **Systems are hot-loadable** - Runtime module replacement
-7. **Compile-time safety** - Missing features caught at compile time
-8. **Runtime dispatch** - Modules provide polymorphism without dyn
+4. **NO turbofish** - Use ComponentId not generics for components
+5. **Model is pure data** - Only data fields, no logic
+6. **NO Option<Handle>** - Use Handle/Shared or Weak directly
+7. **Consistent pattern** - Every module has Id, Data, Ref types
+8. **World contains all** - Central storage for all ECS data

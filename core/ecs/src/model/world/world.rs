@@ -7,6 +7,9 @@ use crate::model::{
     entity::{EntityId, Generation},
     component::{Component, ComponentId},
     event::{EventId, Event, SubscriptionId},
+    query::{QueryId, QueryFilter},
+    storage::StorageId,
+    system::SystemId,
 };
 
 /// The concrete World struct - data fields only, no logic!
@@ -31,6 +34,24 @@ pub struct World {
 
     /// Next subscription ID
     pub next_subscription_id: AtomicU32,
+
+    /// Query storage: query_id -> filter
+    pub queries: Shared<HashMap<QueryId, QueryFilter>>,
+
+    /// Next query ID counter
+    pub next_query_id: AtomicU32,
+
+    /// Storage metadata: storage_id -> (path, format)
+    pub storages: Shared<HashMap<StorageId, (String, String)>>,
+
+    /// Next storage ID counter
+    pub next_storage_id: AtomicU32,
+
+    /// System metadata: system_id -> (name, query_id, dependencies)
+    pub systems: Shared<HashMap<SystemId, (String, QueryId, Vec<SystemId>)>>,
+
+    /// Next system ID counter
+    pub next_system_id: AtomicU32,
 }
 
 impl World {
@@ -44,6 +65,19 @@ impl World {
             pre_handlers: shared(HashMap::new()),
             post_handlers: shared(HashMap::new()),
             next_subscription_id: AtomicU32::new(1),
+            queries: shared(HashMap::new()),
+            next_query_id: AtomicU32::new(1),
+            storages: shared(HashMap::new()),
+            next_storage_id: AtomicU32::new(1),
+            systems: shared(HashMap::new()),
+            next_system_id: AtomicU32::new(1),
         })
+    }
+
+    /// Create a weak reference to this World from a Handle
+    pub fn downgrade(world: &Handle<Self>) -> super::WorldRef {
+        super::WorldRef {
+            world: std::sync::Arc::downgrade(world),
+        }
     }
 }
