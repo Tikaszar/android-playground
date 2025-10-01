@@ -1,27 +1,26 @@
 # Context - Session Continuity
 
-## Session 73 Complete ✅
-Fixed data type layer placement:
-1. ✅ Moved WorldStats, SystemStats, WorldMetadata to Model layer
-2. ✅ Proper subdirectory organization (world/, system/)
-3. ✅ Updated all module exports
-4. ✅ Cleaned View layer (API contracts only)
-5. ✅ core/ecs compiles successfully
+## Session 74 In Progress 🔄
+Implementing systems/ecs ViewModel layer:
+1. 🔄 Audited View API vs ViewModel implementations
+2. 🔄 Found 58/101 functions implemented, 48 missing
+3. 🔄 Updated viewmodel/mod.rs to export query, storage, system modules
+4. ⏳ Implementing 48 missing ViewModel functions
 
 ## Current State
-- modules/* infrastructure complete
-- core/ecs/model complete (7 modules + 3 data types)
-- core/ecs/view complete (7 modules, API contracts only)
-- View = API contracts ONLY (no data types)
-- Model = Pure data structures (including stats/metadata)
+- modules/* infrastructure complete ✅
+- core/ecs/model complete (7 modules + 3 data types) ✅
+- core/ecs/view complete (101 API contracts) ✅
+- systems/ecs/viewmodel partial (58/101 implemented) 🔄
 
-## Next Session (74) Tasks
-1. **systems/ecs ViewModel** - Implement View contracts
-2. **Test module binding** - Verify View→ViewModel connection
-3. **Begin hot-reload testing**
+## Session 74 Remaining Tasks
+1. **Implement 48 missing ViewModel functions** (Priority 1-5)
+2. **Update module_exports.rs** - Add all 101 functions to PLAYGROUND_VIEWMODEL_IMPL
+3. **Update mod.rs exports** - Add new functions to entity/component/event/world modules
+4. **Test compilation** - Verify systems/ecs compiles
 
 ## Important Notes
-- MVVM separation now correct
-- Data types properly in Model layer
-- View layer contains zero data structures
-- Ready for ViewModel implementation
+- ViewModel pattern confirmed: `fn name(args: &[u8]) -> Pin<Box<dyn Future<...>>>`
+- World Model lacks resources field - will stub resource functions
+- Priority 1 (entity/component basics) most critical for testing
+- Must update module_exports.rs with ALL functions for hot-loading

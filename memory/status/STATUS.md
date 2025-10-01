@@ -1,10 +1,10 @@
 # Status - Current Implementation Status
 
 ## Build Status
-- **Last known**: ✅ core/ecs Model layer complete and compiling
-- **Session 71**: Complete ECS Model layer with all data structures
-- **Working**: modules/*, core/ecs/model (7 modules complete)
-- **Note**: Ready for core/ecs View layer implementation
+- **Last known**: ✅ core/ecs Model+View complete and compiling (Session 73)
+- **Session 74**: Implementing systems/ecs ViewModel layer (58/101 functions done)
+- **Working**: modules/*, core/ecs (Model+View complete)
+- **In Progress**: systems/ecs/viewmodel (48 functions remaining)
 
 ## Package Implementation Status
 
@@ -17,24 +17,23 @@
 | modules/resolver | ✅ | Cargo.toml parsing |
 | modules/registry | ✅ | Runtime orchestration |
 
-### Core Layer ⚠️ NEEDS MVVM CONVERSION
-All core packages need conversion to MVVM pattern:
+### Core Layer (MVVM Pattern)
 
-| Package | Status | VTable | Data Only | Features |
-|---------|--------|--------|-----------|----------|
-| core/types | ✅ | N/A | ✅ | N/A |
-| core/ecs | ✅ | ✅ | ✅ | None (all required) |
-| core/console | ✅ | ✅ | ✅ | output, logging, input, etc |
-| core/server | ✅ | N/A | ✅ ECS | websocket, channels, batching, etc |
-| core/client | ✅ | N/A | ✅ ECS | rendering, input, audio, etc |
-| core/rendering | ✅ | N/A | ✅ ECS | shaders, textures, buffers, etc |
-| core/ui | ✅ | N/A | ✅ | N/A |
+| Package | Model | View | Notes |
+|---------|-------|------|-------|
+| core/types | ✅ | N/A | Base types only |
+| core/ecs | ✅ | ✅ | Sessions 71-73: Model+View complete, 101 API contracts |
+| core/console | ⚠️ | ⚠️ | Needs MVVM conversion |
+| core/server | ⚠️ | ⚠️ | Needs MVVM conversion |
+| core/client | ⚠️ | ⚠️ | Needs MVVM conversion |
+| core/rendering | ⚠️ | ⚠️ | Needs MVVM conversion |
+| core/ui | ⚠️ | ⚠️ | Needs MVVM conversion |
 
-### Systems Layer ⚠️ PARTIAL
+### Systems Layer (ViewModel Implementations)
 
-| Package | Status | VTable Handlers | Issues |
-|---------|--------|-----------------|--------|
-| systems/ecs | ✅ | ✅ | None |
+| Package | ViewModel | Status | Notes |
+|---------|-----------|--------|-------|
+| systems/ecs | 🔄 | In Progress | Session 74: 58/101 functions done, 48 remaining |
 | systems/console | ✅ | ✅ | None |
 | systems/networking | ✅ | ✅ | ECS rewrite complete (Session 63) |
 | systems/webgl | 🔴 | ❌ | DOESN'T COMPILE - Missing imports, trait errors |

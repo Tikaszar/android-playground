@@ -1,0 +1,13 @@
+//! Delete a snapshot
+
+use playground_modules_types::{ModuleResult, ModuleError};
+use std::pin::Pin;
+use std::future::Future;
+
+pub fn delete_snapshot(args: &[u8]) -> Pin<Box<dyn Future<Output = ModuleResult<Vec<u8>>> + Send>> {
+    let args = args.to_vec();
+    Box::pin(async move {
+        // TODO: Implement delete_snapshot
+        Err(ModuleError::NotImplemented("delete_snapshot".to_string()))
+    })
+}
