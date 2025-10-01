@@ -8,7 +8,7 @@ use crate::EcsResult;
 ///
 /// Users manually serialize their data and create Components.
 /// Helper functions are provided for common serialization patterns.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct Component {
     /// The serialized component data
     pub data: Bytes,

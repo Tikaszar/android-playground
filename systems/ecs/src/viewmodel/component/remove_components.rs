@@ -1,4 +1,4 @@
-//! Remove a component from an entity
+//! Remove multiple components from an entity in batch
 
 use playground_modules_types::{ModuleResult, ModuleError};
 use playground_core_ecs::{EntityId, ComponentId};
@@ -6,38 +6,31 @@ use std::pin::Pin;
 use std::future::Future;
 
 #[derive(serde::Deserialize)]
-struct RemoveComponentArgs {
+struct RemoveComponentsArgs {
     entity_id: EntityId,
-    component_id: ComponentId,
+    component_ids: Vec<ComponentId>,
 }
 
-/// Remove a component from an entity
-pub fn remove_component(args: &[u8]) -> Pin<Box<dyn Future<Output = ModuleResult<Vec<u8>>> + Send>> {
+/// Remove multiple components from an entity
+pub fn remove_components(args: &[u8]) -> Pin<Box<dyn Future<Output = ModuleResult<Vec<u8>>> + Send>> {
     let args = args.to_vec();
     Box::pin(async move {
         // Deserialize args
-        let args: RemoveComponentArgs = bincode::deserialize(&args)
+        let args: RemoveComponentsArgs = bincode::deserialize(&args)
             .map_err(|e| ModuleError::DeserializationError(e.to_string()))?;
 
         // Get World
         let world = crate::state::get_world()
             .map_err(|e| ModuleError::Generic(e))?;
 
-        // Remove component
-        let removed = {
+        // Remove all components
+        {
             let mut components = world.components.write().await;
             if let Some(entity_components) = components.get_mut(&args.entity_id) {
-                entity_components.remove(&args.component_id).is_some()
-            } else {
-                false
+                for component_id in args.component_ids {
+                    entity_components.remove(&component_id);
+                }
             }
-        };
-
-        if !removed {
-            return Err(ModuleError::Generic(format!(
-                "Component {:?} not found on entity {:?}",
-                args.component_id, args.entity_id
-            )));
         }
 
         Ok(Vec::new())

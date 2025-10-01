@@ -13,9 +13,10 @@ struct DespawnEntityArgs {
 
 /// Despawn an entity
 pub fn despawn_entity(args: &[u8]) -> Pin<Box<dyn Future<Output = ModuleResult<Vec<u8>>> + Send>> {
+    let args = args.to_vec();
     Box::pin(async move {
         // Deserialize entity from args
-        let entity_args: DespawnEntityArgs = bincode::deserialize(args)
+        let entity_args: DespawnEntityArgs = bincode::deserialize(&args)
             .map_err(|e| ModuleError::DeserializationError(e.to_string()))?;
 
         // Get World

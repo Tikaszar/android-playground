@@ -7,9 +7,10 @@ use std::future::Future;
 
 /// Get all components for an entity
 pub fn get_all_components(args: &[u8]) -> Pin<Box<dyn Future<Output = ModuleResult<Vec<u8>>> + Send>> {
+    let args = args.to_vec();
     Box::pin(async move {
         // Deserialize entity ID from args
-        let entity_id: EntityId = bincode::deserialize(args)
+        let entity_id: EntityId = bincode::deserialize(&args)
             .map_err(|e| ModuleError::DeserializationError(e.to_string()))?;
 
         // Get World

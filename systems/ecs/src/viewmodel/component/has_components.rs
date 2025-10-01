@@ -1,4 +1,4 @@
-//! Check if an entity has a component
+//! Check if an entity has all specified components
 
 use playground_modules_types::{ModuleResult, ModuleError};
 use playground_core_ecs::{EntityId, ComponentId};
@@ -6,35 +6,35 @@ use std::pin::Pin;
 use std::future::Future;
 
 #[derive(serde::Deserialize)]
-struct HasComponentArgs {
+struct HasComponentsArgs {
     entity_id: EntityId,
-    component_id: ComponentId,
+    component_ids: Vec<ComponentId>,
 }
 
-/// Check if an entity has a component
-pub fn has_component(args: &[u8]) -> Pin<Box<dyn Future<Output = ModuleResult<Vec<u8>>> + Send>> {
+/// Check if an entity has all specified components
+pub fn has_components(args: &[u8]) -> Pin<Box<dyn Future<Output = ModuleResult<Vec<u8>>> + Send>> {
     let args = args.to_vec();
     Box::pin(async move {
         // Deserialize args
-        let args: HasComponentArgs = bincode::deserialize(&args)
+        let args: HasComponentsArgs = bincode::deserialize(&args)
             .map_err(|e| ModuleError::DeserializationError(e.to_string()))?;
 
         // Get World
         let world = crate::state::get_world()
             .map_err(|e| ModuleError::Generic(e))?;
 
-        // Check if component exists
-        let has_component = {
+        // Check all components
+        let has_all = {
             let components = world.components.read().await;
             if let Some(entity_components) = components.get(&args.entity_id) {
-                entity_components.contains_key(&args.component_id)
+                args.component_ids.iter().all(|id| entity_components.contains_key(id))
             } else {
                 false
             }
         };
 
-        // Serialize result
-        let result = bincode::serialize(&has_component)
+        // Serialize and return
+        let result = bincode::serialize(&has_all)
             .map_err(|e| ModuleError::SerializationError(e.to_string()))?;
 
         Ok(result)

@@ -93,7 +93,7 @@ notify = "6.1"
 nalgebra = { version = "0.33", features = ["serde-serialize"] }
 
 # For ECS and networking
-bytes = "1.5"
+bytes = { version = "1.5", features = ["serde"] }
 indexmap = "2.1"
 petgraph = "0.6"
 fnv = "1.0"

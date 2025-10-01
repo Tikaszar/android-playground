@@ -1,4 +1,4 @@
-//! Add a component to an entity
+//! Add multiple components to an entity in batch
 
 use playground_modules_types::{ModuleResult, ModuleError};
 use playground_core_ecs::{EntityId, Component};
@@ -7,17 +7,17 @@ use std::future::Future;
 use std::collections::HashMap;
 
 #[derive(serde::Deserialize)]
-struct AddComponentArgs {
+struct AddComponentsArgs {
     entity_id: EntityId,
-    component: Component,
+    components: Vec<Component>,
 }
 
-/// Add a component to an entity
-pub fn add_component(args: &[u8]) -> Pin<Box<dyn Future<Output = ModuleResult<Vec<u8>>> + Send>> {
+/// Add multiple components to an entity
+pub fn add_components(args: &[u8]) -> Pin<Box<dyn Future<Output = ModuleResult<Vec<u8>>> + Send>> {
     let args = args.to_vec();
     Box::pin(async move {
         // Deserialize args
-        let args: AddComponentArgs = bincode::deserialize(&args)
+        let args: AddComponentsArgs = bincode::deserialize(&args)
             .map_err(|e| ModuleError::DeserializationError(e.to_string()))?;
 
         // Get World
@@ -34,11 +34,13 @@ pub fn add_component(args: &[u8]) -> Pin<Box<dyn Future<Output = ModuleResult<Ve
             return Err(ModuleError::Generic(format!("Entity {:?} not found", args.entity_id)));
         }
 
-        // Add component
+        // Add all components
         {
             let mut components = world.components.write().await;
             let entity_components = components.entry(args.entity_id).or_insert_with(HashMap::new);
-            entity_components.insert(args.component.component_id, args.component);
+            for component in args.components {
+                entity_components.insert(component.component_id, component);
+            }
         }
 
         Ok(Vec::new())

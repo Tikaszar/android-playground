@@ -14,9 +14,10 @@ struct CloneEntityResult {
 
 /// Clone an entity with all its components
 pub fn clone_entity(args: &[u8]) -> Pin<Box<dyn Future<Output = ModuleResult<Vec<u8>>> + Send>> {
+    let args = args.to_vec();
     Box::pin(async move {
         // Deserialize source entity ID from args
-        let source_entity_id: EntityId = bincode::deserialize(args)
+        let source_entity_id: EntityId = bincode::deserialize(&args)
             .map_err(|e| ModuleError::DeserializationError(e.to_string()))?;
 
         // Get World

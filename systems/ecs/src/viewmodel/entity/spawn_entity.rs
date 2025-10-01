@@ -5,7 +5,6 @@ use playground_core_ecs::{EntityId, Generation};
 use std::pin::Pin;
 use std::future::Future;
 use std::sync::atomic::Ordering;
-use std::collections::HashMap;
 
 /// Spawn a new entity with components
 pub fn spawn_entity(args: &[u8]) -> Pin<Box<dyn Future<Output = ModuleResult<Vec<u8>>> + Send>> {

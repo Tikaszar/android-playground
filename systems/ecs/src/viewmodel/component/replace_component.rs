@@ -1,4 +1,4 @@
-//! Add a component to an entity
+//! Replace a component on an entity (add or update)
 
 use playground_modules_types::{ModuleResult, ModuleError};
 use playground_core_ecs::{EntityId, Component};
@@ -7,17 +7,17 @@ use std::future::Future;
 use std::collections::HashMap;
 
 #[derive(serde::Deserialize)]
-struct AddComponentArgs {
+struct ReplaceComponentArgs {
     entity_id: EntityId,
     component: Component,
 }
 
-/// Add a component to an entity
-pub fn add_component(args: &[u8]) -> Pin<Box<dyn Future<Output = ModuleResult<Vec<u8>>> + Send>> {
+/// Replace a component on an entity (add or update)
+pub fn replace_component(args: &[u8]) -> Pin<Box<dyn Future<Output = ModuleResult<Vec<u8>>> + Send>> {
     let args = args.to_vec();
     Box::pin(async move {
         // Deserialize args
-        let args: AddComponentArgs = bincode::deserialize(&args)
+        let args: ReplaceComponentArgs = bincode::deserialize(&args)
             .map_err(|e| ModuleError::DeserializationError(e.to_string()))?;
 
         // Get World
@@ -34,7 +34,7 @@ pub fn add_component(args: &[u8]) -> Pin<Box<dyn Future<Output = ModuleResult<Ve
             return Err(ModuleError::Generic(format!("Entity {:?} not found", args.entity_id)));
         }
 
-        // Add component
+        // Replace component (insert overwrites existing)
         {
             let mut components = world.components.write().await;
             let entity_components = components.entry(args.entity_id).or_insert_with(HashMap::new);
