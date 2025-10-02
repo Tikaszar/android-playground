@@ -1,18 +1,20 @@
 # Context - Session Continuity
 
-## Session 80 Starting 🚀
-Converting core/ecs and systems/ecs to use new trait-based MVVM infrastructure.
+## Session 80 In Progress 🔄
+Adding fragment support to MVVM trait system in modules/types.
 
-### Objective
-Delete obsolete exports and convert View/ViewModel to trait-based implementations.
+### Completed
+1. ✅ Added FragmentId type to modules/types
+2. ✅ Added ViewFragmentTrait with view_id() and fragment_id()
+3. ✅ Added ViewModelFragmentTrait with view_id() and fragment_id()
+4. ✅ Updated all exports in modules/types
+5. ✅ modules/types compiles successfully
 
-### Tasks
-1. Delete `core/ecs/src/module_exports.rs` (obsolete)
-2. Delete `systems/ecs/src/module_exports.rs` (obsolete)
-3. Convert core/ecs View layer to trait definitions (7 traits)
-4. Convert systems/ecs ViewModel layer to trait implementations (7 implementations)
-5. Add `#[no_mangle]` symbol exports
-6. Test compilation
+### Next Steps
+1. Convert core/ecs View layer to use fragment traits
+2. Convert systems/ecs ViewModel layer to use fragment traits
+3. Add composite EcsViewTrait for compile-time enforcement
+4. Test compilation
 
 See CURRENT_SESSION.md for details.
 

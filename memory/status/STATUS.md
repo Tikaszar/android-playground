@@ -1,17 +1,17 @@
 # Status - Current Implementation Status
 
 ## Build Status
-- **Last known**: ⚠️ Core/Systems modules need trait conversion (Session 80)
-- **Session 79**: modules/* infrastructure complete with traits ✅
-- **Working**: modules/* (types, loader, binding, registry, resolver)
-- **Needs Update**: core/ecs and systems/ecs to use new trait-based exports
+- **Last known**: ✅ modules/types fragment support complete (Session 80)
+- **Session 80**: Added fragment traits to modules/types ✅
+- **Working**: modules/* (types with fragments, loader, binding, registry, resolver)
+- **Needs Update**: core/ecs and systems/ecs to use fragment traits
 
 ## Package Implementation Status
 
-### Modules Infrastructure ✅ COMPLETE (Session 79)
+### Modules Infrastructure ✅ COMPLETE (Sessions 79-80)
 | Package | Status | Notes |
 |---------|--------|-------|
-| modules/types | ✅ | Trait-based MVVM (ModelTrait, ViewTrait, ViewModelTrait) |
+| modules/types | ✅ | Trait-based MVVM with fragments (Session 80) |
 | modules/loader | ✅ | THE single unsafe block, extracts trait objects |
 | modules/binding | ✅ | Triple-nested sharding with ModelPools, object recycling |
 | modules/resolver | ✅ | Cargo.toml parsing |
@@ -68,7 +68,9 @@ All 9 IDE plugins are BROKEN (dependencies removed but code unchanged):
 ## Feature Implementation
 
 ### Working Features ✅
-- Trait-based MVVM infrastructure (Session 79)
+- Fragment-based MVVM infrastructure (Session 80)
+- Trait-based MVVM (ModelTrait, ViewTrait, ViewModelTrait)
+- Fragment traits (ViewFragmentTrait, ViewModelFragmentTrait)
 - Triple-nested sharding with ModelPools
 - Lock-free View/ViewModel access
 - Object recycling for Models
@@ -176,6 +178,7 @@ All 9 IDE plugins are BROKEN (dependencies removed but code unchanged):
 ## Progress Summary
 
 ### Completed ✅
+- Session 80: Fragment-based MVVM infrastructure in modules/types ✅
 - Session 79: Trait-based MVVM module system infrastructure
 - Session 77: ThreadSafe primitives and ComponentPool design
 - Session 71-73: Core/ECS Model+View layers (data structures)
@@ -184,9 +187,10 @@ All 9 IDE plugins are BROKEN (dependencies removed but code unchanged):
 - THE single unsafe block implementation
 - Triple-nested sharding architecture
 - Object recycling system
+- Fragment traits for logical grouping
 
 ### In Progress 🟡
-- Session 80: Converting core/ecs and systems/ecs to use new traits
+- Session 80: Converting core/ecs and systems/ecs to use fragment traits
 - Documentation updates
 - Module loading testing
 

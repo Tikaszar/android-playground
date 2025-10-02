@@ -97,6 +97,17 @@
 - Updated System model to own component pools
 - Removed Bytes serialization from Component struct
 
+### Session 80: Fragment-Based MVVM Infrastructure 🔄 IN PROGRESS
+- Designed fragment support for logical grouping of View/ViewModel methods
+- Added FragmentId type (u64) to modules/types
+- Added ViewFragmentTrait with view_id() and fragment_id()
+- Added ViewModelFragmentTrait with view_id() and fragment_id()
+- Updated all exports in modules/types
+- modules/types compiles successfully ✅
+- Fragments are source code organization, not runtime (still single trait object)
+- Composite traits (EcsViewTrait) provide compile-time enforcement
+- **NEXT**: Convert core/ecs and systems/ecs to use fragment traits
+
 ### Session 79: Trait-Based MVVM Module System ✅ COMPLETE
 - Replaced function pointers with trait-based MVVM in modules/*
 - Created ModelTrait, ViewTrait, ViewModelTrait with 64-bit IDs
@@ -107,7 +118,6 @@
 - Updated loader to extract trait objects from symbols
 - All modules/* packages compile successfully
 - Performance: View/ViewModel lookup ~5ns, Model pool lookup ~10ns
-- **NOTE**: Core/Systems modules still need conversion to new traits
 
 ### Session 78: Module System Redesign & ViewModel Completion
 - Identified fundamental flaw: ViewModelFunction uses dyn and serialization

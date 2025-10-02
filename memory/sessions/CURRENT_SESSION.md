@@ -1,7 +1,7 @@
-# Current Session - Session 80: Convert Core/Systems to Trait-Based MVVM
+# Current Session - Session 80: Fragment-Based MVVM Infrastructure
 
 ## Session Goal
-Convert core/ecs and systems/ecs to use the new trait-based MVVM infrastructure completed in Session 79.
+Add fragment support to MVVM traits for logical grouping of View/ViewModel methods.
 
 ## Context from Session 79
 Session 79 completed the modules/* infrastructure with:
@@ -12,108 +12,71 @@ Session 79 completed the modules/* infrastructure with:
 - THE single unsafe block in loader
 - All modules/* packages compile ✅
 
-**However**: Core/Systems modules still use OLD Session 78 exports that reference deleted types.
+## Work Completed ✅
 
-## Work To Do
+### 1. modules/types Fragment Support
+- ✅ Added `FragmentId` type (u64)
+- ✅ Added `ViewFragmentTrait` with view_id() and fragment_id()
+- ✅ Added `ViewModelFragmentTrait` with view_id() and fragment_id()
+- ✅ Updated all exports in modules/types/src/lib.rs
+- ✅ modules/types compiles successfully
 
-### 1. Delete Obsolete Files
-- `core/ecs/src/module_exports.rs` - References deleted `ViewAPI`
-- `systems/ecs/src/module_exports.rs` - References deleted types
+### 2. Documentation Updates
+- ✅ Updated ARCHITECTURE.md with fragment infrastructure
+- ✅ Updated MODULES.md with fragment pattern examples
+- ✅ Updated PATTERNS.md with complete fragment implementation examples
 
-### 2. Convert core/ecs/src/view/*.rs to Trait Definitions
-Current: Stub async functions that return errors
-Target: Trait definitions extending ViewTrait
+## Work Remaining
 
-Example:
-```rust
-#[async_trait]
-pub trait EntityView: ViewTrait {
-    async fn spawn_entity(&self, world: &World, components: Vec<Component>) -> EcsResult<Entity>;
-    async fn despawn_entity(&self, world: &World, entity: Entity) -> EcsResult<()>;
-    // ... all 11 methods
-}
-```
+### 1. Convert core/ecs to Fragment Traits
+- Convert view/*.rs traits to extend ViewFragmentTrait
+- Add composite EcsViewTrait for compile-time enforcement
+- Create EcsView struct implementing all fragments
+- Delete obsolete module_exports.rs
 
-Files:
-- entity.rs (11 methods)
-- component.rs (14 methods)
-- event.rs (18 methods)
-- query.rs (14 methods)
-- storage.rs (17 methods)
-- system.rs (13 methods)
-- world.rs (17 methods)
+### 2. Convert systems/ecs to Fragment Implementations
+- Implement all fragment traits on EcsViewModel
+- Add compile-time enforcement via EcsViewTrait
+- Delete obsolete module_exports.rs
 
-### 3. Create core/ecs Symbol Exports
-Add to core/ecs/src/lib.rs:
-```rust
-#[no_mangle]
-pub static PLAYGROUND_VIEW: &dyn ViewTrait = &EcsView;
-
-#[no_mangle]
-pub static PLAYGROUND_MODELS: &[ModelTypeInfo] = &[
-    ModelTypeInfo { model_type: 0x0001, type_name: "Entity" },
-    ModelTypeInfo { model_type: 0x0002, type_name: "Component" },
-    // ... all model types
-];
-```
-
-### 4. Convert systems/ecs/src/viewmodel/*.rs to Trait Implementations
-Current: Old serialization-based implementations
-Target: Direct trait implementations
-
-Example:
-```rust
-pub struct EntityViewModel;
-
-impl ViewTrait for EntityViewModel {
-    fn view_id(&self) -> ViewId { 0x1234567890ABCDEF }
-}
-
-#[async_trait]
-impl ViewModelTrait for EntityViewModel {
-    fn view_id(&self) -> ViewId { 0x1234567890ABCDEF }
-}
-
-#[async_trait]
-impl EntityView for EntityViewModel {
-    async fn spawn_entity(&self, world: &World, components: Vec<Component>) -> EcsResult<Entity> {
-        // Move implementation from old functions here
-    }
-}
-```
-
-### 5. Create systems/ecs Symbol Export
-Add to systems/ecs/src/lib.rs:
-```rust
-#[no_mangle]
-pub static PLAYGROUND_VIEWMODEL: &dyn ViewModelTrait = &EcsViewModel;
-```
-
-### 6. Test Compilation
+### 3. Test Compilation
 - Verify core/ecs compiles
 - Verify systems/ecs compiles
 - Verify modules/* still compiles
-- Check for any missing dependencies
 
-### 7. Test Module Loading (Stretch Goal)
-- Create simple test that loads core/ecs
-- Verify symbols extracted correctly
-- Verify binding works
+## Key Design Decisions
 
-## Key Decisions to Make
-1. Single EcsView struct or separate structs per domain (Entity, Component, etc.)?
-2. ViewId values - use hash of trait name or manual assignment?
-3. ModelType values - use hash of type name or manual assignment?
+### Fragment Pattern
+Fragments are **source code organization** not runtime organization:
+- One View/ViewModel trait object at runtime (still single symbol export)
+- Multiple fragment traits in source code for logical grouping
+- Composite trait (EcsViewTrait) enforces all fragments at compile time
+
+### Compile-Time Enforcement
+```rust
+pub trait EcsViewTrait:
+    ViewTrait +
+    EntityView +
+    ComponentView +
+    // ... all fragments
+{}
+
+impl EcsViewTrait for EcsViewModel {}  // Won't compile if missing any fragment
+```
+
+### Feature Gates (Future)
+```rust
+pub trait RenderingViewTrait:
+    ViewTrait +
+    WindowView +
+    #[cfg(feature = "shaders")]
+    + ShaderView
+{}
+```
 
 ## Success Criteria
-- ✅ Obsolete module_exports.rs files deleted
-- ✅ All View traits defined in core/ecs
-- ✅ All ViewModel implementations in systems/ecs
-- ✅ Symbol exports correct
-- ✅ Both packages compile
-- 🎯 Module loading test passes (stretch)
-
-## Notes
-- This is the FIRST real usage of the Session 79 infrastructure
-- Will validate the trait-based design works as intended
-- May discover issues that need infrastructure fixes
+- ✅ modules/types has fragment support
+- ⏳ core/ecs uses fragment traits
+- ⏳ systems/ecs implements fragments
+- ⏳ Compile-time enforcement works
+- ⏳ All packages compile

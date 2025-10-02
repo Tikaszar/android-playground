@@ -13,8 +13,8 @@ Apps → Plugins → Core (Model+View) → [Module Binding] → Systems (ViewMod
 - **ViewModel** = Implementation (systems/*/viewmodel/) - Trait implementations
 - **Binding** = Trait-based with Arc<dyn Trait> (Session 79)
 
-## Implementation (Sessions 68-71, 76-79)
-- **modules/types** - Trait-based MVVM (ModelTrait, ViewTrait, ViewModelTrait) ✅ Session 79
+## Implementation (Sessions 68-71, 76-79, 80)
+- **modules/types** - Trait-based MVVM with fragments (Session 80) ✅ COMPILES
 - **modules/loader** - THE single unsafe block for Library::new() ✅ COMPILES
 - **modules/binding** - Triple-nested sharding with ModelPools ✅ Session 79
 - **modules/resolver** - Cargo.toml module declarations ✅ COMPILES
@@ -24,10 +24,11 @@ Apps → Plugins → Core (Model+View) → [Module Binding] → Systems (ViewMod
 
 ## Module System Architecture (Session 79)
 
-### Trait-Based MVVM Infrastructure
+### Trait-Based MVVM Infrastructure (Session 80: Added Fragments)
 ```rust
 // 64-bit unique identifiers
 pub type ViewId = u64;
+pub type FragmentId = u64;  // Session 80: Fragment identification
 pub type ModelId = u64;
 pub type ModelType = u64;
 
@@ -37,9 +38,23 @@ pub trait ViewTrait: Send + Sync {
     fn view_id(&self) -> ViewId;
 }
 
+// Session 80: Fragment support for logical grouping
+#[async_trait::async_trait]
+pub trait ViewFragmentTrait: Send + Sync {
+    fn view_id(&self) -> ViewId;
+    fn fragment_id(&self) -> FragmentId;
+}
+
 #[async_trait::async_trait]
 pub trait ViewModelTrait: Send + Sync {
     fn view_id(&self) -> ViewId;  // Which View this implements
+}
+
+// Session 80: Fragment support for ViewModels
+#[async_trait::async_trait]
+pub trait ViewModelFragmentTrait: Send + Sync {
+    fn view_id(&self) -> ViewId;
+    fn fragment_id(&self) -> FragmentId;
 }
 
 #[async_trait::async_trait]

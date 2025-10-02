@@ -57,9 +57,9 @@ The entire engine uses MVVM pattern with hot-loadable modules where Core provide
 - **Location**: `apps/*`
 - **Examples**: `apps/editor`, `apps/game`
 
-## Trait-Based Architecture (Session 79)
+## Trait-Based Architecture (Sessions 79-80)
 
-### Core Traits
+### Core Traits (Session 80: Added Fragments)
 ```rust
 // modules/types/src/model/base.rs
 pub type ModelId = u64;
@@ -73,10 +73,18 @@ pub trait ModelTrait: Send + Sync {
 
 // modules/types/src/view/base.rs
 pub type ViewId = u64;
+pub type FragmentId = u64;  // Session 80
 
 #[async_trait::async_trait]
 pub trait ViewTrait: Send + Sync {
     fn view_id(&self) -> ViewId;
+}
+
+// Session 80: Fragment traits for logical grouping
+#[async_trait::async_trait]
+pub trait ViewFragmentTrait: Send + Sync {
+    fn view_id(&self) -> ViewId;
+    fn fragment_id(&self) -> FragmentId;
 }
 
 // modules/types/src/viewmodel/base.rs
@@ -84,17 +92,51 @@ pub trait ViewTrait: Send + Sync {
 pub trait ViewModelTrait: Send + Sync {
     fn view_id(&self) -> ViewId;  // Which View this implements
 }
+
+// Session 80: Fragment traits for ViewModels
+#[async_trait::async_trait]
+pub trait ViewModelFragmentTrait: Send + Sync {
+    fn view_id(&self) -> ViewId;
+    fn fragment_id(&self) -> FragmentId;
+}
 ```
 
-### Core Module Example
+### Core Module Example (Session 80: Fragment Pattern)
 ```rust
-// core/ecs/src/view/entity.rs
+// core/ecs/src/view/entity.rs - Fragment trait
 #[async_trait::async_trait]
-pub trait EntityView: ViewTrait {
+pub trait EntityView: ViewFragmentTrait {
     async fn spawn_entity(&self, world: &World, components: Vec<Component>) -> EcsResult<Entity>;
     async fn despawn_entity(&self, world: &World, entity: Entity) -> EcsResult<()>;
     // ... 11 methods total
 }
+
+// core/ecs/src/view/mod.rs - Composite trait
+pub trait EcsViewTrait:
+    ViewTrait +
+    EntityView +
+    ComponentView +
+    EventView +
+    QueryView +
+    StorageView +
+    SystemView +
+    WorldView
+{}
+
+// core/ecs/src/lib.rs - Concrete implementation
+pub struct EcsView;
+
+impl ViewTrait for EcsView {
+    fn view_id(&self) -> ViewId { ECS_VIEW_ID }
+}
+
+impl EntityView for EcsView {
+    fn view_id(&self) -> ViewId { ECS_VIEW_ID }
+    fn fragment_id(&self) -> FragmentId { ENTITY_FRAGMENT_ID }
+    // ... stub implementations
+}
+
+impl EcsViewTrait for EcsView {}
 
 // Export symbol
 #[no_mangle]
@@ -107,24 +149,22 @@ pub static PLAYGROUND_MODELS: &[ModelTypeInfo] = &[
 ];
 ```
 
-### System Module Example
+### System Module Example (Session 80: Fragment Pattern)
 ```rust
-// systems/ecs/src/viewmodel/entity.rs
-pub struct EntityViewModel;
+// systems/ecs/src/lib.rs
+pub struct EcsViewModel;
 
-impl ViewTrait for EntityViewModel {
-    fn view_id(&self) -> ViewId { 0x1234567890ABCDEF }
+impl ViewModelTrait for EcsViewModel {
+    fn view_id(&self) -> ViewId { ECS_VIEW_ID }
 }
 
 #[async_trait::async_trait]
-impl ViewModelTrait for EntityViewModel {
-    fn view_id(&self) -> ViewId { 0x1234567890ABCDEF }
-}
+impl EntityView for EcsViewModel {
+    fn view_id(&self) -> ViewId { ECS_VIEW_ID }
+    fn fragment_id(&self) -> FragmentId { ENTITY_FRAGMENT_ID }
 
-#[async_trait::async_trait]
-impl EntityView for EntityViewModel {
     async fn spawn_entity(&self, world: &World, components: Vec<Component>) -> EcsResult<Entity> {
-        // Direct implementation - no serialization
+        // ACTUAL implementation - accesses BindingRegistry pools
         let entity_id = EntityId(world.next_entity_id.fetch_add(1));
         let generation = Generation(1);
 
@@ -137,9 +177,12 @@ impl EntityView for EntityViewModel {
     // ... implement all 11 methods
 }
 
+// Compile-time enforcement
+impl EcsViewTrait for EcsViewModel {}
+
 // Export symbol
 #[no_mangle]
-pub static PLAYGROUND_VIEWMODEL: &dyn ViewModelTrait = &EntityViewModel;
+pub static PLAYGROUND_VIEWMODEL: &dyn ViewModelTrait = &EcsViewModel;
 ```
 
 ## Module Declaration in Cargo.toml

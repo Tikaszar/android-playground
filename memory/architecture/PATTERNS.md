@@ -148,7 +148,7 @@ pub fn old_function(args: &[u8]) -> Pin<Box<dyn Future<Output = ModuleResult<Vec
 }
 ```
 
-## Trait-Based MVVM Module Pattern (Session 79 - CURRENT)
+## Trait-Based MVVM Module Pattern (Sessions 79-80 - CURRENT)
 
 ### Core Module Exports (View + Models)
 ```rust
@@ -183,18 +183,20 @@ pub static PLAYGROUND_MODELS: &[ModelTypeInfo] = &[
 ];
 ```
 
-### Core Module View Traits
+### Core Module View Traits (Session 80: Fragment Pattern)
 ```rust
-// core/ecs/src/view/entity.rs
+// core/ecs/src/view/entity.rs - Fragment trait definition
 
 use async_trait::async_trait;
-use playground_modules_types::ViewTrait;
+use playground_modules_types::{ViewFragmentTrait, ViewId, FragmentId};
 use crate::model::*;
 use crate::error::EcsResult;
 
-/// Entity operations View API
+pub const ENTITY_FRAGMENT_ID: FragmentId = 0x0001;
+
+/// Entity operations View API Fragment
 #[async_trait]
-pub trait EntityView: ViewTrait {
+pub trait EntityView: ViewFragmentTrait {
     async fn spawn_entity(&self, world: &World, components: Vec<Component>) -> EcsResult<Entity>;
     async fn despawn_entity(&self, world: &World, entity: Entity) -> EcsResult<()>;
     async fn exists(&self, world: &World, entity: Entity) -> EcsResult<bool>;
@@ -202,6 +204,33 @@ pub trait EntityView: ViewTrait {
     async fn clone_entity(&self, world: &World, entity: Entity) -> EcsResult<Entity>;
     // ... other methods
 }
+
+// core/ecs/src/view/mod.rs - Composite trait for compile-time enforcement
+pub trait EcsViewTrait:
+    ViewTrait +
+    EntityView +
+    ComponentView +
+    EventView +
+    QueryView +
+    StorageView +
+    SystemView +
+    WorldView
+{}
+
+// core/ecs/src/lib.rs - Concrete struct implementing all fragments
+pub struct EcsView;
+
+impl ViewTrait for EcsView {
+    fn view_id(&self) -> ViewId { ECS_VIEW_ID }
+}
+
+impl EntityView for EcsView {
+    fn view_id(&self) -> ViewId { ECS_VIEW_ID }
+    fn fragment_id(&self) -> FragmentId { ENTITY_FRAGMENT_ID }
+    // ... stub implementations
+}
+
+impl EcsViewTrait for EcsView {}  // Compile-time enforcement
 ```
 
 ### System Module Exports (ViewModel)
@@ -233,19 +262,28 @@ impl ViewModelTrait for EcsViewModel {
 pub static PLAYGROUND_VIEWMODEL: &dyn ViewModelTrait = &EcsViewModel;
 ```
 
-### System Module ViewModel Implementations
+### System Module ViewModel Implementations (Session 80: Fragment Pattern)
 ```rust
-// systems/ecs/src/viewmodel/entity.rs
+// systems/ecs/src/lib.rs
 
 use async_trait::async_trait;
-use playground_core_ecs::{EntityView, World, Entity, Component, EcsResult, EntityId, Generation};
-use crate::EcsViewModel;
+use playground_core_ecs::{EcsViewTrait, EntityView, World, Entity, Component, EcsResult, EntityId, Generation};
+use playground_modules_types::{ViewModelTrait, ViewId, FragmentId};
 
-// Implement the EntityView trait from core/ecs
+pub struct EcsViewModel;
+
+impl ViewModelTrait for EcsViewModel {
+    fn view_id(&self) -> ViewId { ECS_VIEW_ID }
+}
+
+// Implement the EntityView fragment from core/ecs
 #[async_trait]
 impl EntityView for EcsViewModel {
+    fn view_id(&self) -> ViewId { ECS_VIEW_ID }
+    fn fragment_id(&self) -> FragmentId { ENTITY_FRAGMENT_ID }
+
     async fn spawn_entity(&self, world: &World, components: Vec<Component>) -> EcsResult<Entity> {
-        // Direct implementation - no serialization!
+        // ACTUAL implementation - accesses BindingRegistry pools
         let entity_id = EntityId(world.next_entity_id.fetch_add(1));
         let generation = Generation(1);
 
@@ -275,6 +313,9 @@ impl EntityView for EcsViewModel {
 
     // ... implement all other methods
 }
+
+// Compile-time enforcement: won't compile unless ALL fragments implemented
+impl EcsViewTrait for EcsViewModel {}
 ```
 
 ### Module Loader (THE Single Unsafe Block)
