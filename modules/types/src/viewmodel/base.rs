@@ -1,7 +1,9 @@
-//! ViewModel base class for implementations (System modules only)
-//! Using concrete base class instead of trait (NO dyn allowed!)
+//! ViewModel trait for implementations (System modules only)
+//! ViewModels implement View API contracts
 
-/// ViewModel base class for View API implementations
+use super::super::view::base::ViewId;
+
+/// ViewModel trait for View API implementations
 ///
 /// System modules implement ViewModels that:
 /// - Implement View API contracts
@@ -9,14 +11,9 @@
 /// - Handle I/O operations
 /// - NO data storage (use Model from Core)
 ///
-/// This is a concrete base class, not a trait!
-pub struct ViewModel {
-    /// Which Core module View this implements
-    pub implements_view: &'static str,
-
-    /// ViewModel name
-    pub viewmodel_name: &'static str,
-
-    /// Which features this ViewModel provides
-    pub provides_features: Vec<&'static str>,
+/// ViewModels are bound to Views via matching ViewId
+#[async_trait::async_trait]
+pub trait ViewModelTrait: Send + Sync {
+    /// Get the ViewId this ViewModel implements
+    fn view_id(&self) -> ViewId;
 }

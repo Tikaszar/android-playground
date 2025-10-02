@@ -1,22 +1,20 @@
-//! View base class for API contracts (Core modules only)
-//! Using concrete base class instead of trait (NO dyn allowed!)
+//! View trait for API contracts (Core modules only)
+//! Views define API contracts with no implementation
 
-/// View base class for API contracts with no implementation
+/// 64-bit unique identifier for a View
+pub type ViewId = u64;
+
+/// View trait for API contracts with no implementation
 ///
 /// Core modules define Views that specify:
-/// - Function signatures
+/// - API surface through trait methods
 /// - Parameter types
 /// - Return types
 /// - NO implementation logic
 ///
-/// This is a concrete base class, not a trait!
-pub struct View {
-    /// Unique identifier for this view
-    pub view_id: &'static str,
-
-    /// View name
-    pub view_name: &'static str,
-
-    /// List of API methods this view exposes
-    pub methods: Vec<&'static str>,
+/// Views are implemented by ViewModels in System modules
+#[async_trait::async_trait]
+pub trait ViewTrait: Send + Sync {
+    /// Get the unique ID of this View
+    fn view_id(&self) -> ViewId;
 }

@@ -1,9 +1,5 @@
 //! View types for Core modules
 
-mod api;
-mod base;
-mod function;
+pub mod base;
 
-pub use api::ViewAPI;
-pub use base::View;
-pub use function::ViewFunction;
+pub use base::{ViewId, ViewTrait};

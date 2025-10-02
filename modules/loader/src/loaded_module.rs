@@ -1,6 +1,8 @@
 //! Loaded module structure
 
-use playground_modules_types::{ModuleMetadata, ModuleType, ViewAPI, ViewModelImpl};
+use playground_modules_types::{
+    Handle, ModelTypeInfo, ModuleMetadata, ModuleType, ViewModelTrait, ViewTrait,
+};
 use libloading::Library;
 use std::path::PathBuf;
 
@@ -18,9 +20,12 @@ pub struct LoadedModule {
     /// Path to the module file
     pub path: PathBuf,
 
-    /// For Core modules: View APIs
-    pub view_api: Option<ViewAPI>,
+    /// For Core modules: View trait object
+    pub view: Option<Handle<dyn ViewTrait>>,
 
-    /// For System modules: ViewModel implementations
-    pub viewmodel_impl: Option<ViewModelImpl>,
+    /// For Core modules: Model type information for pool initialization
+    pub models: Option<&'static [ModelTypeInfo]>,
+
+    /// For System modules: ViewModel trait object
+    pub viewmodel: Option<Handle<dyn ViewModelTrait>>,
 }

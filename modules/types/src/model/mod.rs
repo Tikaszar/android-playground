@@ -1,7 +1,7 @@
 //! Model types for Core modules
 
-mod base;
-mod data;
+pub mod base;
+pub mod data;
 
-pub use base::Model;
+pub use base::{ModelId, ModelTrait, ModelType, ModelTypeInfo};
 pub use data::ModelData;

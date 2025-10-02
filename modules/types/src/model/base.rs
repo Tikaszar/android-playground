@@ -1,9 +1,13 @@
-//! Model base class for data structures (Core modules only)
-//! Using concrete base class instead of trait (NO dyn allowed!)
+//! Model trait for data structures (Core modules only)
+//! Pure data with no logic, stored in module registry pools
 
-use serde::{Deserialize, Serialize};
+/// 64-bit unique identifier for a model instance
+pub type ModelId = u64;
 
-/// Model base class for pure data structures with no logic
+/// 64-bit unique identifier for a model type (for pool routing)
+pub type ModelType = u64;
+
+/// Model trait for pure data structures with no logic
 ///
 /// Core modules define Models that contain:
 /// - Data fields
@@ -11,18 +15,22 @@ use serde::{Deserialize, Serialize};
 /// - Configuration types
 /// - NO implementation logic
 ///
-/// This is a concrete base class, not a trait!
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Model {
-    /// Unique identifier for this model type
-    pub model_id: &'static str,
+/// Models are stored in pools within the module registry
+#[async_trait::async_trait]
+pub trait ModelTrait: Send + Sync {
+    /// Get the unique instance ID of this model
+    fn model_id(&self) -> ModelId;
 
-    /// Model name
-    pub model_name: &'static str,
+    /// Get the type ID for pool routing
+    fn model_type(&self) -> ModelType;
+}
 
-    /// List of fields this model exposes
-    pub fields: Vec<&'static str>,
+/// Information about a model type for pool initialization
+#[derive(Debug, Clone, Copy)]
+pub struct ModelTypeInfo {
+    /// The model type ID (for pool routing)
+    pub model_type: ModelType,
 
-    /// Serialized data (for type erasure without Any)
-    pub data: Vec<u8>,
+    /// Human-readable type name (for debugging)
+    pub type_name: &'static str,
 }

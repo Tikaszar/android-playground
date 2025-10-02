@@ -17,3 +17,6 @@ anyhow = "1.0"
 
 # Semantic versioning
 semver = "1.0"
+
+# Async traits
+async-trait = "0.1"

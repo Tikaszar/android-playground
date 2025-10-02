@@ -4,7 +4,7 @@ use crate::info::{ModuleInfo, ModuleState};
 use crate::stats::RegistryStats;
 use playground_modules_binding::BindingRegistry;
 use playground_modules_loader::ModuleLoader;
-use playground_modules_resolver::{AppModuleConfig, ModuleResolver};
+use playground_modules_resolver::ModuleResolver;
 use playground_modules_types::{Handle, ModuleError, ModuleResult, ModuleType, Shared};
 use notify::{Event, EventKind, RecursiveMode, Watcher};
 use std::collections::{HashMap, HashSet};
@@ -264,7 +264,7 @@ impl ModuleRegistry {
     /// Get registry statistics
     pub async fn get_stats(&self) -> RegistryStats {
         let modules = self.modules.read().await;
-        let binding_stats = self.binding.get_stats().await;
+        let binding_stats = self.binding.get_stats();
 
         let mut stats = RegistryStats {
             total_modules: modules.len(),

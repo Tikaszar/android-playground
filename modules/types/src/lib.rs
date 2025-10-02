@@ -16,8 +16,8 @@ pub mod viewmodel;
 // Re-exports
 pub use error::{ModuleError, ModuleResult};
 pub use metadata::ModuleMetadata;
-pub use model::{Model, ModelData};
+pub use model::{ModelData, ModelId, ModelTrait, ModelType, ModelTypeInfo};
 pub use module::{Module, ModuleDependency, ModuleLifecycle, ModuleType};
 pub use types::{Handle, Shared};
-pub use view::{View, ViewAPI, ViewFunction};
-pub use viewmodel::{ViewModel, ViewModelFunction, ViewModelImpl};
+pub use view::{ViewId, ViewTrait};
+pub use viewmodel::ViewModelTrait;

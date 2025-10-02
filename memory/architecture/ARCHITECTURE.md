@@ -1,6 +1,6 @@
 # Architecture - MVVM-Based Module System
 
-## Core Architectural Pattern (Sessions 67-71)
+## Core Architectural Pattern (Sessions 67-71, 79)
 
 ### MVVM Architecture
 ```
@@ -9,18 +9,74 @@ Apps → Plugins → Core (Model+View) → [Module Binding] → Systems (ViewMod
 
 **Key Components:**
 - **Model** = Data structures (core/*/model/)
-- **View** = API contracts (core/*/view/)
-- **ViewModel** = Implementation (systems/*/viewmodel/)
-- **Binding** = Trait-based with generics (NO dyn, NO Box)
+- **View** = API contracts (core/*/view/) - Trait definitions
+- **ViewModel** = Implementation (systems/*/viewmodel/) - Trait implementations
+- **Binding** = Trait-based with Arc<dyn Trait> (Session 79)
 
-## Implementation (Sessions 68-71, 76-78)
-- **modules/types** - MVVM base types (removing dyn, direct signatures) 🔄 Session 78
+## Implementation (Sessions 68-71, 76-79)
+- **modules/types** - Trait-based MVVM (ModelTrait, ViewTrait, ViewModelTrait) ✅ Session 79
 - **modules/loader** - THE single unsafe block for Library::new() ✅ COMPILES
-- **modules/binding** - Direct function binding, no serialization 🔄 Session 78
-- **modules/resolver** - Cargo.toml module declarations
-- **modules/registry** - Runtime module orchestration
+- **modules/binding** - Triple-nested sharding with ModelPools ✅ Session 79
+- **modules/resolver** - Cargo.toml module declarations ✅ COMPILES
+- **modules/registry** - Runtime module orchestration ✅ COMPILES
 - **core/ecs/model** - Complete ECS Model layer with all data structures ✅ COMPILES
 - **core/types** - Thread-safe wrappers (Handle, Shared, Atomic, Once) ✅ Session 77
+
+## Module System Architecture (Session 79)
+
+### Trait-Based MVVM Infrastructure
+```rust
+// 64-bit unique identifiers
+pub type ViewId = u64;
+pub type ModelId = u64;
+pub type ModelType = u64;
+
+// Base traits
+#[async_trait::async_trait]
+pub trait ViewTrait: Send + Sync {
+    fn view_id(&self) -> ViewId;
+}
+
+#[async_trait::async_trait]
+pub trait ViewModelTrait: Send + Sync {
+    fn view_id(&self) -> ViewId;  // Which View this implements
+}
+
+#[async_trait::async_trait]
+pub trait ModelTrait: Send + Sync {
+    fn model_id(&self) -> ModelId;
+    fn model_type(&self) -> ModelType;  // For pool routing
+}
+```
+
+### Triple-Nested Sharding (Session 79)
+```rust
+pub struct BindingRegistry {
+    // Lock-free singleton access
+    views: Handle<HashMap<ViewId, Handle<dyn ViewTrait>>>,
+    viewmodels: Handle<HashMap<ViewId, Handle<dyn ViewModelTrait>>>,
+
+    // Triple-nested: ViewId → ModelType → Pool
+    models: Handle<HashMap<ViewId, Handle<HashMap<ModelType, ModelPool>>>>,
+}
+
+pub struct ModelPool {
+    active: Shared<HashMap<ModelId, Handle<dyn ModelTrait>>>,
+    recycled: Shared<Vec<Handle<dyn ModelTrait>>>,  // Object pooling
+}
+```
+
+### Lock Granularity Benefits
+- **Level 1**: ViewId lookup (lock-free, ~5ns)
+- **Level 2**: ModelType lookup (lock-free, ~5ns)
+- **Level 3**: Pool operations (RwLock at pool level, ~20-30ns)
+- **Result**: Only same ViewId + same ModelType contend for locks
+
+### Object Recycling (Session 79)
+```rust
+// Reduce allocations by reusing deleted models
+pool.get_or_recycle(model_id, || create_new_model()).await
+```
 
 ## Component Pool Architecture (Session 76)
 
@@ -82,15 +138,20 @@ let pos = Shared::new(position);  // Not Arc::new(RwLock::new(position))
 ## MVVM Separation Pattern
 
 ### Strict Module Types
-- **Core modules** = Model (data) + View (API contracts)
-- **System modules** = ViewModel (implementation only)
+- **Core modules** = Model (data) + View (API contracts as traits)
+- **System modules** = ViewModel (trait implementations only)
 - **Plugin modules** = High-level features (use Core APIs)
 - **App modules** = Applications (use Plugin APIs, declare Systems)
 
-### No Runtime Indirection
-- Direct function calls via compile-time binding
-- ~1-5ns overhead (no VTable, no serialization)
-- Compile-time errors for missing implementations
+### Direct Trait Access (Session 79)
+```rust
+// Consumers get Handle<dyn Trait> once, store it
+let entity_vm = registry.get_viewmodel(view_id).await?;
+self.entity_vm = entity_vm;
+
+// Direct calls forever after - NO registry lookup
+self.entity_vm.spawn_entity(&world, components).await?;
+```
 
 ### Module Structure Example
 ```
@@ -104,13 +165,13 @@ core/ecs/
 │   ├── system/          # SystemId, System, SystemRef
 │   └── world/           # World, WorldRef
 └── view/
-    ├── spawn_entity.rs   # API contract (trait)
-    └── query.rs          # API contract (trait)
+    ├── entity.rs        # EntityView trait
+    └── query.rs         # QueryView trait
 
 systems/ecs/
 └── viewmodel/
-    ├── spawn_entity.rs   # Implementation (impl trait)
-    └── query.rs          # Implementation (impl trait)
+    ├── entity.rs        # impl EntityView for EntityViewModel
+    └── query.rs         # impl QueryView for QueryViewModel
 ```
 
 ## Module Declaration System
@@ -153,13 +214,13 @@ features = ["shaders", "textures", "2d", "basic-3d"]
 
 ### Core Layer
 - **Purpose**: Define contracts and data structures
-- **Contains**: Structs with data fields, type definitions, thread-safe primitives
+- **Contains**: Structs with data fields, type definitions, thread-safe primitives, trait definitions
 - **NO**: Implementation logic, business logic, I/O operations
 - **Examples**: core/ecs, core/server, core/client, core/console
 
 ### Systems Layer
-- **Purpose**: Implement all actual functionality
-- **Contains**: ViewModel implementations, business logic, I/O operations
+- **Purpose**: Implement all actual functionality via trait implementations
+- **Contains**: ViewModel trait implementations, business logic, I/O operations
 - **Dependencies**: Can ONLY use core/* packages
 - **Examples**: systems/ecs, systems/networking, systems/webgl, systems/console
 
@@ -174,120 +235,57 @@ features = ["shaders", "textures", "2d", "basic-3d"]
 - **Run by**: systems/ecs scheduler
 - **Examples**: All IDE plugins, game features
 
-## World Instance Management (Session 76)
+## Symbol Extraction (Session 79)
 
-### OLD: Global Instances (Being Removed)
+### Core Module Exports
 ```rust
-// DEPRECATED - prevents multiple worlds
-static SERVER_INSTANCE: Lazy<Handle<Server>> = Lazy::new(|| Server::new());
+// Core modules export View + Models
+#[no_mangle]
+pub static PLAYGROUND_VIEW: &dyn ViewTrait = &EcsView;
+
+#[no_mangle]
+pub static PLAYGROUND_MODELS: &[ModelTypeInfo] = &[
+    ModelTypeInfo { model_type: 0x0001, type_name: "Entity" },
+    ModelTypeInfo { model_type: 0x0002, type_name: "Component" },
+];
 ```
 
-### NEW: Parameter-Based World
+### System Module Exports
 ```rust
-// World passed as parameter through ViewModel
-pub fn spawn_entity(world: &World, components: Vec<Component>) -> EntityId {
-    // World is explicitly passed, not global
-}
-
-// Module stores World reference during initialization
-pub struct ModuleState {
-    world: Handle<World>,
-}
+// System modules export ViewModel
+#[no_mangle]
+pub static PLAYGROUND_VIEWMODEL: &dyn ViewModelTrait = &EcsViewModel;
 ```
 
-## Component Storage Evolution (Session 76)
-
-### Generation 1: Serialized Components (DEPRECATED)
+### Loader Extraction (THE unsafe block)
 ```rust
-// 100-500ns per access due to serialization
-components: Shared<HashMap<EntityId, HashMap<ComponentId, Bytes>>>
-```
+unsafe {
+    // Extract View trait object
+    let view: Symbol<&'static Handle<dyn ViewTrait>> =
+        library.get(b"PLAYGROUND_VIEW\0")?;
 
-### Generation 2: Generic Component Pools (CURRENT)
-```rust
-// 2-5ns per access with native storage
-pub struct World {
-    component_pools: HashMap<ComponentId, Box<dyn ComponentPoolTrait>>,
-}
+    // Extract Model type info
+    let models: Symbol<*const &'static [ModelTypeInfo]> =
+        library.get(b"PLAYGROUND_MODELS\0")?;
 
-pub struct ComponentPool<T> {
-    components: HashMap<EntityId, T>,
+    // Extract ViewModel trait object
+    let viewmodel: Symbol<&'static Handle<dyn ViewModelTrait>> =
+        library.get(b"PLAYGROUND_VIEWMODEL\0")?;
 }
 ```
-
-### ComponentId: 64-bit Deterministic (Session 76)
-```rust
-// OLD: 32-bit from type name (collision risk)
-pub struct ComponentId(u32);
-
-// NEW: 64-bit deterministic (collision-free)
-pub struct ComponentId(u64);
-
-impl ComponentId {
-    pub fn from_module_and_name(module: &str, name: &str) -> Self {
-        // Deterministic hash for networking/saves
-        let hash = stable_hash_64(module, name);
-        Self(hash)
-    }
-}
-```
-
-## System Isolation
-
-### Strict Rules
-- Systems can ONLY use core/* packages
-- Systems CANNOT import other systems
-- Cross-system communication through ECS only
-- Each system implements specific core contracts
-
-### Registration Pattern
-```rust
-// systems/ecs/src/registration.rs
-pub async fn initialize(world: Handle<World>) -> CoreResult<()> {
-    // Store world reference for module operations
-    MODULE_STATE.set(ModuleState { world })?;
-
-    // Register component pools
-    register_component_pools().await?;
-
-    Ok(())
-}
-```
-
-## Module System Direct Binding (Session 78)
-
-### Problem Identified
-ViewModelFunction used `dyn` and serialization:
-```rust
-// BAD: Violates NO dyn rule
-fn(args: &[u8]) -> Pin<Box<dyn Future<Output = ModuleResult<Vec<u8>>> + Send>>
-```
-
-### Solution: Direct Function Signatures
-```rust
-// GOOD: Direct signatures, no dyn, no serialization
-async fn step(world: &Handle<World>, delta_time: f32) -> ModuleResult<()>
-async fn get_stats(world: &Handle<World>) -> ModuleResult<WorldStats>
-```
-
-### How It Works
-1. **View** defines contracts (returns "not implemented")
-2. **ViewModel** implements exact same signatures
-3. **Binding** connects at runtime via function pointers
-4. **Hot-reload** preserved at module level
 
 ## Architectural Invariants
 
 1. **NO unsafe** - EXCEPTION: Single Library::new() in module loader only
-2. **NO dyn** - Use direct function signatures (Session 78)
+2. **NO dyn (except modules/*)** - modules/* uses Arc<dyn Trait> for hot-loading (Session 79)
 3. **NO Any** - Use concrete types or generics
 4. **NO turbofish** - Use ComponentId not generics for components
 5. **Model is pure data** - Only data fields with threading primitives, no logic
-6. **NO global state** - World passed as Handle<World> parameter (Session 78)
+6. **NO global state** - World passed as Handle<World> parameter
 7. **Native storage** - Components stored as T, not Bytes (Session 77)
 8. **Component-level locking** - Each component manages its concurrency (Session 76)
 9. **Compile-time safety** - Turn ALL runtime bugs into compile-time errors (Session 76)
-10. **Direct function binding** - No serialization overhead (Session 78)
+10. **Direct trait access** - No HashMap lookups after initial binding (Session 79)
 
 ## Compile-Time Safety Principles (Session 76)
 
@@ -314,11 +312,12 @@ async fn get_stats(world: &Handle<World>) -> ModuleResult<WorldStats>
 - **External Data**: User input, file corruption (validation)
 - **Concurrency**: Race conditions (proper synchronization)
 
-## Performance Targets (Session 76)
+## Performance Targets (Sessions 76, 79)
 
 | Operation | Old (Serialized) | New (Native Pools) | Improvement |
 |-----------|-----------------|-------------------|-------------|
-| Component Read | 100-500ns | 2-5ns | **20-100x** |
-| Component Write | 200-600ns | 5-10ns | **20-60x** |
-| Memory Usage | 2x (ser+native) | 1x (native only) | **50% less** |
-| Lock Contention | Global | Per-component | **N-fold** |
+| View/ViewModel Lookup | N/A | Lock-free (~5ns) | **Baseline** |
+| Model Pool Lookup | N/A | Lock-free (~10ns) | **Baseline** |
+| Model Access (Same Pool) | 100-500ns | 20-30ns (RwLock) | **3-15x** |
+| Model Create/Recycle | 200-600ns | 30-40ns (pooled) | **5-15x** |
+| Lock Contention | Global | Per-pool | **N-fold** |

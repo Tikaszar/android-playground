@@ -2,8 +2,8 @@
 
 use crate::loaded_module::LoadedModule;
 use playground_modules_types::{
-    Handle, Module, ModuleError, ModuleMetadata, ModuleResult, ModuleType, Shared, ViewAPI,
-    ViewModelImpl,
+    Handle, ModelTypeInfo, Module, ModuleError, ModuleMetadata, ModuleResult, ModuleType,
+    Shared, ViewModelTrait, ViewTrait,
 };
 use libloading::{Library, Symbol};
 use std::collections::HashMap;
@@ -92,25 +92,43 @@ impl ModuleLoader {
                 dependencies: module.metadata.dependencies,
             };
 
-            // 4. Get View API for Core modules
-            let view_api = if module.module_type == ModuleType::Core {
-                library.get(b"PLAYGROUND_VIEW_API\0")
-                    .ok()
-                    .map(|s: Symbol<*const ViewAPI>| (&**s).clone())
+            // 4. Get View trait object for Core modules
+            let view = if module.module_type == ModuleType::Core {
+                let view_symbol: Symbol<&'static Handle<dyn ViewTrait>> = library
+                    .get(b"PLAYGROUND_VIEW\0")
+                    .map_err(|e| {
+                        ModuleError::LoadFailed(format!("Failed to find PLAYGROUND_VIEW symbol: {}", e))
+                    })?;
+                Some((*view_symbol).clone())
             } else {
                 None
             };
 
-            // 5. Get ViewModel implementation for System modules
-            let viewmodel_impl = if module.module_type == ModuleType::System {
-                library.get(b"PLAYGROUND_VIEWMODEL_IMPL\0")
-                    .ok()
-                    .map(|s: Symbol<*const ViewModelImpl>| (&**s).clone())
+            // 5. Get Model type info for Core modules
+            let models = if module.module_type == ModuleType::Core {
+                let models_symbol: Symbol<*const &'static [ModelTypeInfo]> = library
+                    .get(b"PLAYGROUND_MODELS\0")
+                    .map_err(|e| {
+                        ModuleError::LoadFailed(format!("Failed to find PLAYGROUND_MODELS symbol: {}", e))
+                    })?;
+                Some(**models_symbol)
             } else {
                 None
             };
 
-            // 6. Initialize the module
+            // 6. Get ViewModel trait object for System modules
+            let viewmodel = if module.module_type == ModuleType::System {
+                let vm_symbol: Symbol<&'static Handle<dyn ViewModelTrait>> = library
+                    .get(b"PLAYGROUND_VIEWMODEL\0")
+                    .map_err(|e| {
+                        ModuleError::LoadFailed(format!("Failed to find PLAYGROUND_VIEWMODEL symbol: {}", e))
+                    })?;
+                Some((*vm_symbol).clone())
+            } else {
+                None
+            };
+
+            // 7. Initialize the module
             (module.lifecycle.initialize)(&[]).map_err(|e| {
                 ModuleError::LoadFailed(format!("Failed to initialize module {}: {}", name, e))
             })?;
@@ -121,8 +139,9 @@ impl ModuleLoader {
                 metadata,
                 module_type: module.module_type,
                 path: module_path.clone(),
-                view_api,
-                viewmodel_impl,
+                view,
+                models,
+                viewmodel,
             }
         };
         // ================================================================
@@ -188,6 +207,20 @@ impl ModuleLoader {
             .get(name)
             .ok_or_else(|| ModuleError::NotFound(name.to_string()))?;
         Ok(module.metadata.clone())
+    }
+
+    /// Get loaded module (for accessing View/ViewModel/Models)
+    pub async fn get_module(&self, name: &str) -> ModuleResult<LoadedModule> {
+        let modules = self.modules.read().await;
+        let _module = modules
+            .get(name)
+            .ok_or_else(|| ModuleError::NotFound(name.to_string()))?;
+
+        // Clone the module data (Library can't be cloned, so create minimal copy)
+        // This is a placeholder - actual implementation would need to handle this better
+        Err(ModuleError::Generic(
+            "get_module not yet implemented - use direct registry access".to_string()
+        ))
     }
 
     /// Find a module file in search paths
