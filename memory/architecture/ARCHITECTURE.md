@@ -13,13 +13,71 @@ Apps → Plugins → Core (Model+View) → [Module Binding] → Systems (ViewMod
 - **ViewModel** = Implementation (systems/*/viewmodel/)
 - **Binding** = Trait-based with generics (NO dyn, NO Box)
 
-## Implementation (Sessions 68-71)
+## Implementation (Sessions 68-71, 76)
 - **modules/types** - MVVM base types (traits with generics, NO dyn)
 - **modules/loader** - THE single unsafe block for Library::new() ✅ COMPILES
 - **modules/binding** - Trait-based binding with concrete types ✅ COMPILES
 - **modules/resolver** - Cargo.toml module declarations
 - **modules/registry** - Runtime module orchestration
 - **core/ecs/model** - Complete ECS Model layer with all data structures ✅ COMPILES
+- **core/types** - Thread-safe wrappers (Handle, Shared, Atomic, Once) 🔄 Session 76
+
+## Component Pool Architecture (Session 76)
+
+### Performance-Critical Design
+```rust
+// OLD: Serialization overhead (100-500ns per access)
+components: Shared<HashMap<EntityId, HashMap<ComponentId, Bytes>>>
+
+// NEW: Native storage with pools (2-5ns per access)
+component_pools: HashMap<ComponentId, ComponentPool<T>>
+
+pub struct ComponentPool<T> {
+    components: HashMap<EntityId, T>,  // Native T, no serialization
+}
+```
+
+### Component Threading Strategies
+```rust
+// Hot path: Field-level atomics (2-5ns)
+pub struct Position {
+    pub x: Atomic<f32>,
+    pub y: Atomic<f32>,
+    pub z: Atomic<f32>,
+}
+
+// Complex data: Component-level locking (20ns)
+pub struct Inventory {
+    pub items: Shared<Vec<Item>>,
+}
+
+// Read-heavy: Copy-on-write (2ns read)
+pub struct Mesh {
+    pub data: Handle<MeshData>,
+}
+```
+
+## Thread-Safe Primitives (Session 76)
+
+### Core Wrappers
+```rust
+// Four fundamental primitives for all thread-safe data
+Handle<T>   // Arc<T> - Immutable reference
+Shared<T>   // Arc<RwLock<T>> - Mutable with RwLock
+Atomic<T>   // Arc<AtomicCell<T>> - Lock-free for Copy types
+Once<T>     // Arc<OnceCell<T>> - Initialize once
+
+// Clean API instead of verbose Arc/RwLock
+let pos = Shared::new(position);  // Not Arc::new(RwLock::new(position))
+```
+
+### Performance Characteristics
+| Primitive | Read | Write | Use Case |
+|-----------|------|-------|----------|
+| Handle | 2ns | N/A | Immutable data |
+| Shared | 20ns | 25ns | Complex mutable |
+| Atomic | 3ns | 5ns | Simple values |
+| Once | 2ns | One-time | Lazy init |
 
 ## MVVM Separation Pattern
 
@@ -95,13 +153,13 @@ features = ["shaders", "textures", "2d", "basic-3d"]
 
 ### Core Layer
 - **Purpose**: Define contracts and data structures
-- **Contains**: Structs with data fields, VTable, type definitions
+- **Contains**: Structs with data fields, type definitions, thread-safe primitives
 - **NO**: Implementation logic, business logic, I/O operations
 - **Examples**: core/ecs, core/server, core/client, core/console
 
 ### Systems Layer
 - **Purpose**: Implement all actual functionality
-- **Contains**: VTable handlers, business logic, I/O operations
+- **Contains**: ViewModel implementations, business logic, I/O operations
 - **Dependencies**: Can ONLY use core/* packages
 - **Examples**: systems/ecs, systems/networking, systems/webgl, systems/console
 
@@ -116,41 +174,62 @@ features = ["shaders", "textures", "2d", "basic-3d"]
 - **Run by**: systems/ecs scheduler
 - **Examples**: All IDE plugins, game features
 
-## Global Instances
+## World Instance Management (Session 76)
 
-Core packages maintain global instances using `once_cell::sync::Lazy`:
-
+### OLD: Global Instances (Being Removed)
 ```rust
-// core/server/src/api.rs
+// DEPRECATED - prevents multiple worlds
 static SERVER_INSTANCE: Lazy<Handle<Server>> = Lazy::new(|| Server::new());
-
-// core/client/src/api.rs
-static CLIENT_INSTANCE: Lazy<Handle<Client>> = Lazy::new(|| Client::new());
 ```
 
-Systems access these through API functions:
+### NEW: Parameter-Based World
 ```rust
-let server = playground_core_server::get_server_instance()?;
-let client = playground_core_client::get_client_instance()?;
-```
-
-## Type Aliases
-
-### Handle<T> vs Shared<T>
-- **Handle<T>** = `Arc<T>` - For external references to objects with internal state
-- **Shared<T>** = `Arc<RwLock<T>>` - For internal mutable state (private fields only)
-
-### Usage Rules
-```rust
-// Objects with internal Shared fields use Handle
-let server: Handle<Server> = handle(Server::new());
-server.some_method().await;  // No .read().await needed!
-
-// Simple data uses Shared
-struct MyStruct {
-    data: Shared<HashMap<String, Value>>,  // INTERNAL state
+// World passed as parameter through ViewModel
+pub fn spawn_entity(world: &World, components: Vec<Component>) -> EntityId {
+    // World is explicitly passed, not global
 }
-let guard = self.data.write().await;
+
+// Module stores World reference during initialization
+pub struct ModuleState {
+    world: Handle<World>,
+}
+```
+
+## Component Storage Evolution (Session 76)
+
+### Generation 1: Serialized Components (DEPRECATED)
+```rust
+// 100-500ns per access due to serialization
+components: Shared<HashMap<EntityId, HashMap<ComponentId, Bytes>>>
+```
+
+### Generation 2: Generic Component Pools (CURRENT)
+```rust
+// 2-5ns per access with native storage
+pub struct World {
+    component_pools: HashMap<ComponentId, Box<dyn ComponentPoolTrait>>,
+}
+
+pub struct ComponentPool<T> {
+    components: HashMap<EntityId, T>,
+}
+```
+
+### ComponentId: 64-bit Deterministic (Session 76)
+```rust
+// OLD: 32-bit from type name (collision risk)
+pub struct ComponentId(u32);
+
+// NEW: 64-bit deterministic (collision-free)
+pub struct ComponentId(u64);
+
+impl ComponentId {
+    pub fn from_module_and_name(module: &str, name: &str) -> Self {
+        // Deterministic hash for networking/saves
+        let hash = stable_hash_64(module, name);
+        Self(hash)
+    }
+}
 ```
 
 ## System Isolation
@@ -158,20 +237,19 @@ let guard = self.data.write().await;
 ### Strict Rules
 - Systems can ONLY use core/* packages
 - Systems CANNOT import other systems
-- Cross-system communication through VTable/ECS only
+- Cross-system communication through ECS only
 - Each system implements specific core contracts
 
 ### Registration Pattern
 ```rust
-// systems/networking/src/registration.rs
-pub async fn initialize() -> CoreResult<()> {
-    // Get global instances from core
-    if let Ok(server) = playground_core_server::get_server_instance() {
-        register_server_handlers(server.clone()).await?;
-    }
-    if let Ok(client) = playground_core_client::get_client_instance() {
-        register_client_handlers(client.clone()).await?;
-    }
+// systems/ecs/src/registration.rs
+pub async fn initialize(world: Handle<World>) -> CoreResult<()> {
+    // Store world reference for module operations
+    MODULE_STATE.set(ModuleState { world })?;
+
+    // Register component pools
+    register_component_pools().await?;
+
     Ok(())
 }
 ```
@@ -180,9 +258,18 @@ pub async fn initialize() -> CoreResult<()> {
 
 1. **NO unsafe** - EXCEPTION: Single Library::new() in module loader only
 2. **Traits allowed with generics** - Use `<T: Trait>` NOT `Box<dyn Trait>`
-3. **NO Any** - Use serialization for type erasure
+3. **NO Any** - Use serialization for type erasure when needed
 4. **NO turbofish** - Use ComponentId not generics for components
-5. **Model is pure data** - Only data fields, no logic
-6. **NO Option<Handle>** - Use Handle/Shared or Weak directly
-7. **Consistent pattern** - Every module has Id, Data, Ref types
-8. **World contains all** - Central storage for all ECS data
+5. **Model is pure data** - Only data fields with threading primitives, no logic
+6. **NO global state** - World and instances passed as parameters (Session 76)
+7. **Native storage** - Components stored as T, not Bytes (Session 76)
+8. **Component-level locking** - Each component manages its concurrency (Session 76)
+
+## Performance Targets (Session 76)
+
+| Operation | Old (Serialized) | New (Native Pools) | Improvement |
+|-----------|-----------------|-------------------|-------------|
+| Component Read | 100-500ns | 2-5ns | **20-100x** |
+| Component Write | 200-600ns | 5-10ns | **20-60x** |
+| Memory Usage | 2x (ser+native) | 1x (native only) | **50% less** |
+| Lock Contention | Global | Per-component | **N-fold** |

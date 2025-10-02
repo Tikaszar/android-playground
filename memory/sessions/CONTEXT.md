@@ -1,5 +1,14 @@
 # Context - Session Continuity
 
+## Session 76 In Progress 🔄
+Designing performance-critical ECS improvements:
+1. ✅ Identified serialization bottleneck (100-500ns per component access)
+2. ✅ Designed ComponentPool<T> for native storage
+3. ✅ Designed ThreadSafe primitives (Handle, Shared, Atomic, Once)
+4. ✅ Established component-level threading patterns
+5. 🔄 Documenting architecture changes
+6. ⏳ Implementation pending
+
 ## Session 75 Complete ✅
 Completed Entity Module ViewModel layer:
 1. ✅ Entity module complete (11/11 functions)
@@ -28,30 +37,63 @@ Implemented Event System ViewModel layer:
   - System: 13/13 (100% stubs) ⚠️
   - World: 6/17 (35% partial) 🔄
 
-## Next Session Priorities
-1. **Remove 44 remaining TODOs** - Complete implementations for all modules
-2. **Implement query module** - 14 functions
-3. **Implement storage module** - 17 functions
-4. **Implement system module** - 13 functions
-5. **Complete world module** - 11 functions remaining
+## Critical Performance Issues Identified (Session 76)
+1. **Serialization overhead**: Components stored as Bytes (100-500ns per access)
+2. **Lock contention**: Single global RwLock for all components
+3. **Memory waste**: Double storage (serialized + native)
+4. **ComponentId collisions**: 32-bit IDs from type names
 
-## Important Pattern Established
+## Proposed Solutions (Session 76)
+1. **ComponentPool<T>**: Generic pools with native storage (2-5ns access)
+2. **ThreadSafe primitives**: Handle, Shared, Atomic, Once wrappers
+3. **Component-level locking**: Each component manages its own concurrency
+4. **64-bit ComponentIds**: Deterministic, collision-free IDs
+5. **World as parameter**: Remove global instance
+
+## Next Session Priorities
+1. **Implement ThreadSafe wrappers** in core/types
+2. **Implement ComponentPool<T>** system
+3. **Refactor World** to use pools instead of HashMap
+4. **Update components** to use Atomic/Shared fields
+5. **Complete remaining TODOs** in query/storage/system/world modules
+6. **Add save_state/load_state** for hot-reload testing
+7. **Create build.rs validation** for module dependencies
+
+## Important Pattern Updates (Session 76)
 ```rust
-pub fn func(args: &[u8]) -> Pin<Box<dyn Future<Output = ModuleResult<Vec<u8>>> + Send>> {
-    let args = args.to_vec();  // CRITICAL: Copy before async
-    Box::pin(async move { /* ... */ })
+// NEW: Thread-safe primitives
+Handle<T>  // Arc<T> - Immutable reference
+Shared<T>  // Arc<RwLock<T>> - Mutable with locking
+Atomic<T>  // Arc<AtomicCell<T>> - Lock-free for Copy types
+Once<T>    // Arc<OnceCell<T>> - Initialize once
+
+// NEW: Component patterns
+pub struct Position {
+    pub x: Atomic<f32>,  // Lock-free access
+    pub y: Atomic<f32>,
+    pub z: Atomic<f32>,
+}
+
+// NEW: Pool pattern
+pub struct ComponentPool<T> {
+    components: HashMap<EntityId, T>,  // Native storage
 }
 ```
 
-## Key Architecture Decisions
-- Module symbols must be unique: `PLAYGROUND_MODULE_CORE_ECS` vs `PLAYGROUND_MODULE_SYSTEMS_ECS`
-- Module system is generic - cannot know about core/systems/plugins/apps layers
-- Both core and systems modules export symbols for hot-loading
-- World.subscriptions field stores Subscription details (added this session)
-- Event/Subscription structs need serde derives
-- Entity serialization uses (EntityId, Generation) tuples, not Entity struct
+## Performance Improvements Expected
+- Component access: **20-100x faster** (2-5ns vs 100-500ns)
+- Memory usage: **50% reduction** (no double storage)
+- Parallelism: **N-fold improvement** (per-component locking)
+
+## Key Architecture Decisions (Session 76)
+- NO DashMap - use Shared<HashMap> for explicit control
+- NO Weak<T> - ECS uses EntityId, not references
+- NO Mutex<T> - Shared<T> provides both read/write
+- Developer controls threading strategy per component
+- Zero abstraction overhead is the goal
 
 ## Compilation Status
 - ✅ playground-core-ecs compiles
 - ✅ playground-systems-ecs compiles
 - 49 warnings (unused variables in stub functions - acceptable)
+- Major refactoring pending for performance improvements

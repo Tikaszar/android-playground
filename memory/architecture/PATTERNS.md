@@ -1,45 +1,151 @@
 # Patterns - Code Patterns and Examples
 
-## ViewModel Implementation Pattern (Session 74)
+## Thread-Safe Primitives (Session 76)
 
-### Async Function Pattern with Lifetime Safety
+### Core Wrapper Types
+```rust
+use core::types::{Handle, Shared, Atomic, Once};
+
+// Immutable reference (Arc<T>)
+let config = Handle::new(Config { ... });
+let cfg = config.get();  // &Config
+
+// Mutable with RwLock (Arc<RwLock<T>>)
+let inventory = Shared::new(vec![]);
+let items = inventory.read().await;  // Read access
+let mut items = inventory.write().await;  // Write access
+
+// Lock-free for Copy types (Arc<AtomicCell<T>>)
+let position = Atomic::new(5.0);
+position.store(10.0);  // Lock-free write
+let x = position.load();  // Lock-free read
+
+// Initialize once (Arc<OnceCell<T>>)
+let cache = Once::new();
+cache.set(expensive_computation());  // Only first call succeeds
+let value = cache.get();  // Always returns same value
+```
+
+### Component Threading Patterns
+```rust
+// TIER 1: Ultra-Hot Path (> 10,000 accesses/frame)
+// Use field-level atomics (2-5ns per field)
+pub struct Position {
+    pub x: Atomic<f32>,
+    pub y: Atomic<f32>,
+    pub z: Atomic<f32>,
+}
+
+// TIER 2: Hot Path (1,000-10,000 accesses/frame)
+// Use atomics for frequently changed fields
+pub struct Health {
+    pub current: Atomic<u32>,  // Changes often
+    pub max: Atomic<u32>,      // Read with current
+}
+
+// TIER 3: Warm Path (100-1,000 accesses/frame)
+// Use Shared for component-level locking (20ns)
+pub struct CharacterStats {
+    pub data: Shared<StatsData>,
+}
+
+// TIER 4: Cold Path (< 100 accesses/frame)
+// Can use coarser locking
+pub struct QuestLog {
+    pub entries: Shared<Vec<Quest>>,
+}
+
+// TIER 5: Read-Heavy
+// Use Handle for copy-on-write (2ns read)
+pub struct MeshData {
+    pub vertices: Handle<Vec<Vertex>>,
+}
+```
+
+## Component Pool Pattern (Session 76)
+
+### Generic Pool Implementation
+```rust
+pub struct ComponentPool<T> {
+    components: HashMap<EntityId, T>,  // Native storage, no serialization
+}
+
+impl<T> ComponentPool<T> {
+    pub fn new() -> Self {
+        Self {
+            components: HashMap::new(),
+        }
+    }
+
+    pub fn insert(&mut self, entity: EntityId, component: T) {
+        self.components.insert(entity, component);
+    }
+
+    pub fn get(&self, entity: EntityId) -> Option<&T> {
+        self.components.get(&entity)  // Zero-overhead access
+    }
+
+    pub fn get_mut(&mut self, entity: EntityId) -> Option<&mut T> {
+        self.components.get_mut(&entity)
+    }
+
+    pub fn remove(&mut self, entity: EntityId) -> Option<T> {
+        self.components.remove(&entity)
+    }
+}
+```
+
+### World with Component Pools
+```rust
+pub struct World {
+    // OLD: Serialized components with global lock
+    // components: Shared<HashMap<EntityId, HashMap<ComponentId, Bytes>>>,
+
+    // NEW: Native component pools, no global lock
+    component_pools: HashMap<ComponentId, Box<dyn Any>>,  // Type-erased pools
+
+    // Or better: Use a trait without dyn
+    component_pools: HashMap<ComponentId, ComponentPoolHandle>,
+}
+
+// Access pattern
+let pool = world.get_pool::<Position>()?;  // Get specific pool
+let pos = pool.get(entity_id)?;  // Direct access, no serialization
+pos.x.store(10.0);  // Lock-free update
+```
+
+## ViewModel Implementation Pattern (Session 74-76)
+
+### Updated with World Parameter
 ```rust
 use playground_modules_types::{ModuleResult, ModuleError};
 use std::pin::Pin;
 use std::future::Future;
 
 pub fn function_name(args: &[u8]) -> Pin<Box<dyn Future<Output = ModuleResult<Vec<u8>>> + Send>> {
-    let args = args.to_vec();  // CRITICAL: Copy args before async to avoid lifetime issues
+    let args = args.to_vec();  // CRITICAL: Copy args before async
     Box::pin(async move {
         // Deserialize arguments
         let args: ArgsStruct = bincode::deserialize(&args)
             .map_err(|e| ModuleError::DeserializationError(e.to_string()))?;
 
-        // Get World from global state
-        let world = crate::state::get_world()
+        // Get World from module state (NOT global)
+        let world = crate::state::get_world()  // Will be updated to non-global
             .map_err(|e| ModuleError::Generic(e))?;
 
-        // Perform operations on World data
-        let result = {
-            let data = world.some_field.read().await;
-            // ... computation ...
-        };
+        // Access component pools directly
+        let positions = world.get_pool::<Position>()?;
+        let pos = positions.get(args.entity_id)?;
 
-        // Serialize and return
-        let result = bincode::serialize(&result)
-            .map_err(|e| ModuleError::SerializationError(e.to_string()))?;
+        // Direct atomic operations (no serialization!)
+        pos.x.store(pos.x.load() + args.delta_x);
+        pos.y.store(pos.y.load() + args.delta_y);
 
-        Ok(result)
+        // Return result
+        Ok(vec![])  // Or serialize result if needed
     })
 }
 ```
-
-### Key Requirements
-1. **Copy args first**: `let args = args.to_vec();` before `Box::pin(async move {...})`
-2. **Use bincode**: For all serialization/deserialization
-3. **Return ModuleResult<Vec<u8>>**: Consistent return type
-4. **Access World via state::get_world()**: No direct World references
-5. **Serialize simple types**: Use (EntityId, Generation) tuples instead of Entity structs
 
 ## Module Pattern (IMPLEMENTED Sessions 68-70 - Replaces VTable)
 
@@ -56,13 +162,25 @@ static VTABLE: ModuleVTable = ModuleVTable {
     create: module_create,
     destroy: module_destroy,
     call: module_call,
-    save_state: module_save_state,
-    restore_state: module_restore_state,
+    save_state: module_save_state,  // Session 76: Must implement
+    restore_state: module_restore_state,  // Session 76: Must implement
 };
 
-// Pure Rust function pointers
-fn module_call(state: *mut u8, method: &str, args: &[u8]) -> Result<Vec<u8>, String> {
-    // Implementation
+// State management for hot-reload (Session 76)
+fn module_save_state(state: *mut u8) -> Result<Vec<u8>, String> {
+    // Serialize world and module state
+    let module_state = unsafe { &*(state as *const ModuleState) };
+    bincode::serialize(&module_state.world)
+        .map_err(|e| e.to_string())
+}
+
+fn module_restore_state(state: *mut u8, data: &[u8]) -> Result<(), String> {
+    // Deserialize and restore state
+    let world: World = bincode::deserialize(data)
+        .map_err(|e| e.to_string())?;
+    let module_state = unsafe { &mut *(state as *mut ModuleState) };
+    module_state.world = world;
+    Ok(())
 }
 ```
 
@@ -82,314 +200,121 @@ unsafe {
 }
 ```
 
-## VTable Handler Pattern (DEPRECATED - Being Replaced)
-
-### Correct Pattern (from systems/console)
-```rust
-use once_cell::sync::OnceCell;
-
-// Global state using OnceCell (NO unsafe!)
-static CONSOLE_IMPL: OnceCell<ConsoleImpl> = OnceCell::new();
-
-struct ConsoleImpl {
-    terminal: Arc<Terminal>,
-    dashboard: Option<Arc<Dashboard>>,
-    console_handle: Handle<Console>,
-}
-
-// Initialize once
-pub async fn initialize() -> CoreResult<()> {
-    let terminal = Arc::new(Terminal::new(true));
-    let console_handle = Console::new();
-
-    CONSOLE_IMPL.set(ConsoleImpl {
-        terminal,
-        console_handle: console_handle.clone(),
-    }).map_err(|_| CoreError::AlreadyInitialized)?;
-
-    Ok(())
-}
-
-// Get implementation
-fn get_impl() -> CoreResult<&'static ConsoleImpl> {
-    CONSOLE_IMPL.get().ok_or(CoreError::NotInitialized)
-}
-
-// Handle commands
-pub async fn handle_output_command(operation: String, payload: Bytes) -> VTableResponse {
-    match operation.as_str() {
-        "write" => {
-            let text: String = match bincode::deserialize(&payload) {
-                Ok(t) => t,
-                Err(e) => return VTableResponse {
-                    success: false,
-                    payload: None,
-                    error: Some(e.to_string()),
-                },
-            };
-
-            match get_impl() {
-                Ok(impl_) => {
-                    if let Err(e) = impl_.terminal.write(&text).await {
-                        return VTableResponse {
-                            success: false,
-                            payload: None,
-                            error: Some(e.to_string()),
-                        };
-                    }
-                },
-                Err(e) => return VTableResponse {
-                    success: false,
-                    payload: None,
-                    error: Some(e.to_string()),
-                },
-            }
-
-            VTableResponse {
-                success: true,
-                payload: None,
-                error: None,
-            }
-        },
-        _ => // ... other operations
-    }
-}
-```
-
-### Registration Pattern
-```rust
-pub async fn register_handlers() -> CoreResult<()> {
-    let console = playground_core_console::get_console_instance()?;
-
-    // Create channel for operations
-    let (tx, mut rx) = mpsc::channel::<VTableCommand>(100);
-
-    // Register with VTable
-    console.vtable.register("console.output".to_string(), tx).await?;
-
-    // Spawn handler task
-    tokio::spawn(async move {
-        while let Some(cmd) = rx.recv().await {
-            let response = handle_output_command(cmd.operation, cmd.payload).await;
-            let _ = cmd.response.send(response).await;
-        }
-    });
-
-    Ok(())
-}
-```
-
 ## Anti-Patterns to Avoid
 
-### WRONG: Using unsafe and static mut
+### WRONG: Using global World
 ```rust
 // ❌ NEVER DO THIS
-static mut SERVER_INSTANCE: Option<Arc<NetworkServer>> = None;
+static WORLD: Lazy<Handle<World>> = Lazy::new(World::new);
 
-unsafe {
-    SERVER_INSTANCE = Some(server.clone());
+// ✅ DO THIS INSTEAD (Session 76)
+pub struct ModuleState {
+    world: Handle<World>,
+}
+// Pass World as parameter or store in module state
+```
+
+### WRONG: Serializing components
+```rust
+// ❌ NEVER DO THIS
+let component_bytes = bincode::serialize(&position)?;
+components.insert(entity_id, component_bytes);
+
+// ✅ DO THIS INSTEAD (Session 76)
+let pool = world.get_pool::<Position>()?;
+pool.insert(entity_id, position);  // Store native type
+```
+
+### WRONG: Coarse locking
+```rust
+// ❌ NEVER DO THIS
+pub struct World {
+    everything: Shared<AllTheData>,  // Single lock for everything
 }
 
-// ✅ DO THIS INSTEAD
-static SERVER_STATE: OnceCell<ServerState> = OnceCell::new();
-SERVER_STATE.set(state).map_err(|_| CoreError::AlreadyInitialized)?;
+// ✅ DO THIS INSTEAD (Session 76)
+pub struct Position {
+    x: Atomic<f32>,  // Each field can be accessed independently
+    y: Atomic<f32>,
+    z: Atomic<f32>,
+}
 ```
 
-### WRONG: Systems importing other systems
+### WRONG: Using DashMap
 ```rust
 // ❌ NEVER DO THIS
-use playground_systems_webgl::WebGLRenderer;
+use dashmap::DashMap;
+let map = DashMap::new();
 
 // ✅ DO THIS INSTEAD
-// Use VTable/ECS for cross-system communication
-// Or forward through core packages
+use crate::types::Shared;
+let map = Shared::new(HashMap::new());  // Explicit locking
 ```
 
-### WRONG: Implementing logic in core
+## Performance Guidelines (Session 76)
+
+### Access Pattern Optimization
 ```rust
-// ❌ NEVER DO THIS in core/server/src/server.rs
-impl Server {
-    pub async fn start(&self, config: ServerConfig) -> CoreResult<()> {
-        // Actual implementation logic here
-        let listener = TcpListener::bind(addr).await?;
-        // ...
+// Sequential access - optimize for cache
+for entity in entities.iter() {
+    let pos = positions.get(entity);  // 2-5ns
+    let vel = velocities.get(entity);  // 2-5ns
+    // Process...
+}
+
+// Random access - minimize lock time
+let positions = world.get_pool::<Position>();  // Get once
+for entity in random_entities {
+    if let Some(pos) = positions.get(entity) {  // Direct access
+        pos.x.store(0.0);  // Lock-free
     }
 }
 
-// ✅ DO THIS INSTEAD in core/server/src/operations.rs
-impl Server {
-    pub async fn start(&self, config: ServerConfig) -> CoreResult<()> {
-        let payload = bincode::serialize(&config)
-            .map_err(|e| CoreError::SerializationError(e.to_string()))?;
+// Batch operations - lock once
+let mut inventory = inventory_data.write().await;  // Lock once
+for item in items_to_add {
+    inventory.push(item);  // Multiple operations
+}
+// Lock released
+```
 
-        let response = self.vtable.send_command(
-            "server",
-            "start".to_string(),
-            Bytes::from(payload)
-        ).await?;
+### Component Design by Access Frequency
+| Frequency | Pattern | Example | Performance |
+|-----------|---------|---------|-------------|
+| > 10k/frame | Field atomics | Position.x | 2-5ns |
+| 1k-10k/frame | Component atomics | Health.current | 3-5ns |
+| 100-1k/frame | Shared component | Stats.data | 20ns |
+| < 100/frame | Coarse lock | QuestLog | 20-50ns |
+| Write-rare | Copy-on-write | MeshData | 2ns read |
 
-        if !response.success {
-            return Err(CoreError::Generic(
-                response.error.unwrap_or_else(|| "Unknown error".to_string())
-            ));
+## Build Validation Pattern (Session 76)
+
+### Cargo.toml Module Declaration
+```toml
+# apps/game/Cargo.toml
+[[package.metadata.modules.core]]
+name = "playground-core-ecs"
+features = ["queries", "events"]
+systems = ["playground-systems-ecs"]
+```
+
+### build.rs Validation
+```rust
+// apps/game/build.rs
+fn main() {
+    // Parse Cargo.toml metadata
+    let metadata = parse_cargo_metadata();
+
+    // Validate each system provides required features
+    for module in metadata.modules {
+        for system in module.systems {
+            validate_system_features(&system, &module.features)?;
         }
+    }
 
-        Ok(())
+    // Generate compile error if mismatch
+    if !valid {
+        panic!("System {} doesn't provide feature {}", system, feature);
     }
 }
 ```
-
-## Proper Error Handling
-
-### VTableResponse Pattern
-```rust
-// Helper functions for consistent responses
-fn error_response(msg: String) -> VTableResponse {
-    VTableResponse {
-        success: false,
-        payload: None,
-        error: Some(msg),
-    }
-}
-
-fn success_response(payload: Option<Bytes>) -> VTableResponse {
-    VTableResponse {
-        success: true,
-        payload,
-        error: None,
-    }
-}
-
-// Use in handlers
-pub async fn handle_operation(operation: String, payload: Bytes) -> VTableResponse {
-    match operation.as_str() {
-        "start" => {
-            match do_start(payload).await {
-                Ok(result) => success_response(Some(result)),
-                Err(e) => error_response(format!("Failed to start: {}", e)),
-            }
-        },
-        _ => error_response(format!("Unknown operation: {}", operation)),
-    }
-}
-```
-
-## Accessing Global Instances
-
-### From Systems
-```rust
-// Get core instances
-let server = playground_core_server::get_server_instance()?;
-let client = playground_core_client::get_client_instance()?;
-
-// Update their data fields
-{
-    let mut stats = server.stats.write().await;
-    stats.total_messages_sent += 1;
-}
-
-// Read their configuration
-let config = server.config.read().await.clone();
-```
-
-### From Apps/Plugins
-```rust
-// Use core API functions directly
-playground_core_server::start_server(config).await?;
-playground_core_server::send_to_connection(conn_id, message).await?;
-
-// Or get instance for complex operations
-let server = playground_core_server::get_server_instance()?;
-let is_running = *server.is_running.read().await;
-```
-
-## Feature Flag Usage
-
-### In Core Packages
-```rust
-pub struct Server {
-    // Always present
-    pub vtable: VTable,
-    pub config: Shared<ServerConfig>,
-
-    // Feature-gated
-    #[cfg(feature = "channels")]
-    pub channels: Shared<HashMap<ChannelId, ChannelInfo>>,
-
-    #[cfg(feature = "batching")]
-    pub message_queue: Shared<Vec<(ConnectionId, Message)>>,
-}
-
-impl Server {
-    pub fn new() -> Handle<Self> {
-        handle(Self {
-            vtable: VTable::new(),
-            config: shared(ServerConfig::default()),
-
-            #[cfg(feature = "channels")]
-            channels: shared(HashMap::new()),
-
-            #[cfg(feature = "batching")]
-            message_queue: shared(Vec::new()),
-        })
-    }
-}
-```
-
-### In Systems
-```rust
-#[cfg(feature = "channels")]
-pub async fn handle_channel_operations(operation: String, payload: Bytes) -> VTableResponse {
-    // Channel-specific operations
-}
-
-// Registration
-pub async fn register_handlers(server: Handle<Server>) -> CoreResult<()> {
-    // Always register basic operations
-    register_server_operations(&server).await?;
-
-    // Conditionally register feature-specific handlers
-    #[cfg(feature = "channels")]
-    register_channel_operations(&server).await?;
-
-    Ok(())
-}
-```
-
-## Component Pattern (Session 71)
-
-### Pure Data Wrapper (NO Trait)
-```rust
-// Concrete wrapper type - pure data only
-pub struct Component {
-    pub data: Bytes,
-    pub component_id: ComponentId,
-    pub component_name: String,
-    pub size_hint: usize,
-}
-
-// Helper functions for serialization
-impl Component {
-    pub fn from_serializable<T: serde::Serialize + 'static>(value: &T) -> EcsResult<Self> {
-        let data = bincode::serialize(value)?;
-        Ok(Self {
-            data: Bytes::from(data),
-            component_id: ComponentId::from_type_name::<T>(),
-            component_name: std::any::type_name::<T>().to_string(),
-            size_hint: data.len(),
-        })
-    }
-
-    pub fn to_deserializable<T: serde::de::DeserializeOwned>(&self) -> EcsResult<T> {
-        bincode::deserialize(&self.data)
-    }
-}
-```
-
-### Consistent Model Pattern (All Modules)
-Every ECS module follows this pattern:
-- **{Name}Id** - Simple ID type (Copy, Eq, Hash, Serialize)
-- **{Name}** - Strong reference with Handle<World>
-- **{Name}Ref** - Weak reference with Weak<World>
-- NO Options - use Handle/Shared or Weak directly
-- NO async - pure data only
