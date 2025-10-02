@@ -164,14 +164,45 @@
 
 ## Risk Mitigation
 
+### Compile-Time Safety (Session 76 Update)
+
+All potential runtime failures must be compile-time errors:
+
+#### Module Interface Safety
+- **Risk**: Module missing required functions
+- **Mitigation**: Trait-based contracts - won't compile without implementation
+- **Enforcement**: `impl ModuleInterface` required for all modules
+
+#### State Compatibility
+- **Risk**: State version mismatch during hot-reload
+- **Mitigation**: Versioned state types with serde
+- **Enforcement**: `#[serde(version = N)]` - incompatible versions won't compile
+
+#### Type Safety
+- **Risk**: Component type mismatches
+- **Mitigation**: Generic pools with compile-time type checking
+- **Enforcement**: `get_pool<T>()` - wrong type won't compile
+
+#### Module Dependencies
+- **Risk**: Missing or incompatible system modules
+- **Mitigation**: build.rs compile-time validation
+- **Enforcement**: Build fails if dependencies not met
+
 ### Performance Risks
 - **Risk**: ComponentPool type erasure complexity
-- **Mitigation**: Use trait without dyn, or registry pattern
+- **Mitigation**: Use generics and traits without dyn
+- **Enforcement**: Compile-time monomorphization
 
 ### Implementation Risks
 - **Risk**: Breaking existing code during refactor
 - **Mitigation**: Incremental changes, maintain compilation
+- **Enforcement**: CI/CD requires all code to compile
 
-### Testing Risks
-- **Risk**: Hot-reload bugs only appear at runtime
-- **Mitigation**: Comprehensive test suite, state validation
+### Acceptable Runtime Risks (Unavoidable)
+- **Disk I/O failures**: Handled with Result<T, Error>
+- **Network failures**: Graceful degradation
+- **Resource exhaustion**: Monitoring and limits
+- **File corruption**: Checksums and validation
+
+### Core Principle
+**Turn runtime bugs into compile-time errors wherever possible**

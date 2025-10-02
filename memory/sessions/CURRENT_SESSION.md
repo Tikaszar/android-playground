@@ -90,6 +90,27 @@ pub struct Inventory {
 3. **NO Mutex<T>** - Shared<T> provides both read/write access
 4. **Developer chooses locking** - Not hidden behind abstractions
 5. **Zero abstraction overhead** - Direct access to components
+6. **Compile-time safety over runtime checks** - ALL potential runtime failures must be compile-time errors
+
+## Compile-Time Safety Focus (Critical Update)
+
+### Wrong Approach (Original Risk Assessment)
+- Identified "Hot-reload bugs only appear at runtime" as acceptable
+- Suggested runtime testing as mitigation
+
+### Correct Approach (Architecture Principle)
+- **Every potential runtime failure must be a compile-time error**
+- Module missing functions → Won't compile (trait enforcement)
+- State version mismatch → Won't compile (versioned types)
+- Component type mismatch → Won't compile (generics)
+- Module dependencies wrong → Won't compile (build.rs)
+
+### Implementation Strategy
+- Use traits to enforce module interfaces
+- Use versioned types for state compatibility
+- Use generics for type-safe component access
+- Use build.rs for dependency validation
+- Only truly dynamic behaviors (I/O, network) remain runtime
 
 ## Next Steps
 1. Implement ThreadSafe wrappers in core/types

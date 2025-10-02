@@ -166,21 +166,40 @@ static VTABLE: ModuleVTable = ModuleVTable {
     restore_state: module_restore_state,  // Session 76: Must implement
 };
 
-// State management for hot-reload (Session 76)
-fn module_save_state(state: *mut u8) -> Result<Vec<u8>, String> {
-    // Serialize world and module state
-    let module_state = unsafe { &*(state as *const ModuleState) };
-    bincode::serialize(&module_state.world)
-        .map_err(|e| e.to_string())
+// State management for hot-reload with COMPILE-TIME safety (Session 76)
+
+// Versioned state for compile-time compatibility checking
+#[derive(Serialize, Deserialize)]
+#[serde(version = 1)]  // Compile error if versions mismatch
+pub struct ModuleStateV1 {
+    world: World,
+    version: u32,
 }
 
-fn module_restore_state(state: *mut u8, data: &[u8]) -> Result<(), String> {
-    // Deserialize and restore state
-    let world: World = bincode::deserialize(data)
-        .map_err(|e| e.to_string())?;
-    let module_state = unsafe { &mut *(state as *mut ModuleState) };
-    module_state.world = world;
-    Ok(())
+// Trait ensures ALL modules implement state management
+trait ModuleStateMgmt {
+    type State: Serialize + DeserializeOwned;
+
+    fn save_state(&self) -> Result<Self::State, String>;
+    fn restore_state(&mut self, state: Self::State) -> Result<(), String>;
+}
+
+// Won't compile without implementing the trait
+impl ModuleStateMgmt for MyModule {
+    type State = ModuleStateV1;
+
+    fn save_state(&self) -> Result<ModuleStateV1, String> {
+        Ok(ModuleStateV1 {
+            world: self.world.clone(),
+            version: 1,
+        })
+    }
+
+    fn restore_state(&mut self, state: ModuleStateV1) -> Result<(), String> {
+        // Version checked at compile time via serde
+        self.world = state.world;
+        Ok(())
+    }
 }
 ```
 
@@ -286,6 +305,88 @@ for item in items_to_add {
 | 100-1k/frame | Shared component | Stats.data | 20ns |
 | < 100/frame | Coarse lock | QuestLog | 20-50ns |
 | Write-rare | Copy-on-write | MeshData | 2ns read |
+
+## Compile-Time Safety Patterns (Session 76)
+
+### Turn Runtime Bugs into Compile-Time Errors
+
+#### Component Type Safety
+```rust
+// WRONG: Runtime type checking
+pub fn get_component(&self, id: ComponentId) -> Result<Box<dyn Any>, Error> {
+    self.components.get(&id)
+        .ok_or(Error::NotFound)
+        .and_then(|c| c.downcast().ok_or(Error::WrongType))  // Runtime failure!
+}
+
+// RIGHT: Compile-time type safety
+pub fn get_component<T: Component>(&self) -> Option<&T> {
+    self.pool::<T>().get(self.entity_id)  // Type known at compile time
+}
+
+// Usage:
+let pos = world.get_component::<Position>(entity);  // Can't get wrong type
+```
+
+#### State Version Safety
+```rust
+// WRONG: Runtime version checking
+fn load_state(data: &[u8]) -> Result<State, Error> {
+    let state: State = deserialize(data)?;
+    if state.version != CURRENT_VERSION {  // Runtime check!
+        return Err(Error::VersionMismatch);
+    }
+    Ok(state)
+}
+
+// RIGHT: Compile-time version types
+#[derive(Serialize, Deserialize)]
+#[serde(version = 2)]  // Won't compile with V1 data
+struct StateV2 {
+    // ...
+}
+
+// Migration is explicit and compile-time checked
+impl From<StateV1> for StateV2 {
+    fn from(v1: StateV1) -> Self {
+        // Explicit migration logic
+    }
+}
+```
+
+#### Module Interface Enforcement
+```rust
+// Every module MUST implement this or won't compile
+trait RequiredInterface {
+    fn init(&mut self) -> Result<(), Error>;
+    fn update(&mut self, dt: f32) -> Result<(), Error>;
+    fn save_state(&self) -> Result<Vec<u8>, Error>;
+    fn restore_state(&mut self, data: &[u8]) -> Result<(), Error>;
+}
+
+// build.rs validates at compile time
+const _: () = {
+    fn assert_implements<T: RequiredInterface>() {}
+    assert_implements::<MyModule>();  // Compile error if missing
+};
+```
+
+#### Pool Access Safety
+```rust
+// WRONG: String-based pool lookup
+pub fn get_pool(&self, name: &str) -> Option<&dyn Any> {
+    self.pools.get(name)  // Could typo at runtime!
+}
+
+// RIGHT: Type-based pool access
+pub fn get_pool<T: Component>(&self) -> &ComponentPool<T> {
+    // Type parameter ensures correct pool
+    &self.pools[TypeId::of::<T>()]
+}
+
+// Can't access wrong pool type at compile time
+let positions = world.get_pool::<Position>();  // Always correct type
+```
 
 ## Build Validation Pattern (Session 76)
 
