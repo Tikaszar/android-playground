@@ -1,13 +1,14 @@
 # Context - Session Continuity
 
-## Session 76 In Progress 🔄
-Designing performance-critical ECS improvements:
-1. ✅ Identified serialization bottleneck (100-500ns per component access)
-2. ✅ Designed ComponentPool<T> for native storage
-3. ✅ Designed ThreadSafe primitives (Handle, Shared, Atomic, Once)
-4. ✅ Established component-level threading patterns
-5. 🔄 Documenting architecture changes
-6. ⏳ Implementation pending
+## Session 77 In Progress 🔄
+Implementing performance-critical ECS improvements:
+1. ✅ Implemented ThreadSafe primitives (Atomic, Once) in core/types
+2. ✅ Fixed Atomic<T> to work with primitive types (u64, f32, etc.)
+3. ✅ Updated World to use Atomic<u64> for all ID counters
+4. ✅ Created ComponentPool<T> for native storage
+5. ✅ Updated System model to own component pools
+6. ✅ Removed Bytes serialization from Component struct
+7. 🔄 Completing ViewModel stubs (query/storage/system/world)
 
 ## Session 75 Complete ✅
 Completed Entity Module ViewModel layer:
@@ -51,13 +52,13 @@ Implemented Event System ViewModel layer:
 5. **World as parameter**: Remove global instance
 
 ## Next Session Priorities
-1. **Implement ThreadSafe wrappers** in core/types
-2. **Implement ComponentPool<T>** system
-3. **Refactor World** to use pools instead of HashMap
-4. **Update components** to use Atomic/Shared fields
-5. **Complete remaining TODOs** in query/storage/system/world modules
-6. **Add save_state/load_state** for hot-reload testing
-7. **Create build.rs validation** for module dependencies
+1. ✅ **Implemented ThreadSafe wrappers** in core/types
+2. ✅ **Implemented ComponentPool<T>** system
+3. ✅ **Refactored World** to use component registry
+4. 🔄 **Complete remaining stubs** in query/storage/system/world modules
+5. ⏳ **Add save_state/load_state** for hot-reload testing
+6. ⏳ **Create build.rs validation** for module dependencies
+7. ⏳ **Upgrade ComponentId to 64-bit** deterministic hashing
 
 ## Important Pattern Updates (Session 76)
 ```rust

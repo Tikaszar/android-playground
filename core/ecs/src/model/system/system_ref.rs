@@ -44,13 +44,13 @@ impl SystemRef {
 
     /// Try to upgrade to a strong System handle
     pub fn upgrade(&self) -> Option<System> {
-        self.world.upgrade().map(|world| System {
-            id: self.id,
-            name: self.name.clone(),
-            query: self.query,
-            dependencies: self.dependencies.clone(),
-            world: Handle::from(world),
-        })
+        self.world.upgrade().map(|world| System::new(
+            self.id,
+            self.name.clone(),
+            self.query,
+            self.dependencies.clone(),
+            Handle::from(world),
+        ))
     }
 
     /// Check if the weak reference is still valid (world exists)

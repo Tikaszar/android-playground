@@ -1,11 +1,10 @@
 //! World data structure
 
 use std::collections::HashMap;
-use std::sync::atomic::AtomicU32;
-use playground_core_types::{Handle, handle, Shared, shared};
+use playground_core_types::{Handle, handle, Shared, shared, Atomic};
 use crate::model::{
     entity::{EntityId, Generation},
-    component::{Component, ComponentId},
+    component::ComponentId,
     event::{EventId, Event, SubscriptionId, Subscription},
     query::{QueryId, QueryFilter},
     storage::StorageId,
@@ -17,11 +16,12 @@ pub struct World {
     /// Entity generation tracking
     pub entities: Shared<HashMap<EntityId, Generation>>,
 
-    /// Component storage: entity -> component_id -> component
-    pub components: Shared<HashMap<EntityId, HashMap<ComponentId, Component>>>,
+    /// Component registry: maps component_id to the system that owns it
+    /// Components are stored in System.component_pools, not here
+    pub component_registry: Shared<HashMap<ComponentId, SystemId>>,
 
     /// Next entity ID counter
-    pub next_entity_id: AtomicU32,
+    pub next_entity_id: Atomic<u64>,
 
     /// Event queue for deferred processing
     pub event_queue: Shared<Vec<Event>>,
@@ -33,7 +33,7 @@ pub struct World {
     pub post_handlers: Shared<HashMap<EventId, Vec<SubscriptionId>>>,
 
     /// Next subscription ID
-    pub next_subscription_id: AtomicU32,
+    pub next_subscription_id: Atomic<u64>,
 
     /// Subscription storage: subscription_id -> subscription details
     pub subscriptions: Shared<HashMap<SubscriptionId, Subscription>>,
@@ -42,19 +42,19 @@ pub struct World {
     pub queries: Shared<HashMap<QueryId, QueryFilter>>,
 
     /// Next query ID counter
-    pub next_query_id: AtomicU32,
+    pub next_query_id: Atomic<u64>,
 
     /// Storage metadata: storage_id -> (path, format)
     pub storages: Shared<HashMap<StorageId, (String, String)>>,
 
     /// Next storage ID counter
-    pub next_storage_id: AtomicU32,
+    pub next_storage_id: Atomic<u64>,
 
     /// System metadata: system_id -> (name, query_id, dependencies)
     pub systems: Shared<HashMap<SystemId, (String, QueryId, Vec<SystemId>)>>,
 
     /// Next system ID counter
-    pub next_system_id: AtomicU32,
+    pub next_system_id: Atomic<u64>,
 }
 
 impl World {
@@ -62,19 +62,19 @@ impl World {
     pub fn new() -> Handle<Self> {
         handle(Self {
             entities: shared(HashMap::new()),
-            components: shared(HashMap::new()),
-            next_entity_id: AtomicU32::new(1),
+            component_registry: shared(HashMap::new()),
+            next_entity_id: Atomic::<u64>::new(1),
             event_queue: shared(Vec::new()),
             pre_handlers: shared(HashMap::new()),
             post_handlers: shared(HashMap::new()),
-            next_subscription_id: AtomicU32::new(1),
+            next_subscription_id: Atomic::<u64>::new(1),
             subscriptions: shared(HashMap::new()),
             queries: shared(HashMap::new()),
-            next_query_id: AtomicU32::new(1),
+            next_query_id: Atomic::<u64>::new(1),
             storages: shared(HashMap::new()),
-            next_storage_id: AtomicU32::new(1),
+            next_storage_id: Atomic::<u64>::new(1),
             systems: shared(HashMap::new()),
-            next_system_id: AtomicU32::new(1),
+            next_system_id: Atomic::<u64>::new(1),
         })
     }
 

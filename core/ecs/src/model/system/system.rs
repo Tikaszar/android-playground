@@ -1,8 +1,10 @@
 //! System handle (strong reference)
 
-use playground_core_types::Handle;
+use std::collections::HashMap;
+use playground_core_types::{Handle, Shared, shared};
 use crate::model::{
     system::SystemId,
+    component::ComponentId,
     query::QueryId,
     world::World,
 };
@@ -11,20 +13,39 @@ use crate::model::{
 ///
 /// This handle keeps the World alive and provides system metadata.
 /// The actual system implementation lives in ViewModel (systems/ecs).
+/// Systems own their component pools for optimal performance.
 #[derive(Clone)]
 pub struct System {
     pub id: SystemId,
     pub name: String,
     pub query: QueryId,
     pub dependencies: Vec<SystemId>,
+    /// Component pools owned by this system - maps ComponentId to opaque pool storage
+    pub component_pools: Shared<HashMap<ComponentId, ComponentPoolHandle>>,
     #[allow(dead_code)]
     pub world: Handle<World>,
+}
+
+/// Opaque handle to a component pool
+/// The actual generic ComponentPool<T> is managed by the system
+#[derive(Clone)]
+pub struct ComponentPoolHandle {
+    /// Opaque storage - systems know the actual type
+    #[allow(dead_code)]
+    inner: Handle<()>,
 }
 
 impl System {
     /// Create a new system handle
     pub fn new(id: SystemId, name: String, query: QueryId, dependencies: Vec<SystemId>, world: Handle<World>) -> Self {
-        Self { id, name, query, dependencies, world }
+        Self {
+            id,
+            name,
+            query,
+            dependencies,
+            component_pools: shared(HashMap::new()),
+            world
+        }
     }
 
     /// Get the system ID
@@ -53,6 +74,7 @@ impl System {
     }
 
     /// Create a weak reference to this system
+    /// Note: component_pools are not included in weak references
     pub fn downgrade(&self) -> super::SystemRef {
         super::SystemRef {
             id: self.id,

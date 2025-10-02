@@ -31,8 +31,8 @@
 - **Always check memory/sessions/HISTORY.md** - For session index and major accomplishments
 - **Always check memory/sessions/CONTEXT.md** - For session continuity and next steps
 - **Apps/Plugins use core/* ONLY** - With feature flags, never systems/*
-- **Systems/* use core/* ONLY** - They implement the contracts, never import other systems
-- **Core/* has data + VTable ONLY** - NO implementation logic, just data fields and delegation
+- **Systems/* use core/* ONLY** - They implement the ViewModel contracts, never import other systems
+- **Core/* has Model + View ONLY** - Model = data structures, View = API contracts, NO implementation logic
 - **NEVER assume architecture** - Read the code as designed
 - **Read files fully** - Not partially, for later reference
 - **Read before write** - Always read a file before modifying
