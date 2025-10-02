@@ -48,8 +48,9 @@ A mobile-first game engine and IDE that runs entirely on Android devices (via Te
 
 ### Zero Runtime Failures
 - All errors at compile time when possible
-- NO unsafe code anywhere
+- NO unsafe code anywhere (except single Library::new)
 - NO runtime type casting
+- NO dyn trait objects (Session 78)
 - Result<T, Error> everywhere
 - Graceful degradation
 
@@ -127,8 +128,9 @@ A mobile-first game engine and IDE that runs entirely on Android devices (via Te
 
 ### Type Safety
 - No runtime casting
+- No dyn trait objects (Session 78)
 - Compile-time guarantees
-- Serialization for type erasure
+- Direct function signatures
 - Strong typing throughout
 
 ## Long-term Goals

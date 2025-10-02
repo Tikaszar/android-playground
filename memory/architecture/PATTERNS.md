@@ -114,36 +114,37 @@ let pos = pool.get(entity_id)?;  // Direct access, no serialization
 pos.x.store(10.0);  // Lock-free update
 ```
 
-## ViewModel Implementation Pattern (Session 74-76)
+## ViewModel Implementation Pattern (Session 78 - NEW)
 
-### Updated with World Parameter
+### Direct Signature Pattern (NO dyn, NO serialization)
 ```rust
-use playground_modules_types::{ModuleResult, ModuleError};
-use std::pin::Pin;
-use std::future::Future;
+use playground_modules_types::ModuleResult;
+use playground_core_types::Handle;
+use playground_core_ecs::World;
 
-pub fn function_name(args: &[u8]) -> Pin<Box<dyn Future<Output = ModuleResult<Vec<u8>>> + Send>> {
-    let args = args.to_vec();  // CRITICAL: Copy args before async
-    Box::pin(async move {
-        // Deserialize arguments
-        let args: ArgsStruct = bincode::deserialize(&args)
-            .map_err(|e| ModuleError::DeserializationError(e.to_string()))?;
+// GOOD: Direct function signature
+pub async fn function_name(
+    world: &Handle<World>,
+    param1: Type1,
+    param2: Type2
+) -> ModuleResult<ReturnType> {
+    // Direct implementation - no deserialization needed
 
-        // Get World from module state (NOT global)
-        let world = crate::state::get_world()  // Will be updated to non-global
-            .map_err(|e| ModuleError::Generic(e))?;
+    // Access component pools directly
+    let positions = world.get_pool::<Position>()?;
+    let pos = positions.get(entity_id)?;
 
-        // Access component pools directly
-        let positions = world.get_pool::<Position>()?;
-        let pos = positions.get(args.entity_id)?;
+    // Direct atomic operations
+    pos.x.store(pos.x.load() + delta_x);
+    pos.y.store(pos.y.load() + delta_y);
 
-        // Direct atomic operations (no serialization!)
-        pos.x.store(pos.x.load() + args.delta_x);
-        pos.y.store(pos.y.load() + args.delta_y);
+    // Return concrete type
+    Ok(result)
+}
 
-        // Return result
-        Ok(vec![])  // Or serialize result if needed
-    })
+// BAD: Old serialization pattern (Session 74-77) - DEPRECATED
+pub fn old_function(args: &[u8]) -> Pin<Box<dyn Future<Output = ModuleResult<Vec<u8>>> + Send>> {
+    // This violates NO dyn rule!
 }
 ```
 

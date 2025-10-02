@@ -51,14 +51,15 @@
 
 ## Phase 3: Convert System Modules to ViewModel 🔄 PARTIAL
 
-### 3.1 systems/ecs 🔄 IN PROGRESS (Sessions 74-75)
-- Component module: 14/14 functions ✅
-- Entity module: 11/11 functions ✅
-- Event module: 18/18 functions ✅
-- Query module: 14/14 stubs ⚠️
-- Storage module: 17/17 stubs ⚠️
-- System module: 13/13 stubs ⚠️
-- World module: 6/17 partial 🔄
+### 3.1 systems/ecs ⚠️ NEEDS REFACTOR (Sessions 74-78)
+- Component module: 14/14 functions (old signature)
+- Entity module: 11/11 functions (old signature)
+- Event module: 18/18 functions (old signature)
+- Query module: 14/14 functions (old signature - Session 78)
+- World module: 17/17 functions (old signature - Session 78)
+- Storage module: 17/17 stubs
+- System module: 13/13 stubs
+**NOTE**: All need conversion to new direct signatures (Session 78)
 
 ### 3.2 systems/console ⏳
 - Implement core/console View APIs
@@ -68,20 +69,20 @@
 - Implement core/rendering View APIs
 - WebGL-specific logic
 
-## Phase 4: Performance Optimization 🔄 IN PROGRESS (Session 76)
+## Phase 4: Performance Optimization ✅ PARTIAL (Sessions 76-77)
 
-### 4.1 Component Pool Architecture 🔄
+### 4.1 Component Pool Architecture ✅
 - Replace Bytes storage with generic ComponentPool<T>
 - Native storage, zero serialization (2-5ns vs 100-500ns)
 - On-demand pool creation per component type
-- **Status**: Design complete, implementation pending
+- **Status**: Implemented in Session 77
 
-### 4.2 Thread-Safe Primitives 🔄
+### 4.2 Thread-Safe Primitives ✅
 - Handle<T>: Immutable reference wrapper
 - Shared<T>: Mutable with RwLock
 - Atomic<T>: Lock-free for Copy types
 - Once<T>: Initialize once pattern
-- **Status**: Design complete, implementation pending
+- **Status**: Implemented in Session 77
 
 ### 4.3 Component-Level Threading 🔄
 - Components manage own thread-safety
@@ -154,13 +155,14 @@
 ### Current
 - Session 76: Performance optimization design 🔄
 
-### Next Steps
-1. Implement ThreadSafe primitives in core/types
-2. Implement ComponentPool<T> system
-3. Complete remaining ViewModel stubs (Query, Storage, System, World)
-4. Implement save_state/restore_state
-5. Create build.rs validation
-6. Test hot-reload functionality
+### Next Steps (Session 79+)
+1. Remove dyn from ViewModelFunction type
+2. Implement direct function signatures in module system
+3. Update all ViewModel functions to use Handle<World> parameter
+4. Complete remaining ViewModel stubs (Storage, System)
+5. Implement save_state/restore_state
+6. Create build.rs validation
+7. Test hot-reload functionality with new module system
 
 ## Risk Mitigation
 

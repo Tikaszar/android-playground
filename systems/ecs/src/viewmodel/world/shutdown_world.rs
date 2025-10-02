@@ -17,8 +17,8 @@ pub fn shutdown_world(_args: &[u8]) -> Pin<Box<dyn Future<Output = ModuleResult<
             entities.clear();
         }
         {
-            let mut components = world.components.write().await;
-            components.clear();
+            let mut component_registry = world.component_registry.write().await;
+            component_registry.clear();
         }
         {
             let mut event_queue = world.event_queue.write().await;
@@ -31,6 +31,22 @@ pub fn shutdown_world(_args: &[u8]) -> Pin<Box<dyn Future<Output = ModuleResult<
         {
             let mut post_handlers = world.post_handlers.write().await;
             post_handlers.clear();
+        }
+        {
+            let mut subscriptions = world.subscriptions.write().await;
+            subscriptions.clear();
+        }
+        {
+            let mut queries = world.queries.write().await;
+            queries.clear();
+        }
+        {
+            let mut storages = world.storages.write().await;
+            storages.clear();
+        }
+        {
+            let mut systems = world.systems.write().await;
+            systems.clear();
         }
 
         // Note: We can't actually remove the OnceCell, but data is cleared

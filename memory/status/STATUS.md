@@ -1,21 +1,21 @@
 # Status - Current Implementation Status
 
 ## Build Status
-- **Last known**: ✅ Entity module complete (Session 75)
-- **Session 75**: Completed systems/ecs Entity ViewModel (11/11 functions)
-- **Working**: modules/*, core/ecs (Model+View+serde support complete)
-- **In Progress**: systems/ecs/viewmodel (30 functions remaining in query/storage/system/world)
+- **Last known**: ⚠️ Module system needs refactor (Session 78)
+- **Session 78**: Identified dyn violation in ViewModelFunction, needs redesign
+- **Working**: core/ecs (Model+View complete), core/types (ThreadSafe primitives)
+- **Needs Refactor**: ALL ViewModel implementations use old serialization signatures
 
 ## Package Implementation Status
 
-### Modules Infrastructure ✅ COMPLETE (Sessions 68-70)
+### Modules Infrastructure ⚠️ NEEDS REFACTOR (Session 78)
 | Package | Status | Notes |
 |---------|--------|-------|
-| modules/types | ✅ | MVVM base types, NO traits, Copy+Clone on ViewAPI/ViewModelImpl |
-| modules/loader | ✅ | THE single unsafe block, compiles successfully |
-| modules/binding | ✅ | Direct function binding, compiles successfully |
+| modules/types | ⚠️ | ViewModelFunction uses dyn, needs direct signatures |
+| modules/loader | ⚠️ | Needs update for new function signatures |
+| modules/binding | ⚠️ | Needs rewrite for direct binding without serialization |
 | modules/resolver | ✅ | Cargo.toml parsing |
-| modules/registry | ✅ | Runtime orchestration |
+| modules/registry | ⚠️ | Needs update for new module system |
 
 ### Core Layer (MVVM Pattern)
 
@@ -33,7 +33,7 @@
 
 | Package | ViewModel | Status | Notes |
 |---------|-----------|--------|-------|
-| systems/ecs | 🔄 | In Progress | Session 75: Component 14/14 ✅, Entity 11/11 ✅, Event 18/18 ✅, Query/Storage/System/World pending |
+| systems/ecs | ⚠️ | Needs Refactor | Session 78: All 74 functions use old signatures with serialization |
 | systems/console | ✅ | ✅ | None |
 | systems/networking | ✅ | ✅ | ECS rewrite complete (Session 63) |
 | systems/webgl | 🔴 | ❌ | DOESN'T COMPILE - Missing imports, trait errors |

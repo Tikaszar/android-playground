@@ -128,9 +128,11 @@ fn main() {
 5. **Restore State** - Deserialize saved state
 6. **Update Bindings** - View now calls new ViewModel
 
-## No VTable, No Runtime Indirection
+## No VTable, No Runtime Indirection (Session 78 Update)
 
 - View functions directly call ViewModel implementations
-- Binding happens once at load time
-- After binding, just direct function calls
+- NO dyn trait objects - concrete function signatures
+- NO serialization - direct parameter passing
+- Handle<World> passed as first parameter
+- After binding, just direct function calls (~1-5ns)
 - Compile-time checking ensures compatibility

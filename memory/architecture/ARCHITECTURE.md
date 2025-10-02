@@ -13,14 +13,14 @@ Apps → Plugins → Core (Model+View) → [Module Binding] → Systems (ViewMod
 - **ViewModel** = Implementation (systems/*/viewmodel/)
 - **Binding** = Trait-based with generics (NO dyn, NO Box)
 
-## Implementation (Sessions 68-71, 76)
-- **modules/types** - MVVM base types (traits with generics, NO dyn)
+## Implementation (Sessions 68-71, 76-78)
+- **modules/types** - MVVM base types (removing dyn, direct signatures) 🔄 Session 78
 - **modules/loader** - THE single unsafe block for Library::new() ✅ COMPILES
-- **modules/binding** - Trait-based binding with concrete types ✅ COMPILES
+- **modules/binding** - Direct function binding, no serialization 🔄 Session 78
 - **modules/resolver** - Cargo.toml module declarations
 - **modules/registry** - Runtime module orchestration
 - **core/ecs/model** - Complete ECS Model layer with all data structures ✅ COMPILES
-- **core/types** - Thread-safe wrappers (Handle, Shared, Atomic, Once) 🔄 Session 76
+- **core/types** - Thread-safe wrappers (Handle, Shared, Atomic, Once) ✅ Session 77
 
 ## Component Pool Architecture (Session 76)
 
@@ -254,17 +254,40 @@ pub async fn initialize(world: Handle<World>) -> CoreResult<()> {
 }
 ```
 
+## Module System Direct Binding (Session 78)
+
+### Problem Identified
+ViewModelFunction used `dyn` and serialization:
+```rust
+// BAD: Violates NO dyn rule
+fn(args: &[u8]) -> Pin<Box<dyn Future<Output = ModuleResult<Vec<u8>>> + Send>>
+```
+
+### Solution: Direct Function Signatures
+```rust
+// GOOD: Direct signatures, no dyn, no serialization
+async fn step(world: &Handle<World>, delta_time: f32) -> ModuleResult<()>
+async fn get_stats(world: &Handle<World>) -> ModuleResult<WorldStats>
+```
+
+### How It Works
+1. **View** defines contracts (returns "not implemented")
+2. **ViewModel** implements exact same signatures
+3. **Binding** connects at runtime via function pointers
+4. **Hot-reload** preserved at module level
+
 ## Architectural Invariants
 
 1. **NO unsafe** - EXCEPTION: Single Library::new() in module loader only
-2. **Traits allowed with generics** - Use `<T: Trait>` NOT `Box<dyn Trait>`
-3. **NO Any** - Use serialization for type erasure when needed
+2. **NO dyn** - Use direct function signatures (Session 78)
+3. **NO Any** - Use concrete types or generics
 4. **NO turbofish** - Use ComponentId not generics for components
 5. **Model is pure data** - Only data fields with threading primitives, no logic
-6. **NO global state** - World and instances passed as parameters (Session 76)
-7. **Native storage** - Components stored as T, not Bytes (Session 76)
+6. **NO global state** - World passed as Handle<World> parameter (Session 78)
+7. **Native storage** - Components stored as T, not Bytes (Session 77)
 8. **Component-level locking** - Each component manages its concurrency (Session 76)
 9. **Compile-time safety** - Turn ALL runtime bugs into compile-time errors (Session 76)
+10. **Direct function binding** - No serialization overhead (Session 78)
 
 ## Compile-Time Safety Principles (Session 76)
 

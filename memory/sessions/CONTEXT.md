@@ -1,6 +1,24 @@
 # Context - Session Continuity
 
-## Session 77 In Progress 🔄
+## Session 78 In Progress 🔄
+Major architectural improvements - Module system redesign and ViewModel implementations:
+
+### Module System Redesign
+1. ✅ Identified fundamental flaw: ViewModelFunction uses `dyn` and serialization
+2. ✅ Designed new approach: Direct function signatures, no serialization
+3. ✅ Confirmed MVVM separation: View defines contracts, ViewModel implements
+4. ✅ Preserved hot-loading: Module-level swapping, not function-level
+5. 🔄 Implementation pending: Need to update module types and bindings
+
+### ViewModel Implementation Progress
+1. ⚠️ Query module: 14/14 functions (old signature, needs refactor)
+2. ⚠️ World module: 17/17 functions (old signature, needs refactor)
+3. ⚠️ Component module: 14/14 functions (old signature, needs refactor)
+4. ⚠️ Entity module: 11/11 functions (old signature, needs refactor)
+5. ⚠️ Event module: 18/18 functions (old signature, needs refactor)
+**All use serialization-based signatures that violate NO dyn rule**
+
+## Session 77 Complete ✅
 Implementing performance-critical ECS improvements:
 1. ✅ Implemented ThreadSafe primitives (Atomic, Once) in core/types
 2. ✅ Fixed Atomic<T> to work with primitive types (u64, f32, etc.)
@@ -8,7 +26,6 @@ Implementing performance-critical ECS improvements:
 4. ✅ Created ComponentPool<T> for native storage
 5. ✅ Updated System model to own component pools
 6. ✅ Removed Bytes serialization from Component struct
-7. 🔄 Completing ViewModel stubs (query/storage/system/world)
 
 ## Session 75 Complete ✅
 Completed Entity Module ViewModel layer:

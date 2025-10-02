@@ -1,4 +1,4 @@
-# Violations - MVVM Implementation Requirements (Sessions 69-71)
+# Violations - Current Architecture Violations (Session 78)
 
 ## Resolved in Sessions 69-71 ✅
 
@@ -85,10 +85,27 @@ crate-type = ["cdylib"]
 5. **Fifth**: Test basic loading and binding
 6. **Sixth**: Convert remaining modules
 
+## Critical Violations Discovered (Session 78) 🔴
+
+### 1. ViewModelFunction uses dyn
+**Location**: modules/types/src/viewmodel/function.rs
+**Violation**: `Box<dyn Future<...>>` violates NO dyn rule
+**Fix Required**: Direct function signatures without trait objects
+
+### 2. All ViewModel implementations use serialization
+**Location**: systems/ecs/src/viewmodel/*
+**Violation**: All 74+ functions use `args: &[u8]` and serialization
+**Fix Required**: Direct parameters like `world: &Handle<World>`
+
+### 3. World as global state
+**Location**: systems/ecs/src/state.rs
+**Violation**: Uses global OnceCell for World
+**Fix Required**: Pass World as parameter through all functions
+
 ## Success Criteria
 
-- 🟡 Zero VTable code remaining (core/ecs complete)
-- 🟡 All modules follow MVVM pattern (modules/* and core/ecs complete)
+- ❌ NO dyn compliance (ViewModelFunction violates)
+- 🟡 All modules follow MVVM pattern (structure correct, signatures wrong)
 - 🟡 Compile-time validation working (design complete)
-- ✅ Direct function calls (~1-5ns) (infrastructure ready)
-- 🟡 Hot-reload functional (infrastructure ready, needs testing)
+- ❌ Direct function calls (still using serialization)
+- 🟡 Hot-reload functional (needs new module system)

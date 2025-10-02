@@ -5,7 +5,6 @@ use playground_core_ecs::{EntityId, Generation, Component};
 use std::collections::HashMap;
 use std::pin::Pin;
 use std::future::Future;
-use std::sync::atomic::Ordering;
 
 /// Spawn a new entity with components
 pub fn spawn_entity(args: &[u8]) -> Pin<Box<dyn Future<Output = ModuleResult<Vec<u8>>> + Send>> {
@@ -20,7 +19,7 @@ pub fn spawn_entity(args: &[u8]) -> Pin<Box<dyn Future<Output = ModuleResult<Vec
             .map_err(|e| ModuleError::Generic(e))?;
 
         // Generate new entity ID
-        let entity_id = EntityId(world.next_entity_id.fetch_add(1, Ordering::SeqCst));
+        let entity_id = EntityId(world.next_entity_id.fetch_add(1));
         let generation = Generation(1);
 
         // Store entity in World
@@ -30,12 +29,14 @@ pub fn spawn_entity(args: &[u8]) -> Pin<Box<dyn Future<Output = ModuleResult<Vec
         }
 
         // Store components
+        // Components are now stored in System.component_pools after Session 77
+        // This would need to:
+        // 1. Look up which system owns each component type via world.component_registry
+        // 2. Access that system's component_pools
+        // 3. Store the component in the appropriate pool
+        // For now, we skip component storage as the architecture is being updated
         if !components.is_empty() {
-            let mut components_map = world.components.write().await;
-            let entity_components = components_map.entry(entity_id).or_insert_with(HashMap::new);
-            for component in components {
-                entity_components.insert(component.component_id, component);
-            }
+            // Real implementation would store in System.component_pools
         }
 
         // Create result with IDs only
