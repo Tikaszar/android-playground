@@ -148,76 +148,175 @@ pub fn old_function(args: &[u8]) -> Pin<Box<dyn Future<Output = ModuleResult<Vec
 }
 ```
 
-## Module Pattern (IMPLEMENTED Sessions 68-70 - Replaces VTable)
+## Trait-Based MVVM Module Pattern (Session 79 - CURRENT)
 
-### Pure Rust Module Interface
+### Core Module Exports (View + Models)
 ```rust
-// NO extern "C", NO repr(C) - Pure Rust!
+// core/ecs/src/lib.rs
+
+use playground_modules_types::{ViewTrait, ViewId, ModelTypeInfo};
+
+// Define a View struct that implements ViewTrait
+pub struct EcsView;
+
+impl ViewTrait for EcsView {
+    fn view_id(&self) -> ViewId {
+        // Unique ID for ECS View (could use hash of name)
+        0x1234567890ABCDEF
+    }
+}
+
+// Export View trait object for hot-loading
 #[no_mangle]
-pub static PLAYGROUND_MODULE: Module = Module {
-    metadata: &METADATA,
-    vtable: &VTABLE,
-};
+pub static PLAYGROUND_VIEW: &dyn ViewTrait = &EcsView;
 
-static VTABLE: ModuleVTable = ModuleVTable {
-    create: module_create,
-    destroy: module_destroy,
-    call: module_call,
-    save_state: module_save_state,  // Session 76: Must implement
-    restore_state: module_restore_state,  // Session 76: Must implement
-};
+// Export Model type information for pool initialization
+#[no_mangle]
+pub static PLAYGROUND_MODELS: &[ModelTypeInfo] = &[
+    ModelTypeInfo { model_type: 0x0001, type_name: "Entity" },
+    ModelTypeInfo { model_type: 0x0002, type_name: "Component" },
+    ModelTypeInfo { model_type: 0x0003, type_name: "Event" },
+    ModelTypeInfo { model_type: 0x0004, type_name: "Query" },
+    ModelTypeInfo { model_type: 0x0005, type_name: "Storage" },
+    ModelTypeInfo { model_type: 0x0006, type_name: "System" },
+    ModelTypeInfo { model_type: 0x0007, type_name: "World" },
+];
+```
 
-// State management for hot-reload with COMPILE-TIME safety (Session 76)
+### Core Module View Traits
+```rust
+// core/ecs/src/view/entity.rs
 
-// Versioned state for compile-time compatibility checking
-#[derive(Serialize, Deserialize)]
-#[serde(version = 1)]  // Compile error if versions mismatch
-pub struct ModuleStateV1 {
-    world: World,
-    version: u32,
-}
+use async_trait::async_trait;
+use playground_modules_types::ViewTrait;
+use crate::model::*;
+use crate::error::EcsResult;
 
-// Trait ensures ALL modules implement state management
-trait ModuleStateMgmt {
-    type State: Serialize + DeserializeOwned;
-
-    fn save_state(&self) -> Result<Self::State, String>;
-    fn restore_state(&mut self, state: Self::State) -> Result<(), String>;
-}
-
-// Won't compile without implementing the trait
-impl ModuleStateMgmt for MyModule {
-    type State = ModuleStateV1;
-
-    fn save_state(&self) -> Result<ModuleStateV1, String> {
-        Ok(ModuleStateV1 {
-            world: self.world.clone(),
-            version: 1,
-        })
-    }
-
-    fn restore_state(&mut self, state: ModuleStateV1) -> Result<(), String> {
-        // Version checked at compile time via serde
-        self.world = state.world;
-        Ok(())
-    }
+/// Entity operations View API
+#[async_trait]
+pub trait EntityView: ViewTrait {
+    async fn spawn_entity(&self, world: &World, components: Vec<Component>) -> EcsResult<Entity>;
+    async fn despawn_entity(&self, world: &World, entity: Entity) -> EcsResult<()>;
+    async fn exists(&self, world: &World, entity: Entity) -> EcsResult<bool>;
+    async fn is_alive(&self, world: &World, entity: Entity) -> EcsResult<bool>;
+    async fn clone_entity(&self, world: &World, entity: Entity) -> EcsResult<Entity>;
+    // ... other methods
 }
 ```
 
-### Module Loader (Single Unsafe) - IMPLEMENTED
+### System Module Exports (ViewModel)
 ```rust
-// THE ONLY UNSAFE BLOCK - in modules/loader/src/loader.rs
+// systems/ecs/src/lib.rs
+
+use playground_modules_types::{ViewModelTrait, ViewTrait, ViewId};
+
+// Single ViewModel struct that implements all View traits
+pub struct EcsViewModel;
+
+// Implement base ViewTrait
+impl ViewTrait for EcsViewModel {
+    fn view_id(&self) -> ViewId {
+        0x1234567890ABCDEF  // Same as EcsView
+    }
+}
+
+// Implement ViewModelTrait
+#[async_trait]
+impl ViewModelTrait for EcsViewModel {
+    fn view_id(&self) -> ViewId {
+        0x1234567890ABCDEF  // Same as EcsView
+    }
+}
+
+// Export ViewModel trait object for hot-loading
+#[no_mangle]
+pub static PLAYGROUND_VIEWMODEL: &dyn ViewModelTrait = &EcsViewModel;
+```
+
+### System Module ViewModel Implementations
+```rust
+// systems/ecs/src/viewmodel/entity.rs
+
+use async_trait::async_trait;
+use playground_core_ecs::{EntityView, World, Entity, Component, EcsResult, EntityId, Generation};
+use crate::EcsViewModel;
+
+// Implement the EntityView trait from core/ecs
+#[async_trait]
+impl EntityView for EcsViewModel {
+    async fn spawn_entity(&self, world: &World, components: Vec<Component>) -> EcsResult<Entity> {
+        // Direct implementation - no serialization!
+        let entity_id = EntityId(world.next_entity_id.fetch_add(1));
+        let generation = Generation(1);
+
+        let mut entities = world.entities.write().await;
+        entities.insert(entity_id, generation);
+
+        // Add components to entity
+        for component in components {
+            let mut comps = world.components.write().await;
+            comps.entry(entity_id)
+                .or_insert_with(HashMap::new)
+                .insert(component.id, component);
+        }
+
+        Ok(Entity { id: entity_id, generation })
+    }
+
+    async fn despawn_entity(&self, world: &World, entity: Entity) -> EcsResult<()> {
+        let mut entities = world.entities.write().await;
+        entities.remove(&entity.id);
+
+        let mut components = world.components.write().await;
+        components.remove(&entity.id);
+
+        Ok(())
+    }
+
+    // ... implement all other methods
+}
+```
+
+### Module Loader (THE Single Unsafe Block)
+```rust
+// modules/loader/src/loader.rs - THE ONLY UNSAFE BLOCK
+
 unsafe {
     // 1. Load the dynamic library
     let library = Library::new(&module_path)?;
 
-    // 2. Get module symbol
+    // 2. Get module metadata
     let module_symbol: Symbol<*const Module> = library.get(b"PLAYGROUND_MODULE\0")?;
 
-    // 3. Get View/ViewModel symbols
-    // 4. Initialize module
-    // All in ONE unsafe block!
+    // 3. For Core modules: Extract View trait object
+    let view: Symbol<&'static Handle<dyn ViewTrait>> =
+        library.get(b"PLAYGROUND_VIEW\0")?;
+
+    // 4. For Core modules: Extract Model type info
+    let models: Symbol<*const &'static [ModelTypeInfo]> =
+        library.get(b"PLAYGROUND_MODELS\0")?;
+
+    // 5. For System modules: Extract ViewModel trait object
+    let viewmodel: Symbol<&'static Handle<dyn ViewModelTrait>> =
+        library.get(b"PLAYGROUND_VIEWMODEL\0")?;
+
+    // 6. Initialize module
+    (module.lifecycle.initialize)(&[])?;
 }
+```
+
+### Consumer Pattern (Direct Trait Access)
+```rust
+// Get ViewModel once and store it
+let entity_vm: Handle<dyn ViewModelTrait> = registry.get_viewmodel(view_id).await?;
+
+// Downcast to specific View trait (this is the ONLY allowed use of dyn)
+let entity_view = entity_vm.as_any().downcast_ref::<dyn EntityView>()
+    .ok_or("ViewModel doesn't implement EntityView")?;
+
+// Direct trait method calls - NO registry lookup, NO serialization
+let entity = entity_view.spawn_entity(&world, components).await?;
+entity_view.despawn_entity(&world, entity).await?;
 ```
 
 ## Anti-Patterns to Avoid

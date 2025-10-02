@@ -1,56 +1,104 @@
-# Violations - Current Architecture Violations (Session 78)
+# Violations - Current Architecture Violations (Session 80)
 
-## Resolved in Sessions 69-71 ✅
+## Session 79 Complete ✅
 
-### 1. core/ecs MVVM Implementation Complete (Session 69)
-**Status**: ✅ IMPLEMENTED
-- Rewrote core/ecs from scratch with MVVM pattern
-- Model layer: Pure data structures
-- View layer: API contracts only
-- Event System replaces Messaging (Pre/Post events)
-- Compiles successfully as dylib
+### modules/* Infrastructure Trait-Based MVVM (Session 79)
+**Status**: ✅ COMPLETE
+- Replaced function pointers with trait-based MVVM
+- ModelTrait, ViewTrait, ViewModelTrait with 64-bit IDs
+- Triple-nested sharding with ModelPools
+- Object recycling for memory efficiency
+- Lock-free Views/ViewModels access
+- THE single unsafe block complete in loader
+- All modules/* packages compile successfully
 
-### 2. modules/loader and modules/binding Compilation Fixed (Session 70)
-**Status**: ✅ IMPLEMENTED
-- Added Copy+Clone to ViewAPI and ViewModelImpl
-- Fixed symbol extraction with .clone()
-- Fixed function pointer dereferencing
-- Both packages compile successfully
+## Critical Issues Remaining 🔴
 
-## Pending - Core/Systems MVVM Conversion 🟡
+### 1. Core/Systems Modules NOT Updated to Use New Traits
+**Location**: core/ecs/src/module_exports.rs, systems/ecs/src/module_exports.rs
+**Status**: ❌ BLOCKING
+**Issue**: Still using OLD Session 78 pattern with deleted types
+**Details**:
+- Reference `ViewAPI` struct (deleted from modules/types in Session 79)
+- Use `Pin<Box<dyn Future<...>>>` signatures (violates NO dyn rule)
+- Use serialization `_args: &[u8]` pattern (deprecated)
+- Won't compile against new modules/types
 
-### 3. Remove ALL VTable Code (Next: Session 71)
-**Location**: All core/* packages
-**Status**: PENDING
 **Fix Required**:
-- Delete vtable.rs files
-- Remove VTable fields from structs
-- Replace with MVVM View APIs
+```rust
+// DELETE: core/ecs/src/module_exports.rs (entire file)
+// DELETE: systems/ecs/src/module_exports.rs (entire file)
 
-### 4. Split Core Modules into Model/View (Next: Session 71)
-**Location**: core/ecs, core/console, core/rendering
-**Status**: PENDING
-**Fix Required**:
-```
-core/ecs/
-├── model/
-│   ├── world.rs
-│   └── entity.rs
-└── view/
-    ├── spawn_entity.rs
-    └── query.rs
+// CREATE: core/ecs/src/view/*.rs - Trait definitions
+#[async_trait]
+pub trait EntityView: ViewTrait {
+    async fn spawn_entity(&self, world: &World, components: Vec<Component>) -> EcsResult<Entity>;
+    // ... other methods
+}
+
+// CREATE: core/ecs exports
+#[no_mangle]
+pub static PLAYGROUND_VIEW: &dyn ViewTrait = &EcsView;
+
+#[no_mangle]
+pub static PLAYGROUND_MODELS: &[ModelTypeInfo] = &[
+    ModelTypeInfo { model_type: 0x0001, type_name: "Entity" },
+    ModelTypeInfo { model_type: 0x0002, type_name: "Component" },
+];
+
+// CREATE: systems/ecs/src/viewmodel/*.rs - Trait implementations
+pub struct EntityViewModel;
+
+#[async_trait]
+impl EntityView for EntityViewModel {
+    async fn spawn_entity(&self, world: &World, components: Vec<Component>) -> EcsResult<Entity> {
+        // Direct implementation
+    }
+}
+
+// CREATE: systems/ecs exports
+#[no_mangle]
+pub static PLAYGROUND_VIEWMODEL: &dyn ViewModelTrait = &EntityViewModel;
 ```
 
-### 5. Convert Systems to ViewModel (Next: Session 71)
-**Location**: systems/ecs, systems/console, systems/webgl
+### 2. Core/ECS View Layer Needs Trait Definitions
+**Location**: core/ecs/src/view/
+**Status**: ⚠️ NEEDS WORK
+**Current**: Has stub async functions that return errors
+**Required**: Convert to trait definitions per Session 79 architecture
+
+**Files to Create**:
+- `core/ecs/src/view/entity.rs` - EntityView trait
+- `core/ecs/src/view/component.rs` - ComponentView trait
+- `core/ecs/src/view/event.rs` - EventView trait
+- `core/ecs/src/view/query.rs` - QueryView trait
+- `core/ecs/src/view/storage.rs` - StorageView trait
+- `core/ecs/src/view/system.rs` - SystemView trait
+- `core/ecs/src/view/world.rs` - WorldView trait
+
+### 3. Systems/ECS ViewModel Layer Needs Trait Implementations
+**Location**: systems/ecs/src/viewmodel/
+**Status**: ⚠️ PARTIAL
+**Current**: Has old serialization-based implementations
+**Required**: Convert to trait implementations per Session 79 architecture
+
+**Files to Update**:
+- All `systems/ecs/src/viewmodel/*/*.rs` files
+- Remove serialization signatures
+- Implement View traits directly
+- Use async-trait for async methods
+
+## Pending - Other Modules Need MVVM Conversion 🟡
+
+### 4. Other Core Modules
+**Location**: core/console, core/server, core/client, core/rendering, core/ui
 **Status**: PENDING
-**Fix Required**:
-```
-systems/ecs/
-└── viewmodel/
-    ├── spawn_entity.rs
-    └── query.rs
-```
+**Fix Required**: Same MVVM conversion as core/ecs (Model+View split)
+
+### 5. Other System Modules
+**Location**: systems/console, systems/webgl, systems/ui
+**Status**: PENDING
+**Fix Required**: ViewModel implementations for their Core modules
 
 ## Build System Changes 🟡
 
@@ -78,34 +126,32 @@ crate-type = ["cdylib"]
 
 ## Implementation Order
 
-1. ✅ **First**: Create modules/* infrastructure (Session 68)
-2. ✅ **Second**: Fix modules compilation (Session 70)
-3. ✅ **Third**: Convert core/ecs to Model+View (Session 69)
-4. **Fourth**: Convert systems/ecs to ViewModel (Session 71 - NEXT)
-5. **Fifth**: Test basic loading and binding
-6. **Sixth**: Convert remaining modules
-
-## Critical Violations Discovered (Session 78) 🔴
-
-### 1. ViewModelFunction uses dyn
-**Location**: modules/types/src/viewmodel/function.rs
-**Violation**: `Box<dyn Future<...>>` violates NO dyn rule
-**Fix Required**: Direct function signatures without trait objects
-
-### 2. All ViewModel implementations use serialization
-**Location**: systems/ecs/src/viewmodel/*
-**Violation**: All 74+ functions use `args: &[u8]` and serialization
-**Fix Required**: Direct parameters like `world: &Handle<World>`
-
-### 3. World as global state
-**Location**: systems/ecs/src/state.rs
-**Violation**: Uses global OnceCell for World
-**Fix Required**: Pass World as parameter through all functions
+1. ✅ **Session 68**: Create modules/* infrastructure
+2. ✅ **Session 70**: Fix modules compilation
+3. ✅ **Session 69**: Convert core/ecs to Model layer
+4. ✅ **Session 72-73**: Create core/ecs View stub layer
+5. ✅ **Session 74-75**: Create systems/ecs ViewModel stubs
+6. ✅ **Session 79**: Replace modules/* with trait-based MVVM
+7. **Session 80 - NEXT**: Update core/ecs and systems/ecs to use new traits
+8. **Future**: Convert remaining modules
+9. **Future**: Test hot-loading with state preservation
+10. **Future**: Add build.rs validation
 
 ## Success Criteria
 
-- ❌ NO dyn compliance (ViewModelFunction violates)
-- 🟡 All modules follow MVVM pattern (structure correct, signatures wrong)
+- ✅ modules/* uses trait-based MVVM (Session 79)
+- ❌ Core/Systems modules implement traits (BLOCKING)
+- 🟡 All modules follow MVVM pattern (structure exists, needs trait conversion)
 - 🟡 Compile-time validation working (design complete)
-- ❌ Direct function calls (still using serialization)
-- 🟡 Hot-reload functional (needs new module system)
+- ❌ Direct trait method calls (needs trait implementations)
+- 🟡 Hot-reload functional (infrastructure ready, needs module updates)
+
+## Next Immediate Actions (Session 80)
+
+1. Delete `core/ecs/src/module_exports.rs` (obsolete)
+2. Delete `systems/ecs/src/module_exports.rs` (obsolete)
+3. Convert `core/ecs/src/view/*.rs` to trait definitions
+4. Convert `systems/ecs/src/viewmodel/*.rs` to trait implementations
+5. Add proper exports with `#[no_mangle]` symbols
+6. Test compilation
+7. Test module loading

@@ -50,7 +50,7 @@ A mobile-first game engine and IDE that runs entirely on Android devices (via Te
 - All errors at compile time when possible
 - NO unsafe code anywhere (except single Library::new)
 - NO runtime type casting
-- NO dyn trait objects (Session 78)
+- NO dyn (except modules/* for hot-loading via Arc<dyn Trait>) - Session 79
 - Result<T, Error> everywhere
 - Graceful degradation
 
@@ -127,10 +127,10 @@ A mobile-first game engine and IDE that runs entirely on Android devices (via Te
 - Runtime feature detection
 
 ### Type Safety
-- No runtime casting
-- No dyn trait objects (Session 78)
+- No runtime casting (except Any for downcasting trait objects)
+- No dyn (except modules/* for Arc<dyn Trait> hot-loading) - Session 79
 - Compile-time guarantees
-- Direct function signatures
+- Direct trait method signatures (no serialization)
 - Strong typing throughout
 
 ## Long-term Goals
@@ -161,18 +161,22 @@ A mobile-first game engine and IDE that runs entirely on Android devices (via Te
 
 ## Architecture Decisions
 
-### Why Data vs Logic Separation?
-- Enables hot-swapping implementations
-- Achieves polymorphism without dyn
-- Maintains compile-time type safety
-- Allows multiple renderer backends
+### Why MVVM (Model-View-ViewModel)?
+- **Model** (Core): Pure data structures, no logic
+- **View** (Core): API contracts as traits, no implementation
+- **ViewModel** (Systems): Trait implementations with business logic
+- Enables hot-swapping implementations via trait objects
+- Maintains compile-time type safety within each layer
+- Allows multiple backends (e.g., WebGL vs Vulkan)
 
-### Why Hot-Loadable Modules Instead of VTable?
-- **Direct function calls** - 1000x faster than VTable serialization
+### Why Trait-Based Hot-Loading? (Session 79)
+- **Direct trait method calls** - ~1-5ns overhead (just vtable dispatch)
+- **No serialization** - Parameters passed directly, not as bytes
 - **Everything reloadable** - Core, Systems, Plugins, and Apps
 - **Single unsafe exception** - Only Library::new() needed
 - **Pure Rust interfaces** - No C ABI or extern "C"
-- **State preservation** - Via serialization
+- **Arc<dyn Trait>** - The ONLY allowed use of dyn for hot-loading
+- **State preservation** - Via save_state/restore_state (future)
 - **Self-modifying** - IDE can reload itself while running
 
 ### Why Feature Flags?

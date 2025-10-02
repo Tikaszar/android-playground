@@ -1,32 +1,41 @@
 # Roadmap - MVVM Implementation Path (Sessions 67-76)
 
-## Phase 1: Create modules/* Infrastructure ✅ COMPLETE (Sessions 68-70)
+## Phase 1: Create modules/* Infrastructure ✅ COMPLETE (Sessions 68-70, 79)
 
-### 1.1 modules/types ✅
-- Defined Model, View, ViewModel base types (concrete classes, NO traits)
-- Created module metadata structures
+### 1.1 modules/types ✅ COMPLETE (Session 79)
+- Trait-based MVVM (ModelTrait, ViewTrait, ViewModelTrait)
+- 64-bit IDs (ViewId, ModelId, ModelType)
+- async-trait for async trait methods
+- ModelTypeInfo for pool initialization
 - Pure Rust interfaces (no C ABI)
 - Proper Rust module organization (subdirectories with mod.rs)
-- ViewAPI and ViewModelImpl are Copy+Clone (Session 70)
 
-### 1.2 modules/loader ✅
-- Single unsafe block for ALL operations
+### 1.2 modules/loader ✅ COMPLETE (Session 79)
+- THE single unsafe block for ALL operations
 - Load .so/.dll files
+- Extract trait objects from symbols
 - No runtime type checking
-- Compiles successfully (Session 70)
-- **NEEDS**: save_state/restore_state implementation (Session 76)
+- Compiles successfully
+- **NEEDS**: save_state/restore_state implementation (future)
 
-### 1.3 modules/binding ✅
-- Connect View to ViewModel
-- Direct function pointer binding
+### 1.3 modules/binding ✅ COMPLETE (Session 79)
+- Triple-nested sharding (ViewId → ModelType → ModelPool)
+- Lock-free Views/ViewModels via Handle<HashMap>
+- Object recycling in ModelPools
 - Runtime binding (not compile-time)
-- Compiles successfully (Session 70)
+- Compiles successfully
 
-### 1.4 modules/resolver ✅
+### 1.4 modules/resolver ✅ COMPLETE
 - Read Cargo.toml metadata
 - Resolve dependencies
 - Feature validation
-- **NEEDS**: build.rs validation system (Session 76)
+- **NEEDS**: build.rs validation system (future)
+
+### 1.5 modules/registry ✅ COMPLETE (Session 79)
+- Runtime module orchestration
+- Hot-reload infrastructure
+- Module lifecycle management
+- Compiles successfully
 
 ## Phase 2: Convert Core Modules to MVVM ✅ PARTIAL
 
@@ -49,17 +58,18 @@
 - Model: Window, RenderTarget data
 - View: create_window, render_frame APIs
 
-## Phase 3: Convert System Modules to ViewModel 🔄 PARTIAL
+## Phase 3: Convert System Modules to ViewModel 🔄 IN PROGRESS
 
-### 3.1 systems/ecs ⚠️ NEEDS REFACTOR (Sessions 74-78)
-- Component module: 14/14 functions (old signature)
-- Entity module: 11/11 functions (old signature)
-- Event module: 18/18 functions (old signature)
-- Query module: 14/14 functions (old signature - Session 78)
-- World module: 17/17 functions (old signature - Session 78)
-- Storage module: 17/17 stubs
-- System module: 13/13 stubs
-**NOTE**: All need conversion to new direct signatures (Session 78)
+### 3.1 systems/ecs ⚠️ NEEDS TRAIT CONVERSION (Session 80 - IN PROGRESS)
+- Has old serialization-based implementations (Sessions 74-78)
+- Component module: 14/14 functions (needs trait impl)
+- Entity module: 11/11 functions (needs trait impl)
+- Event module: 18/18 functions (needs trait impl)
+- Query module: 14/14 functions (needs trait impl)
+- World module: 17/17 functions (needs trait impl)
+- Storage module: 17/17 stubs (needs trait impl)
+- System module: 13/13 stubs (needs trait impl)
+**STATUS**: Session 80 converting to trait implementations
 
 ### 3.2 systems/console ⏳
 - Implement core/console View APIs
@@ -148,21 +158,25 @@
 - Session 69: core/ecs MVVM conversion ✅
 - Session 70: Fixed modules/loader and modules/binding compilation ✅
 - Session 71: Complete core/ecs Model layer ✅
-- Session 72-73: Complete core/ecs View layer ✅
-- Session 74: Component and Event ViewModel implementation ✅
-- Session 75: Entity ViewModel implementation ✅
+- Session 72-73: Complete core/ecs View layer (stubs) ✅
+- Session 74: Component and Event ViewModel implementation (old pattern) ✅
+- Session 75: Entity ViewModel implementation (old pattern) ✅
+- Session 76: Performance optimization design ✅
+- Session 77: ThreadSafe primitives and ComponentPool ✅
+- Session 78: Query/World ViewModel implementation (old pattern) ✅
+- Session 79: Trait-based MVVM modules/* infrastructure ✅
 
 ### Current
-- Session 76: Performance optimization design 🔄
+- Session 80: Convert core/ecs and systems/ecs to trait-based MVVM 🔄
 
-### Next Steps (Session 79+)
-1. Remove dyn from ViewModelFunction type
-2. Implement direct function signatures in module system
-3. Update all ViewModel functions to use Handle<World> parameter
-4. Complete remaining ViewModel stubs (Storage, System)
-5. Implement save_state/restore_state
-6. Create build.rs validation
-7. Test hot-reload functionality with new module system
+### Next Steps (Session 81+)
+1. Test module loading with trait-based system
+2. Implement save_state/restore_state for hot-reload
+3. Create build.rs validation
+4. Convert remaining core modules (console, server, client, rendering, ui)
+5. Convert remaining system modules (webgl, ui, console)
+6. Test hot-reload functionality with state preservation
+7. Performance benchmarking
 
 ## Risk Mitigation
 
