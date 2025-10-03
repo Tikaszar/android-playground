@@ -9,15 +9,28 @@ pub mod error;
 pub mod metadata;
 pub mod model;
 pub mod module;
-pub mod types;
 pub mod view;
 pub mod viewmodel;
+
+// Thread-safe types
+pub mod handle;
+pub mod shared;
+pub mod atomic;
+pub mod once;
 
 // Re-exports
 pub use error::{ModuleError, ModuleResult};
 pub use metadata::ModuleMetadata;
 pub use model::{ModelData, ModelId, ModelTrait, ModelType, ModelTypeInfo};
 pub use module::{Module, ModuleDependency, ModuleLifecycle, ModuleType};
-pub use types::{Handle, Shared};
 pub use view::{ViewId, FragmentId, ViewTrait, ViewFragmentTrait};
 pub use viewmodel::{ViewModelTrait, ViewModelFragmentTrait};
+
+// Thread-safe type re-exports
+pub use handle::{Handle, handle};
+pub use shared::{Shared, shared};
+pub use atomic::{Atomic, atomic, Ordering};
+pub use once::{Once, once, once_with};
+
+// Re-export common atomic types from std
+pub use std::sync::atomic::{AtomicU64, AtomicU32, AtomicBool};

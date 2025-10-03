@@ -9,7 +9,7 @@ crate-type = ["dylib", "rlib"]
 
 [dependencies]
 playground-modules-types = { path = "../../modules/types" }
-playground-core-types = { path = "../types" }
+async-trait = "0.1"
 bytes = { workspace = true }
 thiserror = { workspace = true }
 serde = { workspace = true }

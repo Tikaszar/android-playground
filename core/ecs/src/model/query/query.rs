@@ -1,6 +1,6 @@
 //! Query handle (strong reference)
 
-use playground_core_types::Handle;
+use playground_modules_types::Handle;
 use crate::model::{
     query::{QueryId, QueryFilter},
     world::World,

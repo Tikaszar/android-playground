@@ -1,7 +1,7 @@
 //! Query weak reference
 
 use std::sync::Weak;
-use playground_core_types::Handle;
+use playground_modules_types::Handle;
 use crate::model::{
     query::{Query, QueryId, QueryFilter},
     world::World,

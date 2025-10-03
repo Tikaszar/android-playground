@@ -1,7 +1,7 @@
 //! World data structure
 
 use std::collections::HashMap;
-use playground_core_types::{Handle, handle, Shared, shared, Atomic};
+use playground_modules_types::{Handle, handle, Shared, shared, Atomic};
 use crate::model::{
     entity::{EntityId, Generation},
     component::ComponentId,

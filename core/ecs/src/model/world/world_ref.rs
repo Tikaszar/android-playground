@@ -1,7 +1,7 @@
 //! World weak reference
 
 use std::sync::Weak;
-use playground_core_types::Handle;
+use playground_modules_types::Handle;
 use crate::model::world::World;
 
 /// A weak reference to the World

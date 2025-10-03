@@ -1,7 +1,7 @@
 //! System handle (strong reference)
 
 use std::collections::HashMap;
-use playground_core_types::{Handle, Shared, shared};
+use playground_modules_types::{Handle, Shared, shared};
 use crate::model::{
     system::SystemId,
     component::ComponentId,

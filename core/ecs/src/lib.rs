@@ -1,17 +1,19 @@
 //! Core ECS Module - EXPORTS ONLY
 //!
-//! This provides the fundamental ECS infrastructure with Event System.
-//! All functionality is implemented by systems/ecs ViewModel.
+//! Provides the fundamental ECS infrastructure with Event System.
+//! Model = data structures, View = API contracts
 
-// Public API exports
+use playground_modules_types::ViewId;
+
+// Module constants
+pub const ECS_VIEW_ID: ViewId = 0x1000_0000_0000_0001;
+
+// Public API
 pub mod error;
 pub mod model;
 pub mod view;
 
-// Module exports (symbols for loader)
-mod module_exports;
-
-// Re-exports for convenience
+// Re-export error types
 pub use error::{EcsError, EcsResult};
 
 // Re-export all model types
@@ -32,3 +34,8 @@ pub use model::{
     World, WorldRef, WorldStats, WorldMetadata,
 };
 
+// Re-export view traits and structs
+pub use view::{
+    EntityView, ComponentView, EventView, QueryView,
+    StorageView, SystemView, WorldView, EcsViewTrait, EcsView,
+};

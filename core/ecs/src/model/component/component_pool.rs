@@ -1,7 +1,7 @@
 //! Component pool for native type storage
 
 use std::collections::HashMap;
-use playground_core_types::{Shared, shared};
+use playground_modules_types::{Shared, shared};
 use crate::model::entity::EntityId;
 
 /// A pool that stores components of a specific type
