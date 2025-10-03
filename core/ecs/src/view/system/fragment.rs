@@ -16,7 +16,19 @@ impl SystemView for SystemFragment {
         Err(EcsError::NotImplemented("ViewModel not bound".into()))
     }
 
-    async fn unregister_system(&self, _world: &World, _system_id: SystemId) -> EcsResult<()> {
+    async fn unregister_system(&self, _world: &World, _system: &System) -> EcsResult<()> {
+        Err(EcsError::NotImplemented("ViewModel not bound".into()))
+    }
+
+    async fn run_system(&self, _world: &World, _system: &System) -> EcsResult<()> {
+        Err(EcsError::NotImplemented("ViewModel not bound".into()))
+    }
+
+    async fn run_systems(&self, _world: &World, _systems: Vec<System>) -> EcsResult<()> {
+        Err(EcsError::NotImplemented("ViewModel not bound".into()))
+    }
+
+    async fn schedule_systems(&self, _world: &World) -> EcsResult<Vec<System>> {
         Err(EcsError::NotImplemented("ViewModel not bound".into()))
     }
 
@@ -40,19 +52,7 @@ impl SystemView for SystemFragment {
         Err(EcsError::NotImplemented("ViewModel not bound".into()))
     }
 
-    async fn run_system(&self, _world: &World, _system_id: SystemId) -> EcsResult<SystemStats> {
-        Err(EcsError::NotImplemented("ViewModel not bound".into()))
-    }
-
-    async fn run_systems(&self, _world: &World, _system_ids: Vec<SystemId>) -> EcsResult<Vec<SystemStats>> {
-        Err(EcsError::NotImplemented("ViewModel not bound".into()))
-    }
-
-    async fn schedule_systems(&self, _world: &World) -> EcsResult<Vec<SystemId>> {
-        Err(EcsError::NotImplemented("ViewModel not bound".into()))
-    }
-
-    async fn get_system_dependencies(&self, _world: &World, _system_id: SystemId) -> EcsResult<Vec<SystemId>> {
+    async fn step_systems(&self, _world: &World, _delta_time: f32) -> EcsResult<()> {
         Err(EcsError::NotImplemented("ViewModel not bound".into()))
     }
 
@@ -60,7 +60,23 @@ impl SystemView for SystemFragment {
         Err(EcsError::NotImplemented("ViewModel not bound".into()))
     }
 
-    async fn step_systems(&self, _world: &World, _delta_time: f32) -> EcsResult<Vec<SystemStats>> {
+    async fn get_system_dependencies(&self, _world: &World, _system_id: SystemId) -> EcsResult<Vec<SystemId>> {
+        Err(EcsError::NotImplemented("ViewModel not bound".into()))
+    }
+
+    async fn update_system_dependencies(&self, _world: &World, _system_id: SystemId, _dependencies: Vec<SystemId>) -> EcsResult<()> {
+        Err(EcsError::NotImplemented("ViewModel not bound".into()))
+    }
+
+    async fn get_dependent_systems(&self, _world: &World, _system_id: SystemId) -> EcsResult<Vec<SystemId>> {
+        Err(EcsError::NotImplemented("ViewModel not bound".into()))
+    }
+
+    async fn system_exists(&self, _world: &World, _system_id: SystemId) -> EcsResult<bool> {
+        Err(EcsError::NotImplemented("ViewModel not bound".into()))
+    }
+
+    async fn clear_system_stats(&self, _world: &World) -> EcsResult<()> {
         Err(EcsError::NotImplemented("ViewModel not bound".into()))
     }
 }

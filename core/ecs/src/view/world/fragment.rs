@@ -22,7 +22,7 @@ impl WorldView for WorldFragment {
         Err(EcsError::NotImplemented("ViewModel not bound".into()))
     }
 
-    async fn reset_world(&self, _world: &World) -> EcsResult<()> {
+    async fn shutdown_world(&self) -> EcsResult<()> {
         Err(EcsError::NotImplemented("ViewModel not bound".into()))
     }
 
@@ -30,15 +30,59 @@ impl WorldView for WorldFragment {
         Err(EcsError::NotImplemented("ViewModel not bound".into()))
     }
 
-    async fn save_world_state(&self, _world: &World) -> EcsResult<Bytes> {
+    async fn step(&self, _world: &World, _delta_time: f32) -> EcsResult<()> {
         Err(EcsError::NotImplemented("ViewModel not bound".into()))
     }
 
-    async fn load_world_state(&self, _world: &World, _state: Bytes) -> EcsResult<()> {
+    async fn get_stats(&self, _world: &World) -> EcsResult<WorldStats> {
         Err(EcsError::NotImplemented("ViewModel not bound".into()))
     }
 
-    async fn get_world_stats(&self, _world: &World) -> EcsResult<WorldStats> {
+    async fn merge_worlds(&self, _target: &World, _source: &World) -> EcsResult<()> {
+        Err(EcsError::NotImplemented("ViewModel not bound".into()))
+    }
+
+    async fn clone_world(&self, _world: &World) -> EcsResult<Arc<World>> {
+        Err(EcsError::NotImplemented("ViewModel not bound".into()))
+    }
+
+    async fn insert_resource(&self, _world: &World, _type_name: String, _data: Bytes) -> EcsResult<()> {
+        Err(EcsError::NotImplemented("ViewModel not bound".into()))
+    }
+
+    async fn get_resource(&self, _world: &World, _type_name: String) -> EcsResult<Bytes> {
+        Err(EcsError::NotImplemented("ViewModel not bound".into()))
+    }
+
+    async fn remove_resource(&self, _world: &World, _type_name: String) -> EcsResult<()> {
+        Err(EcsError::NotImplemented("ViewModel not bound".into()))
+    }
+
+    async fn has_resource(&self, _world: &World, _type_name: String) -> EcsResult<bool> {
+        Err(EcsError::NotImplemented("ViewModel not bound".into()))
+    }
+
+    async fn get_all_resources(&self, _world: &World) -> EcsResult<Vec<String>> {
+        Err(EcsError::NotImplemented("ViewModel not bound".into()))
+    }
+
+    async fn reset_world(&self, _world: &World) -> EcsResult<()> {
+        Err(EcsError::NotImplemented("ViewModel not bound".into()))
+    }
+
+    async fn lock_world(&self, _world: &World) -> EcsResult<()> {
+        Err(EcsError::NotImplemented("ViewModel not bound".into()))
+    }
+
+    async fn unlock_world(&self, _world: &World) -> EcsResult<()> {
+        Err(EcsError::NotImplemented("ViewModel not bound".into()))
+    }
+
+    async fn is_world_locked(&self, _world: &World) -> EcsResult<bool> {
+        Err(EcsError::NotImplemented("ViewModel not bound".into()))
+    }
+
+    async fn validate_world(&self, _world: &World) -> EcsResult<Vec<String>> {
         Err(EcsError::NotImplemented("ViewModel not bound".into()))
     }
 
@@ -46,19 +90,7 @@ impl WorldView for WorldFragment {
         Err(EcsError::NotImplemented("ViewModel not bound".into()))
     }
 
-    async fn set_world_metadata(&self, _world: &World, _metadata: WorldMetadata) -> EcsResult<()> {
-        Err(EcsError::NotImplemented("ViewModel not bound".into()))
-    }
-
-    async fn get_entity_count(&self, _world: &World) -> EcsResult<u32> {
-        Err(EcsError::NotImplemented("ViewModel not bound".into()))
-    }
-
-    async fn get_component_count(&self, _world: &World) -> EcsResult<u32> {
-        Err(EcsError::NotImplemented("ViewModel not bound".into()))
-    }
-
-    async fn get_system_count(&self, _world: &World) -> EcsResult<u32> {
+    async fn get_entity_count(&self, _world: &World) -> EcsResult<usize> {
         Err(EcsError::NotImplemented("ViewModel not bound".into()))
     }
 }

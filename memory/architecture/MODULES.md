@@ -6,9 +6,10 @@ The entire engine uses MVVM pattern with hot-loadable modules where Core provide
 
 ## Implementation Status (Sessions 68-71, 79)
 
-### modules/* Infrastructure ✅ COMPLETE (Session 79)
-- **modules/types** - Trait-based MVVM (ModelTrait, ViewTrait, ViewModelTrait)
+### modules/* Infrastructure ✅ COMPLETE (Sessions 79-80)
+- **modules/types** - Trait-based MVVM with Associated Types & Runtime Types
   - 64-bit IDs (ViewId, ModelId, ModelType)
+  - Runtime type generation via `model_type_of<T>()`
   - async-trait for async trait methods
   - ModelTypeInfo for pool initialization
 - **modules/loader** - THE single unsafe block ✅ COMPILES
@@ -16,14 +17,18 @@ The entire engine uses MVVM pattern with hot-loadable modules where Core provide
 - **modules/registry** - Runtime orchestration ✅ COMPILES
 - **modules/resolver** - Cargo.toml parsing ✅ COMPILES
 
-### core/ecs/model ✅ COMPLETE (Session 71)
-- **entity/** - EntityId, Entity, EntityRef, Generation
-- **component/** - ComponentId, Component, ComponentRef
-- **event/** - EventId, Event, EventRef, Priority, Subscription, SubscriptionId
-- **query/** - QueryId, Query, QueryRef, QueryFilter
-- **storage/** - StorageId, Storage, StorageRef
-- **system/** - SystemId, System, SystemRef
-- **world/** - World, WorldRef (contains all storage)
+### core/ecs ✅ PARTIAL (Sessions 71, 80)
+- **model/** - All models implement ModelTrait with runtime types ✅
+  - **entity/** - EntityId, Entity, EntityRef, Generation
+  - **component/** - ComponentId, Component, ComponentRef
+  - **event/** - EventId, Event, EventRef, Priority, Subscription, SubscriptionId
+  - **query/** - QueryId, Query, QueryRef, QueryFilter
+  - **storage/** - StorageId, Storage, StorageRef
+  - **system/** - SystemId, System, SystemRef
+  - **world/** - World, WorldRef (needs update to be lightweight)
+- **view/** - Associated Types pattern with fragments ✅
+  - All fragments (EntityView, ComponentView, etc.) complete
+  - EcsView composes all fragments via associated types
 
 ## MVVM Module Types
 

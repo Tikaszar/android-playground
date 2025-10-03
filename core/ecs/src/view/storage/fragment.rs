@@ -16,7 +16,31 @@ impl StorageView for StorageFragment {
         Err(EcsError::NotImplemented("ViewModel not bound".into()))
     }
 
-    async fn delete_storage(&self, _world: &World, _storage_id: StorageId) -> EcsResult<()> {
+    async fn save_world(&self, _world: &World, _storage: &Storage) -> EcsResult<()> {
+        Err(EcsError::NotImplemented("ViewModel not bound".into()))
+    }
+
+    async fn load_world(&self, _world: &World, _storage: &Storage) -> EcsResult<()> {
+        Err(EcsError::NotImplemented("ViewModel not bound".into()))
+    }
+
+    async fn save_entities(&self, _world: &World, _storage: &Storage, _entities: Vec<Entity>) -> EcsResult<()> {
+        Err(EcsError::NotImplemented("ViewModel not bound".into()))
+    }
+
+    async fn load_entities(&self, _world: &World, _storage: &Storage) -> EcsResult<Vec<Entity>> {
+        Err(EcsError::NotImplemented("ViewModel not bound".into()))
+    }
+
+    async fn clear_storage(&self, _storage: &Storage) -> EcsResult<()> {
+        Err(EcsError::NotImplemented("ViewModel not bound".into()))
+    }
+
+    async fn storage_exists(&self, _storage: &Storage) -> EcsResult<bool> {
+        Err(EcsError::NotImplemented("ViewModel not bound".into()))
+    }
+
+    async fn delete_storage(&self, _world: &World, _storage: &Storage) -> EcsResult<()> {
         Err(EcsError::NotImplemented("ViewModel not bound".into()))
     }
 
@@ -24,59 +48,35 @@ impl StorageView for StorageFragment {
         Err(EcsError::NotImplemented("ViewModel not bound".into()))
     }
 
-    async fn storage_exists(&self, _world: &World, _storage_id: StorageId) -> EcsResult<bool> {
-        Err(EcsError::NotImplemented("ViewModel not bound".into()))
-    }
-
     async fn get_all_storages(&self, _world: &World) -> EcsResult<Vec<Storage>> {
         Err(EcsError::NotImplemented("ViewModel not bound".into()))
     }
 
-    async fn save_world(&self, _world: &World, _storage_id: StorageId) -> EcsResult<()> {
+    async fn create_snapshot(&self, _world: &World, _name: String) -> EcsResult<StorageId> {
         Err(EcsError::NotImplemented("ViewModel not bound".into()))
     }
 
-    async fn load_world(&self, _world: &World, _storage_id: StorageId) -> EcsResult<()> {
+    async fn restore_snapshot(&self, _world: &World, _snapshot_id: StorageId) -> EcsResult<()> {
         Err(EcsError::NotImplemented("ViewModel not bound".into()))
     }
 
-    async fn save_entities(&self, _world: &World, _storage_id: StorageId, _entities: Vec<Entity>) -> EcsResult<()> {
+    async fn list_snapshots(&self, _world: &World) -> EcsResult<Vec<(StorageId, String)>> {
         Err(EcsError::NotImplemented("ViewModel not bound".into()))
     }
 
-    async fn load_entities(&self, _world: &World, _storage_id: StorageId) -> EcsResult<Vec<Entity>> {
+    async fn delete_snapshot(&self, _world: &World, _snapshot_id: StorageId) -> EcsResult<()> {
         Err(EcsError::NotImplemented("ViewModel not bound".into()))
     }
 
-    async fn clear_storage(&self, _world: &World, _storage_id: StorageId) -> EcsResult<()> {
+    async fn export_json(&self, _world: &World, _path: String) -> EcsResult<()> {
         Err(EcsError::NotImplemented("ViewModel not bound".into()))
     }
 
-    async fn get_storage_size(&self, _world: &World, _storage_id: StorageId) -> EcsResult<usize> {
+    async fn import_json(&self, _world: &World, _path: String) -> EcsResult<()> {
         Err(EcsError::NotImplemented("ViewModel not bound".into()))
     }
 
-    async fn create_snapshot(&self, _world: &World, _storage_id: StorageId, _name: String) -> EcsResult<String> {
-        Err(EcsError::NotImplemented("ViewModel not bound".into()))
-    }
-
-    async fn restore_snapshot(&self, _world: &World, _storage_id: StorageId, _snapshot_id: String) -> EcsResult<()> {
-        Err(EcsError::NotImplemented("ViewModel not bound".into()))
-    }
-
-    async fn delete_snapshot(&self, _world: &World, _storage_id: StorageId, _snapshot_id: String) -> EcsResult<()> {
-        Err(EcsError::NotImplemented("ViewModel not bound".into()))
-    }
-
-    async fn list_snapshots(&self, _world: &World, _storage_id: StorageId) -> EcsResult<Vec<String>> {
-        Err(EcsError::NotImplemented("ViewModel not bound".into()))
-    }
-
-    async fn export_json(&self, _world: &World, _storage_id: StorageId) -> EcsResult<String> {
-        Err(EcsError::NotImplemented("ViewModel not bound".into()))
-    }
-
-    async fn import_json(&self, _world: &World, _storage_id: StorageId, _json: String) -> EcsResult<()> {
+    async fn get_storage_size(&self, _storage: &Storage) -> EcsResult<usize> {
         Err(EcsError::NotImplemented("ViewModel not bound".into()))
     }
 }

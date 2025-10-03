@@ -1,6 +1,6 @@
 //! Storage handle (strong reference)
 
-use playground_modules_types::Handle;
+use playground_modules_types::{Handle, ModelTrait, ModelId, ModelType, model_type_of};
 use crate::model::{
     storage::StorageId,
     world::World,
@@ -17,6 +17,16 @@ pub struct Storage {
     pub format: String,
     #[allow(dead_code)]
     pub world: Handle<World>,
+}
+
+impl ModelTrait for Storage {
+    fn model_id(&self) -> ModelId {
+        self.id.0 as u64  // Convert StorageId's u32 to u64 ModelId
+    }
+
+    fn model_type(&self) -> ModelType {
+        model_type_of::<Storage>()  // Runtime-generated, but deterministic
+    }
 }
 
 impl Storage {

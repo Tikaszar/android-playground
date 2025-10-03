@@ -1,6 +1,7 @@
 //! Event type
 
 use bytes::Bytes;
+use playground_modules_types::{ModelTrait, ModelId, ModelType, model_type_of};
 use crate::model::{
     event::{EventId, Priority},
     entity::{EntityRef, EntityId, Generation},
@@ -24,6 +25,16 @@ pub struct Event {
 
     /// Event priority
     pub priority: Priority,
+}
+
+impl ModelTrait for Event {
+    fn model_id(&self) -> ModelId {
+        self.id.0 as u64  // Convert EventId's u32 to u64 ModelId
+    }
+
+    fn model_type(&self) -> ModelType {
+        model_type_of::<Event>()  // Runtime-generated, but deterministic
+    }
 }
 
 impl Event {

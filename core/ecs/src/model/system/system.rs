@@ -1,7 +1,7 @@
 //! System handle (strong reference)
 
 use std::collections::HashMap;
-use playground_modules_types::{Handle, Shared, shared};
+use playground_modules_types::{Handle, Shared, shared, ModelTrait, ModelId, ModelType, model_type_of};
 use crate::model::{
     system::SystemId,
     component::ComponentId,
@@ -33,6 +33,16 @@ pub struct ComponentPoolHandle {
     /// Opaque storage - systems know the actual type
     #[allow(dead_code)]
     inner: Handle<()>,
+}
+
+impl ModelTrait for System {
+    fn model_id(&self) -> ModelId {
+        self.id.0 as u64  // Convert SystemId's u32 to u64 ModelId
+    }
+
+    fn model_type(&self) -> ModelType {
+        model_type_of::<System>()  // Runtime-generated, but deterministic
+    }
 }
 
 impl System {

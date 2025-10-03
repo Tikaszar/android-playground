@@ -21,7 +21,7 @@ pub mod once;
 // Re-exports
 pub use error::{ModuleError, ModuleResult};
 pub use metadata::ModuleMetadata;
-pub use model::{ModelData, ModelId, ModelTrait, ModelType, ModelTypeInfo};
+pub use model::{ModelData, ModelId, ModelTrait, ModelType, ModelTypeInfo, model_type_of};
 pub use module::{Module, ModuleDependency, ModuleLifecycle, ModuleType};
 pub use view::{ViewId, ViewTrait};
 pub use viewmodel::{ViewModelTrait};

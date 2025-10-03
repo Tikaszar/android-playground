@@ -22,9 +22,9 @@ Apps → Plugins → Core (Model+View) → [Module Binding] → Systems (ViewMod
 - **core/ecs/model** - Complete ECS Model layer with all data structures ✅ COMPILES
 - **core/types** - Thread-safe wrappers (Handle, Shared, Atomic, Once) ✅ Session 77
 
-## Module System Architecture (Session 79)
+## Module System Architecture (Sessions 79-80)
 
-### Trait-Based MVVM Infrastructure (Session 80: Added Fragments)
+### Trait-Based MVVM Infrastructure (Session 80: Added Fragments & Runtime Types)
 ```rust
 // 64-bit unique identifiers
 pub type ViewId = u64;
@@ -61,6 +61,27 @@ pub trait ViewModelFragmentTrait: Send + Sync {
 pub trait ModelTrait: Send + Sync {
     fn model_id(&self) -> ModelId;
     fn model_type(&self) -> ModelType;  // For pool routing
+}
+```
+
+### Runtime Type Generation (Session 80)
+```rust
+// Generate unique ModelType from Rust types at runtime
+pub fn model_type_of<T: 'static>() -> ModelType {
+    let type_id = TypeId::of::<T>();
+    let mut hasher = DefaultHasher::new();
+    type_id.hash(&mut hasher);
+    hasher.finish()
+}
+
+// All ECS models implement ModelTrait
+impl ModelTrait for Entity {
+    fn model_id(&self) -> ModelId {
+        self.id.0 as u64
+    }
+    fn model_type(&self) -> ModelType {
+        model_type_of::<Entity>()  // Runtime-generated, deterministic
+    }
 }
 ```
 

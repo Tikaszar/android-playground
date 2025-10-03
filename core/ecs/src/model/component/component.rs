@@ -1,5 +1,6 @@
 //! Component metadata
 
+use playground_modules_types::{ModelTrait, ModelId, ModelType, model_type_of};
 use crate::model::component::ComponentId;
 
 /// Component metadata - describes a component type
@@ -16,6 +17,16 @@ pub struct Component {
 
     /// Size hint for allocation
     pub size_hint: usize,
+}
+
+impl ModelTrait for Component {
+    fn model_id(&self) -> ModelId {
+        self.component_id.0 as u64  // Convert ComponentId's u32 to u64 ModelId
+    }
+
+    fn model_type(&self) -> ModelType {
+        model_type_of::<Component>()  // Runtime-generated, but deterministic
+    }
 }
 
 impl Component {

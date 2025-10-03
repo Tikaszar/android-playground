@@ -69,4 +69,7 @@ pub trait WorldView: Send + Sync {
 
     /// Get world metadata (creation time, last modified, etc)
     async fn get_world_metadata(&self, world: &World) -> EcsResult<WorldMetadata>;
+
+    /// Get total count of entities in the world
+    async fn get_entity_count(&self, world: &World) -> EcsResult<usize>;
 }

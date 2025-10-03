@@ -1,15 +1,18 @@
 //! Main EcsView struct that composes all fragments
 
-use playground_modules_types::{ViewTrait, ViewId, ModelTypeInfo};
-use crate::view::{
-    EcsViewTrait,
-    entity::EntityFragment,
-    component::ComponentFragment,
-    event::EventFragment,
-    query::QueryFragment,
-    storage::StorageFragment,
-    system::SystemFragment,
-    world::WorldFragment,
+use playground_modules_types::{ViewTrait, ViewId, ModelTypeInfo, model_type_of};
+use crate::{
+    model::{Entity, Component, Event, Query, Storage, System},
+    view::{
+        EcsViewTrait,
+        entity::EntityFragment,
+        component::ComponentFragment,
+        event::EventFragment,
+        query::QueryFragment,
+        storage::StorageFragment,
+        system::SystemFragment,
+        world::WorldFragment,
+    },
 };
 
 /// The main ECS View struct that composes all fragments
@@ -90,14 +93,38 @@ static ECS_VIEW: EcsView = EcsView::new();
 #[unsafe(no_mangle)]
 pub static PLAYGROUND_VIEW: &dyn ViewTrait = &ECS_VIEW;
 
+/// Generate model type info at runtime
+/// This will be called by the module loader to get the model types
+pub fn get_model_types() -> Vec<ModelTypeInfo> {
+    vec![
+        ModelTypeInfo {
+            model_type: model_type_of::<Entity>(),
+            type_name: "Entity"
+        },
+        ModelTypeInfo {
+            model_type: model_type_of::<Component>(),
+            type_name: "Component"
+        },
+        ModelTypeInfo {
+            model_type: model_type_of::<Event>(),
+            type_name: "Event"
+        },
+        ModelTypeInfo {
+            model_type: model_type_of::<Query>(),
+            type_name: "Query"
+        },
+        ModelTypeInfo {
+            model_type: model_type_of::<Storage>(),
+            type_name: "Storage"
+        },
+        ModelTypeInfo {
+            model_type: model_type_of::<System>(),
+            type_name: "System"
+        },
+    ]
+}
+
 /// Model type information for pool initialization
+/// Note: This is empty at compile-time and filled at runtime by the loader
 #[unsafe(no_mangle)]
-pub static PLAYGROUND_MODELS: &[ModelTypeInfo] = &[
-    ModelTypeInfo { model_type: 0x0001, type_name: "Entity" },
-    ModelTypeInfo { model_type: 0x0002, type_name: "Component" },
-    ModelTypeInfo { model_type: 0x0003, type_name: "Event" },
-    ModelTypeInfo { model_type: 0x0004, type_name: "Query" },
-    ModelTypeInfo { model_type: 0x0005, type_name: "Storage" },
-    ModelTypeInfo { model_type: 0x0006, type_name: "System" },
-    ModelTypeInfo { model_type: 0x0007, type_name: "World" },
-];
+pub static PLAYGROUND_MODELS: &[ModelTypeInfo] = &[];
