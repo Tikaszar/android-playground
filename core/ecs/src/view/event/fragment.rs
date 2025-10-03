@@ -1,31 +1,17 @@
-//! Event view stub implementation
+//! Event fragment implementation
 
 use async_trait::async_trait;
-use playground_modules_types::{ViewFragmentTrait, ViewId, FragmentId};
 use crate::{
     EcsResult, EcsError,
     model::{World, Event, EventId, Priority, Subscription, SubscriptionId},
     view::event::EventView,
 };
 
-pub const EVENT_FRAGMENT_ID: FragmentId = 0x0003;
-
-/// EcsView implementation for EventView fragment
-pub struct EcsView;
+/// Event operations fragment
+pub struct EventFragment;
 
 #[async_trait]
-impl ViewFragmentTrait for EcsView {
-    fn view_id(&self) -> ViewId {
-        crate::ECS_VIEW_ID
-    }
-
-    fn fragment_id(&self) -> FragmentId {
-        EVENT_FRAGMENT_ID
-    }
-}
-
-#[async_trait]
-impl EventView for EcsView {
+impl EventView for EventFragment {
     async fn emit_event(&self, _world: &World, _event: Event) -> EcsResult<()> {
         Err(EcsError::NotImplemented("ViewModel not bound".into()))
     }
@@ -83,6 +69,22 @@ impl EventView for EcsView {
     }
 
     async fn get_event_queue_size(&self, _world: &World) -> EcsResult<usize> {
+        Err(EcsError::NotImplemented("ViewModel not bound".into()))
+    }
+
+    async fn subscribe_event(&self, _world: &World, _event_id: EventId, _listener: String) -> EcsResult<Subscription> {
+        Err(EcsError::NotImplemented("ViewModel not bound".into()))
+    }
+
+    async fn unsubscribe_event(&self, _world: &World, _event_id: EventId, _listener: String) -> EcsResult<()> {
+        Err(EcsError::NotImplemented("ViewModel not bound".into()))
+    }
+
+    async fn publish_pre_event(&self, _world: &World, _event: Event) -> EcsResult<()> {
+        Err(EcsError::NotImplemented("ViewModel not bound".into()))
+    }
+
+    async fn publish_post_event(&self, _world: &World, _event: Event) -> EcsResult<()> {
         Err(EcsError::NotImplemented("ViewModel not bound".into()))
     }
 }

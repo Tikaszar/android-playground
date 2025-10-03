@@ -2,4 +2,4 @@
 
 pub mod base;
 
-pub use base::{ViewModelTrait, ViewModelFragmentTrait};
+pub use base::ViewModelTrait;

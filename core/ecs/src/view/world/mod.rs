@@ -1,6 +1,7 @@
 //! World view module
 
 mod r#trait;
-mod view;
+mod fragment;
 
 pub use r#trait::WorldView;
+pub use fragment::WorldFragment;

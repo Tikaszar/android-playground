@@ -2,4 +2,4 @@
 
 pub mod base;
 
-pub use base::{ViewId, FragmentId, ViewTrait, ViewFragmentTrait};
+pub use base::{ViewId, ViewTrait};

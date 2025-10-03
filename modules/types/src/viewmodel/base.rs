@@ -1,7 +1,7 @@
 //! ViewModel trait for implementations (System modules only)
 //! ViewModels implement View API contracts
 
-use crate::view::base::{ViewId, FragmentId};
+use crate::view::base::ViewId;
 
 /// ViewModel trait for View API implementations
 ///
@@ -16,17 +16,4 @@ use crate::view::base::{ViewId, FragmentId};
 pub trait ViewModelTrait: Send + Sync {
     /// Get the ViewId this ViewModel implements
     fn view_id(&self) -> ViewId;
-}
-
-/// ViewModel Fragment trait for pieces of a ViewModel
-///
-/// ViewModels are composed of fragments matching View fragments.
-/// Each fragment implements the logic for its corresponding View fragment.
-#[async_trait::async_trait]
-pub trait ViewModelFragmentTrait: Send + Sync {
-    /// Get the ViewId this fragment implements
-    fn view_id(&self) -> ViewId;
-
-    /// Get the FragmentId this fragment implements
-    fn fragment_id(&self) -> FragmentId;
 }

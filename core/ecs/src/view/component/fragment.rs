@@ -1,31 +1,17 @@
-//! Component view stub implementation
+//! Component fragment implementation
 
 use async_trait::async_trait;
-use playground_modules_types::{ViewFragmentTrait, ViewId, FragmentId};
 use crate::{
     EcsResult, EcsError,
     model::{World, Entity, Component, ComponentId},
     view::component::ComponentView,
 };
 
-pub const COMPONENT_FRAGMENT_ID: FragmentId = 0x0002;
-
-/// EcsView implementation for ComponentView fragment
-pub struct EcsView;
+/// Component operations fragment
+pub struct ComponentFragment;
 
 #[async_trait]
-impl ViewFragmentTrait for EcsView {
-    fn view_id(&self) -> ViewId {
-        crate::ECS_VIEW_ID
-    }
-
-    fn fragment_id(&self) -> FragmentId {
-        COMPONENT_FRAGMENT_ID
-    }
-}
-
-#[async_trait]
-impl ComponentView for EcsView {
+impl ComponentView for ComponentFragment {
     async fn add_component(&self, _world: &World, _entity: Entity, _component: Component) -> EcsResult<()> {
         Err(EcsError::NotImplemented("ViewModel not bound".into()))
     }

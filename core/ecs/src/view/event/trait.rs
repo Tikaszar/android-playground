@@ -55,4 +55,16 @@ pub trait EventView: Send + Sync {
 
     /// Get the queue size
     async fn get_event_queue_size(&self, world: &World) -> EcsResult<usize>;
+
+    /// Subscribe to an event (generic subscription)
+    async fn subscribe_event(&self, world: &World, event_id: EventId, listener: String) -> EcsResult<Subscription>;
+
+    /// Unsubscribe from a specific event with listener
+    async fn unsubscribe_event(&self, world: &World, event_id: EventId, listener: String) -> EcsResult<()>;
+
+    /// Publish a pre-event (for pre-processing hooks)
+    async fn publish_pre_event(&self, world: &World, event: Event) -> EcsResult<()>;
+
+    /// Publish a post-event (for post-processing hooks)
+    async fn publish_post_event(&self, world: &World, event: Event) -> EcsResult<()>;
 }

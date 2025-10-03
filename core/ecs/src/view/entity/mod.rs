@@ -1,6 +1,7 @@
 //! Entity view module
 
 mod r#trait;
-mod view;
+mod fragment;
 
 pub use r#trait::EntityView;
+pub use fragment::EntityFragment;

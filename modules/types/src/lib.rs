@@ -23,8 +23,8 @@ pub use error::{ModuleError, ModuleResult};
 pub use metadata::ModuleMetadata;
 pub use model::{ModelData, ModelId, ModelTrait, ModelType, ModelTypeInfo};
 pub use module::{Module, ModuleDependency, ModuleLifecycle, ModuleType};
-pub use view::{ViewId, FragmentId, ViewTrait, ViewFragmentTrait};
-pub use viewmodel::{ViewModelTrait, ViewModelFragmentTrait};
+pub use view::{ViewId, ViewTrait};
+pub use viewmodel::{ViewModelTrait};
 
 // Thread-safe type re-exports
 pub use handle::{Handle, handle};

@@ -1,6 +1,7 @@
 //! Event view module
 
 mod r#trait;
-mod view;
+mod fragment;
 
 pub use r#trait::EventView;
+pub use fragment::EventFragment;

@@ -1,6 +1,7 @@
 //! Query view module
 
 mod r#trait;
-mod view;
+mod fragment;
 
 pub use r#trait::QueryView;
+pub use fragment::QueryFragment;

@@ -1,6 +1,7 @@
 //! Storage view module
 
 mod r#trait;
-mod view;
+mod fragment;
 
 pub use r#trait::StorageView;
+pub use fragment::StorageFragment;

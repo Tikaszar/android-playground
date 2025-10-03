@@ -1,28 +1,17 @@
-//! Entity view stub implementation
+//! Entity fragment implementation
 
 use async_trait::async_trait;
-use playground_modules_types::{ViewFragmentTrait, ViewId, FragmentId};
 use crate::{
     EcsResult, EcsError,
     model::{World, Entity, EntityId, Generation, Component},
-    view::{entity::EntityView, EcsView},
+    view::entity::EntityView,
 };
 
-pub const ENTITY_FRAGMENT_ID: FragmentId = 0x0001;
+/// Entity operations fragment
+pub struct EntityFragment;
 
 #[async_trait]
-impl ViewFragmentTrait for EcsView {
-    fn view_id(&self) -> ViewId {
-        crate::ECS_VIEW_ID
-    }
-
-    fn fragment_id(&self) -> FragmentId {
-        ENTITY_FRAGMENT_ID
-    }
-}
-
-#[async_trait]
-impl EntityView for EcsView {
+impl EntityView for EntityFragment {
     async fn spawn_entity(&self, _world: &World, _components: Vec<Component>) -> EcsResult<Entity> {
         Err(EcsError::NotImplemented("ViewModel not bound".into()))
     }
