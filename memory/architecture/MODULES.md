@@ -190,27 +190,30 @@ impl EcsViewTrait for EcsViewModel {}
 pub static PLAYGROUND_VIEWMODEL: &dyn ViewModelTrait = &EcsViewModel;
 ```
 
-## Module Declaration in Cargo.toml
+## Module Declaration in Cargo.toml (Session 81 Design)
 
-### App Declares Everything
+The relationship between `Apps`, `Core` modules, and `Systems` is declared explicitly in `Cargo.toml` files to enable build-time validation.
+
+### App Declares Requirements
+An `App` declares which `Core` modules it uses, the `features` it needs from them, and an ordered list of preferred `Systems` to provide the implementation.
 ```toml
-# apps/editor/Cargo.toml
-[[package.metadata.modules.core]]
+# in apps/editor/Cargo.toml
+[[package.metadata.playground.requires.core]]
 name = "playground-core-rendering"
-features = ["shaders", "textures", "multi-window"]
-systems = [
-    "playground-systems-vulkan",   # Primary choice
-    "playground-systems-webgl"     # Fallback
-]
+features = ["shaders", "textures"]
+systems = ["playground-systems-vulkan", "playground-systems-webgl"]
 ```
 
-### System Declares What It Provides
+### System Declares Provisions
+A `System` declares which `Core` module it implements and the set of `features` it supports.
 ```toml
-# systems/webgl/Cargo.toml
-[package.metadata.provides]
-core = "playground-core-rendering"
-features = ["shaders", "textures", "2d", "basic-3d"]
+# in systems/webgl/Cargo.toml
+[package.metadata.playground.provides]
+core_module = "playground-core-rendering"
+features = ["shaders", "textures", "2d"]
 ```
+
+This structure allows an `App`'s `build.rs` script to validate that a compatible `System` exists for all of its requirements before the engine is ever compiled, preventing runtime errors.
 
 ## Module Infrastructure (modules/*)
 
@@ -239,17 +242,19 @@ modules/                  # NOT loadable - compiled into main binary
 7. **Consumers Get Handle** - `registry.get_viewmodel(view_id)` returns `Handle<dyn ViewModelTrait>`
 8. **Direct Calls** - Consumer stores Handle, calls trait methods directly
 
-## Binding Registry Architecture (Session 79)
+## Binding Registry Architecture (Session 79, Refined Session 81)
 
-### Triple-Nested Sharding
+### Concurrent, Flattened Map
 ```rust
-pub struct BindingRegistry {
-    // Lock-free singleton access
-    views: Handle<HashMap<ViewId, Handle<dyn ViewTrait>>>,
-    viewmodels: Handle<HashMap<ViewId, Handle<dyn ViewModelTrait>>>,
+use arc_swap::ArcSwap;
 
-    // Triple-nested: ViewId → ModelType → Pool
-    models: Handle<HashMap<ViewId, Handle<HashMap<ModelType, ModelPool>>>>,
+pub struct BindingRegistry {
+    // Concurrently updatable with lock-free reads
+    views: ArcSwap<HashMap<ViewId, Handle<dyn ViewTrait>>>,
+    viewmodels: ArcSwap<HashMap<ViewId, Handle<dyn ViewModelTrait>>>,
+
+    // Flattened map for models: (ViewId, ModelType) -> Pool
+    models: ArcSwap<HashMap<(ViewId, ModelType), ModelPool>>,
 }
 
 pub struct ModelPool {
@@ -269,11 +274,11 @@ app.entity_vm.spawn_entity(&world, components).await?;
 ```
 
 ### Performance
-- **View/ViewModel lookup**: Lock-free (~5ns)
-- **Model pool lookup**: Lock-free (~10ns)
-- **Model access**: RwLock at pool level (~20-30ns)
-- **Object recycling**: Reuse deleted models
-- **Lock contention**: Only same ViewId + same ModelType contend
+- **Registry Read**: Lock-free (~5ns) for any lookup (View, ViewModel, or Model Pool).
+- **Registry Write**: Non-blocking for readers, using `arc-swap`'s RCU mechanism.
+- **Model access**: `RwLock` at the individual `ModelPool` level (~20-30ns).
+- **Object recycling**: Reuses deleted models to reduce allocations.
+- **Lock contention**: Highly minimized. Contention only occurs when multiple threads write to the *exact same model pool* simultaneously.
 
 ## Compile-Time Safety
 
@@ -293,15 +298,17 @@ fn main() {
 - **Type safety** - Rust compiler enforces signatures
 - **Clear errors** - Know exactly what's missing
 
-## Hot-Reload Process
+## Hot-Reload Process (With State Preservation)
 
-1. **Detect Change** - File watcher sees .rs change
-2. **Save State** - Module serializes current state
-3. **Compile Module** - Incremental build (~500ms)
-4. **Load New Version** - Using single unsafe
-5. **Extract New Trait** - Get new ViewModel trait object
-6. **Update Registry** - Replace old `Handle<dyn ViewModelTrait>` with new one
-7. **Consumers Refresh** - Next `get_viewmodel()` call returns new implementation
+1.  **Detect Change**: A file watcher (or other trigger) detects a change in a module's source code.
+2.  **Save State**: The module loader checks if the current (old) `ViewModel` implements the `StatefulModule` trait. If so, it calls `save_state()` and stores the resulting state bytes in memory.
+3.  **Unload Old Module**: The old module (`.so`/`.dll`) is unloaded.
+4.  **Compile Module**: The build system compiles the new version of the module.
+5.  **Load New Module**: The loader loads the newly compiled `.so`/`.dll` file.
+6.  **Extract Symbols**: The loader extracts the `PLAYGROUND_VIEWMODEL` symbol to get the new `ViewModel` trait object.
+7.  **Update Registry**: The `BindingRegistry` is updated to point the `ViewId` to the new `ViewModel` implementation.
+8.  **Restore State**: The loader checks if the new `ViewModel` implements `StatefulModule`. If so, it calls `restore_state()` with the bytes saved in step 2.
+9.  **Resume**: The engine continues, with all new calls to the `View` now being directed to the new, state-restored `ViewModel`.
 
 ## Symbol Extraction (THE Unsafe Block)
 

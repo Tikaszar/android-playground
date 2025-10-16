@@ -51,6 +51,11 @@ Session 79 completed the modules/* infrastructure with:
 - Verify systems/ecs compiles
 - Test module loading
 
+### 4. Plan for Session 81
+- **Implement `BindingRegistry` Refactor**: Change `modules/binding` to use the flattened, concurrent map with `arc-swap`.
+- **Implement Stateful Hot-Reload**: Add the `StatefulModule` trait to `modules/types` and update `modules/loader` to orchestrate the save/restore process.
+- **Implement Build-Time Validation**: Create the `build.rs` validation scripts and necessary `Cargo.toml` metadata for `App` and `System` crates.
+
 ## Key Design Decisions
 
 ### Fragment Pattern

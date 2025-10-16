@@ -48,6 +48,7 @@ A mobile-first game engine and IDE that runs entirely on Android devices (via Te
 
 ### Zero Runtime Failures
 - All errors at compile time when possible
+- **Build-Time Validation**: An App's `build.rs` script validates that chosen `System` modules meet all `Core` feature requirements before compilation, preventing runtime dependency errors.
 - NO unsafe code anywhere (except single Library::new)
 - NO runtime type casting
 - NO dyn (except modules/* for hot-loading via Arc<dyn Trait>) - Session 79
@@ -176,8 +177,9 @@ A mobile-first game engine and IDE that runs entirely on Android devices (via Te
 - **Single unsafe exception** - Only Library::new() needed
 - **Pure Rust interfaces** - No C ABI or extern "C"
 - **Arc<dyn Trait>** - The ONLY allowed use of dyn for hot-loading
-- **State preservation** - Via save_state/restore_state (future)
+- **State Preservation (Session 81 Design)** - An optional `StatefulModule` trait allows `ViewModels` to serialize their state before being unloaded and restore it after a new version is loaded.
 - **Self-modifying** - IDE can reload itself while running
+- **Concurrent Registry** - The central `BindingRegistry` is designed for high-throughput, non-blocking reads and concurrent writes, enabling facades like `systems/ecs` to be simple, performant pass-through layers.
 
 ### Why Feature Flags?
 - Compile-time optimization

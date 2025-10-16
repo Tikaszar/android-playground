@@ -85,15 +85,17 @@ impl ModelTrait for Entity {
 }
 ```
 
-### Triple-Nested Sharding (Session 79)
+### Concurrent Binding Registry (Session 79, Refined in Session 81)
 ```rust
-pub struct BindingRegistry {
-    // Lock-free singleton access
-    views: Handle<HashMap<ViewId, Handle<dyn ViewTrait>>>,
-    viewmodels: Handle<HashMap<ViewId, Handle<dyn ViewModelTrait>>>,
+use arc_swap::ArcSwap;
 
-    // Triple-nested: ViewId → ModelType → Pool
-    models: Handle<HashMap<ViewId, Handle<HashMap<ModelType, ModelPool>>>>,
+pub struct BindingRegistry {
+    // Concurrently updatable with lock-free reads
+    views: ArcSwap<HashMap<ViewId, Handle<dyn ViewTrait>>>,
+    viewmodels: ArcSwap<HashMap<ViewId, Handle<dyn ViewModelTrait>>>,
+
+    // Flattened map for models: (ViewId, ModelType) -> Pool
+    models: ArcSwap<HashMap<(ViewId, ModelType), ModelPool>>,
 }
 
 pub struct ModelPool {
@@ -102,11 +104,10 @@ pub struct ModelPool {
 }
 ```
 
-### Lock Granularity Benefits
-- **Level 1**: ViewId lookup (lock-free, ~5ns)
-- **Level 2**: ModelType lookup (lock-free, ~5ns)
-- **Level 3**: Pool operations (RwLock at pool level, ~20-30ns)
-- **Result**: Only same ViewId + same ModelType contend for locks
+### Concurrency and Locking Model
+- **Registry Access**: All registry read operations (getting views, viewmodels, or pools) are completely lock-free and fast (~5ns) via `arc-swap`.
+- **Registry Updates**: Updates (registrations) use a Read-Copy-Update (RCU) strategy, which is non-blocking for readers and enables concurrent writes.
+- **Pool Operations**: The `ModelPool` itself uses an `RwLock`, so contention is isolated to operations on the *same pool* (i.e., same ViewId and ModelType).
 
 ### Object Recycling (Session 79)
 ```rust
@@ -224,11 +225,28 @@ systems = [
 ]
 ```
 
-### Compile-Time Validation
-- build.rs validates System provides required features
-- Missing features = compile error
-- Wrong System = compile error
-- Plugin requirements checked against App declarations
+### Compile-Time Validation (Session 81 Design)
+
+To guarantee that a chosen `System` can support the features an `App` requires, a `build.rs` script in the `App` crate performs validation before compilation.
+
+1.  **`System` Declares what it Provides**: A `System`'s `Cargo.toml` explicitly lists the `core_module` it implements and the `features` it supports.
+    ```toml
+    # In systems/webgl/Cargo.toml
+    [package.metadata.playground.provides]
+    core_module = "playground-core-rendering"
+    features = ["shaders", "textures", "2d"]
+    ```
+
+2.  **`App` Declares what it Requires**: An `App`'s `Cargo.toml` lists the `Core` modules it needs, the `features` it requires from them, and an ordered list of preferred `Systems` to provide them.
+    ```toml
+    # In apps/editor/Cargo.toml
+    [[package.metadata.playground.requires.core]]
+    name = "playground-core-rendering"
+    features = ["shaders", "textures"]
+    systems = ["playground-systems-vulkan", "playground-systems-webgl"]
+    ```
+
+3.  **`build.rs` Logic**: The `App`'s build script parses these metadata sections. If it cannot find a `System` in the preference list that provides all required `features` for a given `Core` module, it will `panic!`, causing the compilation to fail with a clear error message.
 
 ## Module Loading from Cargo.toml
 
@@ -293,6 +311,23 @@ pub static PLAYGROUND_MODELS: &[ModelTypeInfo] = &[
 pub static PLAYGROUND_VIEWMODEL: &dyn ViewModelTrait = &EcsViewModel;
 ```
 
+### Stateful Hot-Reload (Session 81 Design)
+
+To support preserving state during a hot-reload, a module's `ViewModel` can optionally implement the `StatefulModule` trait. This allows the loader to save state before unloading and restore it after loading the new version.
+
+```rust
+// Defined in modules/types
+#[async_trait::async_trait]
+pub trait StatefulModule {
+    type State: Serialize + DeserializeOwned + Send;
+
+    async fn save_state(&self) -> Result<Vec<u8>, ModuleError>;
+    async fn restore_state(&self, state: Vec<u8>) -> Result<(), ModuleError>;
+}
+```
+
+The module loader orchestrates this by checking for the trait's implementation before and after the reload.
+
 ### Loader Extraction (THE unsafe block)
 ```rust
 unsafe {
@@ -352,8 +387,7 @@ unsafe {
 
 | Operation | Old (Serialized) | New (Native Pools) | Improvement |
 |-----------|-----------------|-------------------|-------------|
-| View/ViewModel Lookup | N/A | Lock-free (~5ns) | **Baseline** |
-| Model Pool Lookup | N/A | Lock-free (~10ns) | **Baseline** |
+| View/ViewModel/Pool Lookup | N/A | Lock-free (~5ns) | **Baseline** |
 | Model Access (Same Pool) | 100-500ns | 20-30ns (RwLock) | **3-15x** |
 | Model Create/Recycle | 200-600ns | 30-40ns (pooled) | **5-15x** |
 | Lock Contention | Global | Per-pool | **N-fold** |

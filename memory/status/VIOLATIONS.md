@@ -6,7 +6,7 @@
 **Status**: ✅ COMPLETE
 - Replaced function pointers with trait-based MVVM
 - ModelTrait, ViewTrait, ViewModelTrait with 64-bit IDs
-- Triple-nested sharding with ModelPools
+- Concurrent, flattened binding map (refined from original triple-nested sharding).
 - Object recycling for memory efficiency
 - Lock-free Views/ViewModels access
 - THE single unsafe block complete in loader
@@ -102,14 +102,20 @@ pub static PLAYGROUND_VIEWMODEL: &dyn ViewModelTrait = &EntityViewModel;
 
 ## Build System Changes 🟡
 
-### 6. Add Cargo.toml Metadata
-**Location**: All apps/*, plugins/*
-**Fix Required**:
+### 6. Add Cargo.toml Metadata (Session 81 Design)
+**Location**: All `apps/*` and `systems/*` crates.
+**Fix Required**: `App` and `System` crates must declare their module dependencies and provisions in `Cargo.toml` using the `package.metadata.playground` keys. For example:
 ```toml
-[[package.metadata.modules.core]]
+# In an App's Cargo.toml
+[[package.metadata.playground.requires.core]]
 name = "playground-core-rendering"
 features = ["shaders"]
 systems = ["playground-systems-webgl"]
+
+# In a System's Cargo.toml
+[package.metadata.playground.provides]
+core_module = "playground-core-rendering"
+features = ["shaders", "2d"]
 ```
 
 ### 7. Add build.rs Validation

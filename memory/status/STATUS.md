@@ -13,7 +13,7 @@
 |---------|--------|-------|
 | modules/types | ✅ | Trait-based MVVM with fragments (Session 80) |
 | modules/loader | ✅ | THE single unsafe block, extracts trait objects |
-| modules/binding | ✅ | Triple-nested sharding with ModelPools, object recycling |
+| modules/binding | ✅ | Concurrent, flattened binding map with `arc-swap`, object recycling. |
 | modules/resolver | ✅ | Cargo.toml parsing |
 | modules/registry | ✅ | Runtime module orchestration |
 
@@ -71,7 +71,7 @@ All 9 IDE plugins are BROKEN (dependencies removed but code unchanged):
 - Fragment-based MVVM infrastructure (Session 80)
 - Trait-based MVVM (ModelTrait, ViewTrait, ViewModelTrait)
 - Fragment traits (ViewFragmentTrait, ViewModelFragmentTrait)
-- Triple-nested sharding with ModelPools
+- Concurrent, flattened binding map with non-blocking updates
 - Lock-free View/ViewModel access
 - Object recycling for Models
 - THE single unsafe block (module loader)
@@ -91,7 +91,7 @@ All 9 IDE plugins are BROKEN (dependencies removed but code unchanged):
 - MCP integration
 
 ### Not Working ❌
-- Module loading (infrastructure ready, modules not yet converted)
+- Module loading (Stateless loading infrastructure is ready, but stateful hot-reload requires implementation of the `StatefulModule` pattern)
 - Direct trait method calls (needs trait implementations in modules)
 - Client WebSocket connections
 - Rendering pipeline
@@ -132,7 +132,7 @@ All 9 IDE plugins are BROKEN (dependencies removed but code unchanged):
 
 ### Module System Performance
 - View/ViewModel lookup: ~5ns (lock-free)
-- Model pool lookup: ~10ns (lock-free)
+- Model pool lookup: ~5ns (lock-free, single lookup)
 - Model access: ~20-30ns (per-pool RwLock)
 - Object recycling: Reduces allocations
 

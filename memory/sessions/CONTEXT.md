@@ -24,11 +24,13 @@ Converting core/ecs to Associated Types pattern for fragment-based MVVM architec
 - NO functionality removed - all event system features preserved
 
 ### Next Steps (Session 81)
-1. Fix EcsView implementation - single struct implementing all fragments
-2. Complete core/ecs trait-based View layer
-3. Convert systems/ecs to implement fragment traits
-4. Test full compilation
-5. Make core/types re-export modules/types primitives
+
+With the core architectural designs now updated and outlined, the plan for the next implementation session is:
+
+1.  **Implement `BindingRegistry` Refactor**: Modify `modules/binding` to use the flattened, concurrent map with `arc-swap`.
+2.  **Implement Stateful Hot-Reload Pattern**: Add the `StatefulModule` trait and update the `modules/loader`.
+3.  **Implement Build-Time Validation Pattern**: Add the necessary `Cargo.toml` metadata and create the `build.rs` validation scripts.
+4.  **Convert `core/ecs` and `systems/ecs`**: With the foundational architecture in place, proceed with the planned rewrite of the ECS modules to use the new trait-based MVVM patterns.
 
 See CURRENT_SESSION.md for details.
 

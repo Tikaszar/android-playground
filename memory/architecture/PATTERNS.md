@@ -318,7 +318,366 @@ impl EntityView for EcsViewModel {
 impl EcsViewTrait for EcsViewModel {}
 ```
 
+### Stateful Hot-Reload Pattern (Session 81 Design)
+
+To preserve state across hot-reloads, a `ViewModel` can optionally implement the `StatefulModule` trait from `modules/types`.
+
+```rust
+// In modules/types/src/lib.rs
+use serde::{Serialize, de::DeserializeOwned};
+
+#[async_trait::async_trait]
+pub trait StatefulModule {
+    type State: Serialize + DeserializeOwned + Send;
+
+    async fn save_state(&self) -> Result<Vec<u8>, ModuleError>;
+    async fn restore_state(&self, state: Vec<u8>) -> Result<(), ModuleError>;
+}
+```
+
+An example implementation in `systems/ecs`:
+
+```rust
+// In systems/ecs/src/lib.rs
+use playground_modules_types::StatefulModule;
+use serde::Serialize;
+
+// A serializable representation of the world's state
+#[derive(Serialize, Deserialize)]
+pub struct WorldState { /* ... */ }
+
+// The EcsViewModel from before...
+pub struct EcsViewModel {
+    world: Handle<World>,
+}
+
+#[async_trait::async_trait]
+impl StatefulModule for EcsViewModel {
+    type State = WorldState;
+
+    async fn save_state(&self) -> Result<Vec<u8>, ModuleError> {
+        let state = self.world.capture_state().await; // Gathers state into WorldState
+        bincode::serialize(&state).map_err(|e| ModuleError::StateSaveFailed(e.to_string()))
+    }
+
+    async fn restore_state(&self, state_bytes: Vec<u8>) -> Result<(), ModuleError> {
+        let state: Self::State = bincode::deserialize(&state_bytes)?;
+        self.world.apply_state(state).await; // Applies the state
+        Ok(())
+    }
+}
+```
+
 ### Module Loader (THE Single Unsafe Block)
+```rust
+// modules/loader/src/loader.rs - THE ONLY UNSAFE BLOCK
+
+unsafe {
+    // 1. Load the dynamic library
+    let library = Library::new(&module_path)?;
+
+    // 2. Get module metadata
+    let module_symbol: Symbol<*const Module> = library.get(b"PLAYGROUND_MODULE\0")?;
+
+    // 3. For Core modules: Extract View trait object
+    let view: Symbol<&'static Handle<dyn ViewTrait>> =
+        library.get(b"PLAYGROUND_VIEW\0")?;
+
+    // 4. For Core modules: Extract Model type info
+    let models: Symbol<*const &'static [ModelTypeInfo]> =
+        library.get(b"PLAYGROUND_MODELS\0")?;
+
+    // 5. For System modules: Extract ViewModel trait object
+    let viewmodel: Symbol<&'static Handle<dyn ViewModelTrait>> =
+        library.get(b"PLAYGROUND_VIEWMODEL\0")?;
+
+    // 6. Initialize module
+    (module.lifecycle.initialize)(&[])?;
+}
+```
+
+### ECS Facade Pattern (Session 81 Design)
+
+The concurrent `BindingRegistry` enables `systems/ecs` to act as a pure facade. The `World` object becomes a stateless pass-through that holds a reference to the registry.
+
+```rust
+// In systems/ecs
+pub struct World {
+    registry: Handle<BindingRegistry>, // Handle is Arc
+    // ... other stateless handles or config
+}
+
+impl World {
+    pub fn new(registry: Handle<BindingRegistry>) -> Self {
+        Self { registry }
+    }
+
+    // The World's public API methods become simple pass-through calls
+    // to the underlying BindingRegistry.
+
+    pub fn get_view(&self, view_id: ViewId) -> Option<Handle<dyn ViewTrait>> {
+        self.registry.get_view(view_id)
+    }
+
+    pub async fn get_model(
+        &self,
+        view_id: ViewId,
+        model_type: ModelType,
+        model_id: ModelId,
+    ) -> ModuleResult<Handle<dyn ModelTrait>> {
+        self.registry.get_model(view_id, model_type, model_id).await
+    }
+
+    // Registration can also be passed through, as the registry supports
+    // concurrent writes.
+    pub fn register_view(&self, view: Handle<dyn ViewTrait>) {
+        self.registry.register_view(view);
+    }
+}
+```
+
+### Consumer Pattern (Direct Trait Access)
+```rust
+// Get ViewModel once and store it. Note: this is a synchronous, lock-free call.
+let entity_vm: Handle<dyn ViewModelTrait> = registry.get_viewmodel(view_id)
+    .ok_or("ViewModel not found for view_id")?;
+
+// Downcast to specific View trait (this is an accepted use of `Any`)
+let entity_view = entity_vm.as_any().downcast_ref::<dyn EntityView>()
+    .ok_or("ViewModel doesn't implement EntityView")?;
+
+// Direct async trait method calls - NO registry lookup, NO serialization
+let entity = entity_view.spawn_entity(&world, components).await?;
+entity_view.despawn_entity(&world, entity).await?;
+```
+
+## Anti-Patterns to Avoid
+
+### WRONG: Using global World
+```rust
+// ❌ NEVER DO THIS
+static WORLD: Lazy<Handle<World>> = Lazy::new(World::new);
+
+// ✅ DO THIS INSTEAD (Session 76)
+pub struct ModuleState {
+    world: Handle<World>,
+}
+// Pass World as parameter or store in module state
+```
+
+### WRONG: Serializing components
+```rust
+// ❌ NEVER DO THIS
+let component_bytes = bincode::serialize(&position)?;
+components.insert(entity_id, component_bytes);
+
+// ✅ DO THIS INSTEAD (Session 76)
+let pool = world.get_pool::<Position>()?;
+pool.insert(entity_id, position);  // Store native type
+```
+
+### WRONG: Coarse locking
+```rust
+// ❌ NEVER DO THIS
+pub struct World {
+    everything: Shared<AllTheData>,  // Single lock for everything
+}
+
+// ✅ DO THIS INSTEAD (Session 76)
+pub struct Position {
+    x: Atomic<f32>,  // Each field can be accessed independently
+    y: Atomic<f32>,
+    z: Atomic<f32>,
+}
+```
+
+### WRONG: Using DashMap
+```rust
+// ❌ NEVER DO THIS
+use dashmap::DashMap;
+let map = DashMap::new();
+
+// ✅ DO THIS INSTEAD
+use crate::types::Shared;
+let map = Shared::new(HashMap::new());  // Explicit locking
+```
+
+## Performance Guidelines (Session 76)
+
+### Access Pattern Optimization
+```rust
+// Sequential access - optimize for cache
+for entity in entities.iter() {
+    let pos = positions.get(entity);  // 2-5ns
+    let vel = velocities.get(entity);  // 2-5ns
+    // Process...
+}
+
+// Random access - minimize lock time
+let positions = world.get_pool::<Position>();  // Get once
+for entity in random_entities {
+    if let Some(pos) = positions.get(entity) {  // Direct access
+        pos.x.store(0.0);  // Lock-free
+    }
+}
+
+// Batch operations - lock once
+let mut inventory = inventory_data.write().await;  // Lock once
+for item in items_to_add {
+    inventory.push(item);  // Multiple operations
+}
+// Lock released
+```
+
+### Component Design by Access Frequency
+| Frequency | Pattern | Example | Performance |
+|-----------|---------|---------|-------------|
+| > 10k/frame | Field atomics | Position.x | 2-5ns |
+| 1k-10k/frame | Component atomics | Health.current | 3-5ns |
+| 100-1k/frame | Shared component | Stats.data | 20ns |
+| < 100/frame | Coarse lock | QuestLog | 20-50ns |
+| Write-rare | Copy-on-write | MeshData | 2ns read |
+
+## Compile-Time Safety Patterns (Session 76)
+
+### Turn Runtime Bugs into Compile-Time Errors
+
+#### Component Type Safety
+```rust
+// WRONG: Runtime type checking
+pub fn get_component(&self, id: ComponentId) -> Result<Box<dyn Any>, Error> {
+    self.components.get(&id)
+        .ok_or(Error::NotFound)
+        .and_then(|c| c.downcast().ok_or(Error::WrongType))  // Runtime failure!
+}
+
+// RIGHT: Compile-time type safety
+pub fn get_component<T: Component>(&self) -> Option<&T> {
+    self.pool::<T>().get(self.entity_id)  // Type known at compile time
+}
+
+// Usage:
+let pos = world.get_component::<Position>(entity);  // Can't get wrong type
+```
+
+#### State Version Safety
+```rust
+// WRONG: Runtime version checking
+fn load_state(data: &[u8]) -> Result<State, Error> {
+    let state: State = deserialize(data)?;
+    if state.version != CURRENT_VERSION {  // Runtime check!
+        return Err(Error::VersionMismatch);
+    }
+    Ok(state)
+}
+
+// RIGHT: Compile-time version types
+#[derive(Serialize, Deserialize)]
+#[serde(version = 2)]  // Won't compile with V1 data
+struct StateV2 {
+    // ...
+}
+
+// Migration is explicit and compile-time checked
+impl From<StateV1> for StateV2 {
+    fn from(v1: StateV1) -> Self {
+        // Explicit migration logic
+    }
+}
+```
+
+#### Module Interface Enforcement
+```rust
+// Every module MUST implement this or won't compile
+trait RequiredInterface {
+    fn init(&mut self) -> Result<(), Error>;
+    fn update(&mut self, dt: f32) -> Result<(), Error>;
+    fn save_state(&self) -> Result<Vec<u8>, Error>;
+    fn restore_state(&mut self, data: &[u8]) -> Result<(), Error>;
+}
+
+// build.rs validates at compile time
+const _: () = {
+    fn assert_implements<T: RequiredInterface>() {}
+    assert_implements::<MyModule>();  // Compile error if missing
+};
+```
+
+#### Pool Access Safety
+```rust
+// WRONG: String-based pool lookup
+pub fn get_pool(&self, name: &str) -> Option<&dyn Any> {
+    self.pools.get(name)  // Could typo at runtime!
+}
+
+// RIGHT: Type-based pool access
+pub fn get_pool<T: Component>(&self) -> &ComponentPool<T> {
+    // Type parameter ensures correct pool
+    &self.pools[TypeId::of::<T>()]
+}
+
+// Can't access wrong pool type at compile time
+let positions = world.get_pool::<Position>();  // Always correct type
+```
+
+## Build Validation Pattern (Session 81 Design)
+
+To guarantee dependencies at compile-time, `App` crates use a `build.rs` script to validate `System` capabilities against their own requirements, using metadata defined in `Cargo.toml`.
+
+### `System` Crate: Declares Provisions
+
+A `System`'s `Cargo.toml` declares which `Core` module it implements and the features it supports.
+
+```toml
+# In systems/webgl/Cargo.toml
+[package.metadata.playground.provides]
+core_module = "playground-core-rendering"
+features = ["shaders", "textures", "2d"]
+```
+
+### `App` Crate: Declares Requirements
+
+An `App`'s `Cargo.toml` declares its `Core` module dependencies, required features, and an ordered list of preferred `System` implementations.
+
+```toml
+# In apps/editor/Cargo.toml
+[[package.metadata.playground.requires.core]]
+name = "playground-core-rendering"
+features = ["shaders", "textures"]
+systems = ["playground-systems-vulkan", "playground-systems-webgl"]
+```
+
+### `App` Crate: `build.rs` Validation Logic
+
+The `build.rs` script in the `App` crate performs the validation.
+
+```rust
+// In apps/editor/build.rs
+fn main() {
+    // 1. Parse own `requires` metadata from Cargo.toml.
+    let required_cores = parse_app_requirements();
+
+    // 2. For each requirement, parse the `provides` metadata from the
+    //    corresponding System crates' Cargo.toml files.
+    for core in required_cores {
+        let mut found_compatible_system = false;
+        for system_name in core.systems {
+            let system_features = parse_system_provisions(&system_name);
+            if system_features.is_superset_of(&core.features) {
+                found_compatible_system = true;
+                break; // Found a compatible system, move to next core requirement
+            }
+        }
+
+        // 3. If no compatible system was found, panic to fail the build.
+        if !found_compatible_system {
+            panic!("Build failed: No compatible system found for core module '{}' with required features: {:?}", core.name, core.features);
+        }
+    }
+    println!("cargo:rerun-if-changed=build.rs");
+    println!("cargo:rerun-if-changed=Cargo.toml");
+}
+
 ```rust
 // modules/loader/src/loader.rs - THE ONLY UNSAFE BLOCK
 
@@ -348,16 +707,57 @@ unsafe {
 
 ### Consumer Pattern (Direct Trait Access)
 ```rust
-// Get ViewModel once and store it
-let entity_vm: Handle<dyn ViewModelTrait> = registry.get_viewmodel(view_id).await?;
+// Get ViewModel once and store it. Note: this is a synchronous, lock-free call.
+let entity_vm: Handle<dyn ViewModelTrait> = registry.get_viewmodel(view_id)
+    .ok_or("ViewModel not found for view_id")?;
 
-// Downcast to specific View trait (this is the ONLY allowed use of dyn)
+// Downcast to specific View trait (this is an accepted use of `Any`)
 let entity_view = entity_vm.as_any().downcast_ref::<dyn EntityView>()
     .ok_or("ViewModel doesn't implement EntityView")?;
 
-// Direct trait method calls - NO registry lookup, NO serialization
+// Direct async trait method calls - NO registry lookup, NO serialization
 let entity = entity_view.spawn_entity(&world, components).await?;
 entity_view.despawn_entity(&world, entity).await?;
+```
+
+## ECS Facade Pattern (Session 81 Design)
+
+The concurrent `BindingRegistry` enables `systems/ecs` to act as a pure facade. The `World` object becomes a stateless pass-through that holds a reference to the registry.
+
+```rust
+// In systems/ecs
+pub struct World {
+    registry: Handle<BindingRegistry>, // Handle is Arc
+    // ... other stateless handles or config
+}
+
+impl World {
+    pub fn new(registry: Handle<BindingRegistry>) -> Self {
+        Self { registry }
+    }
+
+    // The World's public API methods become simple pass-through calls
+    // to the underlying BindingRegistry.
+
+    pub fn get_view(&self, view_id: ViewId) -> Option<Handle<dyn ViewTrait>> {
+        self.registry.get_view(view_id)
+    }
+
+    pub async fn get_model(
+        &self,
+        view_id: ViewId,
+        model_type: ModelType,
+        model_id: ModelId,
+    ) -> ModuleResult<Handle<dyn ModelTrait>> {
+        self.registry.get_model(view_id, model_type, model_id).await
+    }
+
+    // Registration can also be passed through, as the registry supports
+    // concurrent writes.
+    pub fn register_view(&self, view: Handle<dyn ViewTrait>) {
+        self.registry.register_view(view);
+    }
+}
 ```
 
 ## Anti-Patterns to Avoid

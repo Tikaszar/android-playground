@@ -19,11 +19,12 @@
 - **NEEDS**: save_state/restore_state implementation (future)
 
 ### 1.3 modules/binding ✅ COMPLETE (Session 79)
-- Triple-nested sharding (ViewId → ModelType → ModelPool)
-- Lock-free Views/ViewModels via Handle<HashMap>
-- Object recycling in ModelPools
-- Runtime binding (not compile-time)
-- Compiles successfully
+- Concurrent, flattened map for bindings. (Refined in Session 81 from original triple-nested sharding design).
+- Lock-free reads for all registry data via `arc-swap`.
+- Non-blocking, concurrent writes via Read-Copy-Update pattern.
+- Object recycling in ModelPools.
+- Runtime binding (not compile-time).
+- Compiles successfully.
 
 ### 1.4 modules/resolver ✅ COMPLETE
 - Read Cargo.toml metadata
@@ -115,15 +116,14 @@
 ## Phase 5: Module System Completion ⏳
 
 ### 5.1 save_state/restore_state ⏳
-- Implement in modules/loader
-- Serialize World before hot-reload
-- Restore after reload
-- Required for testing
+- **Design**: Complete (Session 81). Introduce an optional `StatefulModule` trait in `modules/types` with `save_state` and `restore_state` methods. `ViewModel`s that manage state will implement this trait. The `modules/loader` will orchestrate calling these methods before and after a hot-reload to preserve state.
+- **Implementation**: Needs to be implemented in `modules/loader` and any stateful `System` modules like `systems/ecs`.
+- **Required for**: Meaningful hot-reload testing and development.
 
 ### 5.2 Build Validation ⏳
-- Create build.rs for compile-time checks
-- Validate Systems provide required features
-- Module compatibility verification
+- **Design**: Complete (Session 81). A `build.rs` script in each `App` crate will validate its module requirements. It will parse its own `Cargo.toml` for `[[package.metadata.playground.requires.core]]` sections and check them against the `[package.metadata.playground.provides]` section in the corresponding `System` crates' `Cargo.toml` files.
+- **Implementation**: A `build.rs` script needs to be created for `App` crates, along with a helper crate to parse the metadata.
+- **Required for**: Guaranteeing at compile-time that an `App`'s chosen `System` backends can provide all required features.
 
 ### 5.3 Module Testing ⏳
 - Test hot-reload with state preservation
