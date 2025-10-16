@@ -24,7 +24,7 @@ Apps → Plugins → Core (Model+View) → [Module Binding] → Systems (ViewMod
 
 ## Module System Architecture (Sessions 79-80)
 
-### Trait-Based MVVM Infrastructure (Session 80: Added Fragments & Runtime Types)
+### Trait-Based MVVM Infrastructure (Session 80, Refined Session 81)
 ```rust
 // 64-bit unique identifiers
 pub type ViewId = u64;
@@ -36,6 +36,7 @@ pub type ModelType = u64;
 #[async_trait::async_trait]
 pub trait ViewTrait: Send + Sync {
     fn view_id(&self) -> ViewId;
+    fn api_version(&self) -> u32; // For API compatibility
 }
 
 // Session 80: Fragment support for logical grouping
@@ -48,6 +49,16 @@ pub trait ViewFragmentTrait: Send + Sync {
 #[async_trait::async_trait]
 pub trait ViewModelTrait: Send + Sync {
     fn view_id(&self) -> ViewId;  // Which View this implements
+    fn api_version(&self) -> u32; // For API compatibility
+
+    // Optional: For stateful hot-reloading. Default is stateless.
+    async fn save_state(&self) -> Option<Result<Vec<u8>, ModuleError>> {
+        None
+    }
+
+    async fn restore_state(&self, _state: Vec<u8>) -> Option<Result<(), ModuleError>> {
+        None
+    }
 }
 
 // Session 80: Fragment support for ViewModels
@@ -311,22 +322,25 @@ pub static PLAYGROUND_MODELS: &[ModelTypeInfo] = &[
 pub static PLAYGROUND_VIEWMODEL: &dyn ViewModelTrait = &EcsViewModel;
 ```
 
-### Stateful Hot-Reload (Session 81 Design)
+### Automated Versioning and Safety (Session 81 Design)
 
-To support preserving state during a hot-reload, a module's `ViewModel` can optionally implement the `StatefulModule` trait. This allows the loader to save state before unloading and restore it after loading the new version.
+To ensure safe hot-reloading, the architecture uses a two-version scheme that is fully automated via `build.rs` scripts and content hashing. This prevents both API contract mismatches and data corruption from incompatible state.
 
-```rust
-// Defined in modules/types
-#[async_trait::async_trait]
-pub trait StatefulModule {
-    type State: Serialize + DeserializeOwned + Send;
+**1. API Version (for API Compatibility)**
 
-    async fn save_state(&self) -> Result<Vec<u8>, ModuleError>;
-    async fn restore_state(&self, state: Vec<u8>) -> Result<(), ModuleError>;
-}
-```
+This version ensures that a `ViewModel` implementation from a `System` is compatible with the `View` trait contract from `Core`.
 
-The module loader orchestrates this by checking for the trait's implementation before and after the reload.
+- **Generation**: A `build.rs` script in both the `Core` and `System` crates generates a hash of the `core/.../view` directory source files. This hash is compiled as an `API_VERSION` constant into both modules.
+- **Enforcement**: The `api_version()` method on `ViewTrait` and `ViewModelTrait` exposes this version. The `BindingRegistry` asserts that these versions are equal when binding a `ViewModel` to a `View`. A mismatch aborts the binding, preventing a crash.
+
+**2. State Format Version (for Data Compatibility)**
+
+This version tracks the physical structure of the data being saved for stateful hot-reloading.
+
+- **Generation**: The `build.rs` script in a stateful `System` (e.g., `systems/ecs`) generates a hash of the `core/.../model` directory source files. This hash is compiled as a `STATE_FORMAT_VERSION` constant.
+- **Enforcement**: The `save_state` method embeds this version inside the serialized data. The `restore_state` method reads the version from the data and compares it to its own compiled version. If they do not match, the state is rejected, preventing data corruption.
+
+This two-version scheme makes hot-reloading safe and reliable while remaining 100% automated.
 
 ### Loader Extraction (THE unsafe block)
 ```rust

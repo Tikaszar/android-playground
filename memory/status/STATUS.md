@@ -91,7 +91,7 @@ All 9 IDE plugins are BROKEN (dependencies removed but code unchanged):
 - MCP integration
 
 ### Not Working ❌
-- Module loading (Stateless loading infrastructure is ready, but stateful hot-reload requires implementation of the `StatefulModule` pattern)
+- Module loading (Stateless loading infrastructure is ready, but stateful hot-reload requires implementation of the optional `save_state`/`restore_state` methods on `ViewModelTrait`)
 - Direct trait method calls (needs trait implementations in modules)
 - Client WebSocket connections
 - Rendering pipeline

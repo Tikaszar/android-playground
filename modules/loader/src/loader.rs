@@ -172,23 +172,36 @@ impl ModuleLoader {
         Ok(())
     }
 
-    /// Hot-reload a module
+    /// Hot-reload a module with optional state preservation
     pub async fn hot_reload(&self, name: &str) -> ModuleResult<()> {
         info!("Hot-reloading module: {}", name);
 
-        // Verify module exists before unloading
-        {
+        let saved_state = {
             let modules = self.modules.read().await;
-            modules
+            let module = modules
                 .get(name)
                 .ok_or_else(|| ModuleError::NotFound(name.to_string()))?;
-        }
 
-        // Unload the old version
+            if let Some(ref viewmodel) = module.viewmodel {
+                viewmodel.save_state().await.transpose()?
+            } else {
+                None
+            }
+        };
+
         self.unload_module(name).await?;
-
-        // Load the new version
         self.load_module(name).await?;
+
+        if let Some(state_bytes) = saved_state {
+            let modules = self.modules.read().await;
+            if let Some(module) = modules.get(name) {
+                if let Some(ref viewmodel) = module.viewmodel {
+                    if let Some(result) = viewmodel.restore_state(state_bytes).await {
+                        result?;
+                    }
+                }
+            }
+        }
 
         info!("Successfully hot-reloaded module: {}", name);
         Ok(())

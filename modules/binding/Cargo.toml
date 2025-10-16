@@ -9,6 +9,9 @@ playground-modules-types = { path = "../types" }
 # Async runtime
 tokio = { version = "1.41", features = ["sync"] }
 
+# Concurrent data structures
+arc-swap = "1.7"
+
 # Error handling
 thiserror = "1.0"
 anyhow = "1.0"

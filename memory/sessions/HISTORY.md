@@ -3,9 +3,11 @@
 ## Session Ranges and Major Accomplishments
 
 ### Session 81 (Design): Architecture Refinement
-- **`BindingRegistry` Refactoring**: Designed a refactoring of the `BindingRegistry` to use a flattened `HashMap` with a `(ViewId, ModelType)` key and `arc-swap` to enable concurrent, non-blocking updates. This allows `systems/ecs::World` to act as a pure pass-through facade.
-- **Stateful Hot-Reload Design**: Outlined a pattern for state preservation using a new `StatefulModule` trait. This allows `ViewModels` to serialize their state before unloading and restore it after reloading, making hot-reloads practical.
-- **Build-Time Validation Design**: Outlined a pattern for compile-time safety using `build.rs` scripts and explicit `[package.metadata.playground.provides]` and `requires` keys in `Cargo.toml` files to prevent runtime dependency failures.
+- **`BindingRegistry` Refactoring**: Finalized a design to refactor the `BindingRegistry` using a flattened, concurrent map with `arc-swap`.
+- **Stateful Hot-Reload Design**: Finalized a design for state preservation by adding optional `save_state` and `restore_state` methods to `ViewModelTrait`.
+- **Automated Versioning Scheme**: Designed a two-version safety system, 100% automated via `build.rs` content hashing:
+    1.  **API Version**: Ensures `View` and `ViewModel` traits are compatible, checked at binding time.
+    2.  **State Format Version**: Ensures serialized data is compatible, checked at restore time.
 
 ### Session 65: Hot-Loadable Module Architecture Design
 - Designed complete hot-loadable module system to replace VTable

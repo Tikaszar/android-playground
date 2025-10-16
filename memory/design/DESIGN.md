@@ -49,6 +49,7 @@ A mobile-first game engine and IDE that runs entirely on Android devices (via Te
 ### Zero Runtime Failures
 - All errors at compile time when possible
 - **Build-Time Validation**: An App's `build.rs` script validates that chosen `System` modules meet all `Core` feature requirements before compilation, preventing runtime dependency errors.
+- **API Versioning**: The `BindingRegistry` checks a module's `api_version()` upon loading, preventing crashes from API contract mismatches.
 - NO unsafe code anywhere (except single Library::new)
 - NO runtime type casting
 - NO dyn (except modules/* for hot-loading via Arc<dyn Trait>) - Session 79
@@ -177,7 +178,7 @@ A mobile-first game engine and IDE that runs entirely on Android devices (via Te
 - **Single unsafe exception** - Only Library::new() needed
 - **Pure Rust interfaces** - No C ABI or extern "C"
 - **Arc<dyn Trait>** - The ONLY allowed use of dyn for hot-loading
-- **State Preservation (Session 81 Design)** - An optional `StatefulModule` trait allows `ViewModels` to serialize their state before being unloaded and restore it after a new version is loaded.
+- **State Preservation** - The `ViewModelTrait` includes optional `save_state` and `restore_state` methods. An automated, two-version (`API Version` and `State Format Version`) scheme ensures that both the module's API contract and its serialized data are compatible before state is restored, preventing crashes and data corruption.
 - **Self-modifying** - IDE can reload itself while running
 - **Concurrent Registry** - The central `BindingRegistry` is designed for high-throughput, non-blocking reads and concurrent writes, enabling facades like `systems/ecs` to be simple, performant pass-through layers.
 

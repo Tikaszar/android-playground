@@ -15,6 +15,6 @@ pub type ViewId = u64;
 /// Views are implemented by ViewModels in System modules
 #[async_trait::async_trait]
 pub trait ViewTrait: Send + Sync {
-    /// Get the unique ID of this View
     fn view_id(&self) -> ViewId;
+    fn api_version(&self) -> u32;
 }

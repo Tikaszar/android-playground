@@ -25,12 +25,23 @@ Converting core/ecs to Associated Types pattern for fragment-based MVVM architec
 
 ### Next Steps (Session 81)
 
-With the core architectural designs now updated and outlined, the plan for the next implementation session is:
+With the core architectural designs now finalized, the plan for the next implementation session is as follows:
 
-1.  **Implement `BindingRegistry` Refactor**: Modify `modules/binding` to use the flattened, concurrent map with `arc-swap`.
-2.  **Implement Stateful Hot-Reload Pattern**: Add the `StatefulModule` trait and update the `modules/loader`.
-3.  **Implement Build-Time Validation Pattern**: Add the necessary `Cargo.toml` metadata and create the `build.rs` validation scripts.
-4.  **Convert `core/ecs` and `systems/ecs`**: With the foundational architecture in place, proceed with the planned rewrite of the ECS modules to use the new trait-based MVVM patterns.
+1.  **Implement Automated Versioning Framework**:
+    -   Create `build.rs` scripts in `core` and `system` modules to hash `view` and `model` directories, generating `API_VERSION` and `STATE_FORMAT_VERSION` constants.
+    -   Add the `api_version()` method to `ViewTrait` and `ViewModelTrait` in `modules/types`.
+
+2.  **Implement `BindingRegistry` Refactor**:
+    -   Modify `modules/binding` to use the flattened, concurrent map with `arc-swap`.
+    -   Incorporate the `api_version()` check into the binding logic to ensure API compatibility.
+
+3.  **Implement Stateful Hot-Reload Logic**:
+    -   Add the optional `save_state` and `restore_state` methods to `ViewModelTrait`.
+    -   Update the `modules/loader` to orchestrate the save/restore process.
+    -   Ensure the `restore_state` implementation pattern includes checking the embedded `STATE_FORMAT_VERSION`.
+
+4.  **Begin `core/ecs` and `systems/ecs` Conversion**:
+    -   With the complete foundational architecture in place, start the rewrite of the ECS modules, implementing the new versioned, state-aware MVVM patterns.
 
 See CURRENT_SESSION.md for details.
 

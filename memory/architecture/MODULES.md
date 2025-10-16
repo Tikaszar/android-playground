@@ -62,9 +62,9 @@ The entire engine uses MVVM pattern with hot-loadable modules where Core provide
 - **Location**: `apps/*`
 - **Examples**: `apps/editor`, `apps/game`
 
-## Trait-Based Architecture (Sessions 79-80)
+### Trait-Based Architecture (Sessions 79-80, Refined Session 81)
 
-### Core Traits (Session 80: Added Fragments)
+### Core Traits
 ```rust
 // modules/types/src/model/base.rs
 pub type ModelId = u64;
@@ -83,6 +83,7 @@ pub type FragmentId = u64;  // Session 80
 #[async_trait::async_trait]
 pub trait ViewTrait: Send + Sync {
     fn view_id(&self) -> ViewId;
+    fn api_version(&self) -> u32; // For API compatibility
 }
 
 // Session 80: Fragment traits for logical grouping
@@ -96,6 +97,16 @@ pub trait ViewFragmentTrait: Send + Sync {
 #[async_trait::async_trait]
 pub trait ViewModelTrait: Send + Sync {
     fn view_id(&self) -> ViewId;  // Which View this implements
+    fn api_version(&self) -> u32; // For API compatibility
+
+    // Optional methods for stateful hot-reloading. Default is stateless.
+    async fn save_state(&self) -> Option<Result<Vec<u8>, ModuleError>> {
+        None
+    }
+
+    async fn restore_state(&self, _state: Vec<u8>) -> Option<Result<(), ModuleError>> {
+        None
+    }
 }
 
 // Session 80: Fragment traits for ViewModels
@@ -300,15 +311,14 @@ fn main() {
 
 ## Hot-Reload Process (With State Preservation)
 
-1.  **Detect Change**: A file watcher (or other trigger) detects a change in a module's source code.
-2.  **Save State**: The module loader checks if the current (old) `ViewModel` implements the `StatefulModule` trait. If so, it calls `save_state()` and stores the resulting state bytes in memory.
-3.  **Unload Old Module**: The old module (`.so`/`.dll`) is unloaded.
-4.  **Compile Module**: The build system compiles the new version of the module.
-5.  **Load New Module**: The loader loads the newly compiled `.so`/`.dll` file.
-6.  **Extract Symbols**: The loader extracts the `PLAYGROUND_VIEWMODEL` symbol to get the new `ViewModel` trait object.
-7.  **Update Registry**: The `BindingRegistry` is updated to point the `ViewId` to the new `ViewModel` implementation.
-8.  **Restore State**: The loader checks if the new `ViewModel` implements `StatefulModule`. If so, it calls `restore_state()` with the bytes saved in step 2.
-9.  **Resume**: The engine continues, with all new calls to the `View` now being directed to the new, state-restored `ViewModel`.
+1.  **Detect Change**: A file watcher detects a change in a module's source code.
+2.  **Save State**: The loader calls `save_state()` on the current `ViewModel`. If `Some(Ok(state_bytes))` is returned, the bytes (which include the **State Format Version**) are stored.
+3.  **Unload Old Module**: The old module is unloaded.
+4.  **Compile Module**: The new version of the module is compiled. Its `build.rs` script generates the new **API Version** and **State Format Version** constants.
+5.  **Load New Module**: The loader loads the new `.so`/`.dll`.
+6.  **Extract Symbols & Bind**: The loader gets the new `View` and `ViewModel` trait objects. The `BindingRegistry` asserts that `view.api_version() == viewmodel.api_version()`. If they mismatch, the hot-reload fails, preventing an API incompatibility crash.
+7.  **Restore State**: If state was saved in step 2, the loader calls `restore_state()` on the new `ViewModel`. The `restore_state` implementation is responsible for checking the **State Format Version** within the state bytes before attempting to deserialize the data.
+8.  **Resume**: The engine resumes, with all calls now safely directed to the new, version-checked, and state-restored `ViewModel`.
 
 ## Symbol Extraction (THE Unsafe Block)
 

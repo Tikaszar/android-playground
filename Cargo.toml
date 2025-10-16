@@ -7,6 +7,7 @@ members = [
     "modules/binding",
     "modules/resolver",
     "modules/registry",
+    "modules/build-utils",
 
     # Core layer
     "core/types",
