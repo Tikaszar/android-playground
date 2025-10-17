@@ -129,8 +129,8 @@ A mobile-first game engine and IDE that runs entirely on Android devices (via Te
 - Runtime feature detection
 
 ### Type Safety
-- No runtime casting (except Any for downcasting trait objects)
-- No dyn (except modules/* for Arc<dyn Trait> hot-loading) - Session 79
+- No runtime casting
+- No dyn (except modules/* for hot-loading via Arc<dyn Trait>) - Session 79
 - Compile-time guarantees
 - Direct trait method signatures (no serialization)
 - Strong typing throughout

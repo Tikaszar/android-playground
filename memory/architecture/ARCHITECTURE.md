@@ -8,9 +8,9 @@ Apps → Plugins → Core (Model+View) → [Module Binding] → Systems (ViewMod
 ```
 
 **Key Components:**
-- **Model** = Data structures (core/*/model/)
-- **View** = API contracts (core/*/view/) - Trait definitions
-- **ViewModel** = Implementation (systems/*/viewmodel/) - Trait implementations
+- **Model** = Data structures (core/*/model/), with `World` acting as a facade to these structures.
+- **View** = API contracts (core/*/view/) - Trait definitions.
+- **ViewModel** = Implementation (systems/*/viewmodel/) - Trait implementations that interact with the `BindingRegistry` via the `World` facade.
 - **Binding** = Trait-based with Arc<dyn Trait> (Session 79)
 
 ## Implementation (Sessions 68-71, 76-79, 80)

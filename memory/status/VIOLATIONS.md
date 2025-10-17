@@ -104,7 +104,7 @@ crate-type = ["cdylib"]
 4. ✅ **Session 72-73**: Create core/ecs View stub layer
 5. ✅ **Session 74-75**: Create systems/ecs ViewModel stubs
 6. ✅ **Session 79**: Replace modules/* with trait-based MVVM
-7. **Session 80 - NEXT**: Update core/ecs and systems/ecs to use new traits
+7. ✅ **Session 80-83**: Update core/ecs and systems/ecs to use new traits (in progress)
 8. **Future**: Convert remaining modules
 9. **Future**: Test hot-loading with state preservation
 10. **Future**: Add build.rs validation
@@ -118,12 +118,14 @@ crate-type = ["cdylib"]
 - ❌ Direct trait method calls (needs trait implementations)
 - 🟡 Hot-reload functional (infrastructure ready, needs module updates)
 
-## Next Immediate Actions (Session 80)
+## Next Immediate Actions (Session 83)
 
-1. Delete `core/ecs/src/module_exports.rs` (obsolete)
-2. Delete `systems/ecs/src/module_exports.rs` (obsolete)
-3. Convert `core/ecs/src/view/*.rs` to trait definitions
-4. Convert `systems/ecs/src/viewmodel/*.rs` to trait implementations
-5. Add proper exports with `#[no_mangle]` symbols
-6. Test compilation
-7. Test module loading
+1. Complete systems/ecs World module conversion.
+2. Create final lib.rs integration for systems/ecs.
+3. Test compilation for systems/ecs.
+4. Delete `core/ecs/src/module_exports.rs` (obsolete)
+5. Delete `systems/ecs/src/module_exports.rs` (obsolete)
+6. Convert `core/ecs/src/view/*.rs` to trait definitions
+7. Convert `systems/ecs/src/viewmodel/*.rs` to trait implementations
+8. Add proper exports with `#[no_mangle]` symbols
+9. Test module loading

@@ -25,7 +25,7 @@ The entire engine uses MVVM pattern with hot-loadable modules where Core provide
   - **query/** - QueryId, Query, QueryRef, QueryFilter
   - **storage/** - StorageId, Storage, StorageRef
   - **system/** - SystemId, System, SystemRef
-  - **world/** - World, WorldRef (needs update to be lightweight)
+  - **world/** - World, WorldRef (These define the data model for the world, not the runtime facade. Needs update to be lightweight.)
 - **view/** - Associated Types pattern with fragments ✅
   - All fragments (EntityView, ComponentView, etc.) complete
   - EcsView composes all fragments via associated types

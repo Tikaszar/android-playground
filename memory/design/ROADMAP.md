@@ -167,16 +167,17 @@
 - Session 79: Trait-based MVVM modules/* infrastructure ✅
 
 ### Current
-- Session 80: Convert core/ecs and systems/ecs to trait-based MVVM 🔄
+- Session 83: Converting systems/ecs World module to trait-based MVVM 🔄
 
-### Next Steps (Session 81+)
-1. Test module loading with trait-based system
-2. Implement save_state/restore_state for hot-reload
-3. Create build.rs validation
-4. Convert remaining core modules (console, server, client, rendering, ui)
-5. Convert remaining system modules (webgl, ui, console)
-6. Test hot-reload functionality with state preservation
-7. Performance benchmarking
+### Next Steps (Post Session 83)
+1. Complete systems/ecs World module conversion.
+2. Finalize systems/ecs lib.rs integration and test compilation.
+3. Implement save_state/restore_state for hot-reload.
+4. Create build.rs validation.
+5. Convert remaining core modules (console, server, client, rendering, ui).
+6. Convert remaining system modules (webgl, ui, console).
+7. Test hot-reload functionality with state preservation.
+8. Performance benchmarking.
 
 ## Risk Mitigation
 

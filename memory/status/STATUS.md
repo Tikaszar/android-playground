@@ -166,16 +166,16 @@ All 9 IDE plugins are BROKEN (dependencies removed but code unchanged):
 | File | Status | Needs Update |
 |------|--------|--------------|
 | README.md | 🟡 | Architecture changes |
-| memory/architecture/ARCHITECTURE.md | ✅ | Updated Session 79 |
-| memory/architecture/MODULES.md | ✅ | Updated Session 79 |
-| memory/architecture/PATTERNS.md | 🟡 | Needs trait pattern examples |
-| memory/design/DESIGN.md | 🟡 | References old patterns |
-| memory/design/ROADMAP.md | 🟡 | Needs Session 79 progress update |
-| memory/sessions/HISTORY.md | 🟡 | Needs Session 79 entry |
-| memory/sessions/CONTEXT.md | 🟡 | Needs Session 79 completion |
-| memory/sessions/CURRENT_SESSION.md | 🟡 | Needs Session 80 update |
+| memory/architecture/ARCHITECTURE.md | ✅ | Updated (updates in progress) |
+| memory/architecture/MODULES.md | ✅ | Updated (updates in progress) |
+| memory/architecture/PATTERNS.md | ✅ | Updated (updates in progress) |
+| memory/design/DESIGN.md | ✅ | Updated (updates in progress) |
+| memory/design/ROADMAP.md | ✅ | Updated (updates in progress) |
+| memory/sessions/HISTORY.md | ✅ | Updated (updates in progress) |
+| memory/sessions/CONTEXT.md | ✅ | Current |
+| memory/sessions/CURRENT_SESSION.md | ✅ | Current |
 | memory/status/STATUS.md | ✅ | This file - just updated |
-| memory/status/VIOLATIONS.md | ✅ | Updated Session 80 |
+| memory/status/VIOLATIONS.md | ✅ | Updated (updates in progress) |
 | CLAUDE.md | ✅ | Current |
 
 ## Progress Summary
@@ -210,12 +210,14 @@ All 9 IDE plugins are BROKEN (dependencies removed but code unchanged):
 - build.rs validation
 - Hot-reload testing with state preservation
 
-## Next Session Priority (Session 80)
+## Next Session Priority (Session 83)
 
-1. Delete obsolete `core/ecs/src/module_exports.rs`
-2. Delete obsolete `systems/ecs/src/module_exports.rs`
-3. Convert `core/ecs/src/view/*.rs` to trait definitions
-4. Convert `systems/ecs/src/viewmodel/*.rs` to trait implementations
-5. Add `#[no_mangle]` exports for View/ViewModel/Models
-6. Test compilation
-7. Test module loading
+1. Complete systems/ecs World module conversion.
+2. Create final lib.rs integration for systems/ecs.
+3. Test compilation for systems/ecs.
+4. Delete obsolete `core/ecs/src/module_exports.rs`
+5. Delete obsolete `systems/ecs/src/module_exports.rs`
+6. Convert `core/ecs/src/view/*.rs` to trait definitions
+7. Convert `systems/ecs/src/viewmodel/*.rs` to trait implementations
+8. Add `#[no_mangle]` exports for View/ViewModel/Models
+9. Test module loading

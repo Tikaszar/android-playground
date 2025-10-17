@@ -96,20 +96,14 @@ impl<T> ComponentPool<T> {
 ```
 
 ### World with Component Pools
+The `World` object, acting as a stateless facade, does not directly store component pools. Instead, it provides access to them via its facade methods, delegating to the `BindingRegistry` or the ViewModel responsible for managing these pools.
+
 ```rust
-pub struct World {
-    // OLD: Serialized components with global lock
-    // components: Shared<HashMap<EntityId, HashMap<ComponentId, Bytes>>>,
+// The World facade provides access to component pools,
+// which are managed by the BindingRegistry or a ViewModel.
 
-    // NEW: Native component pools, no global lock
-    component_pools: HashMap<ComponentId, Box<dyn Any>>,  // Type-erased pools
-
-    // Or better: Use a trait without dyn
-    component_pools: HashMap<ComponentId, ComponentPoolHandle>,
-}
-
-// Access pattern
-let pool = world.get_pool::<Position>()?;  // Get specific pool
+// Access pattern (via World facade)
+let pool = world.get_pool::<Position>()?;  // World delegates this call
 let pos = pool.get(entity_id)?;  // Direct access, no serialization
 pos.x.store(10.0);  // Lock-free update
 ```
@@ -130,10 +124,9 @@ pub async fn function_name(
 ) -> ModuleResult<ReturnType> {
     // Direct implementation - no deserialization needed
 
-    // Access component pools directly
+    // Access component pools directly (World acts as a facade, delegating to the BindingRegistry)
     let positions = world.get_pool::<Position>()?;
     let pos = positions.get(entity_id)?;
-
     // Direct atomic operations
     pos.x.store(pos.x.load() + delta_x);
     pos.y.store(pos.y.load() + delta_y);
@@ -455,17 +448,11 @@ pub struct ModuleState {
 let component_bytes = bincode::serialize(&position)?;
 components.insert(entity_id, component_bytes);
 
-// ✅ DO THIS INSTEAD (Session 76)
-let pool = world.get_pool::<Position>()?;
-pool.insert(entity_id, position);  // Store native type
-```
-
-### WRONG: Coarse locking
-```rust
 // ❌ NEVER DO THIS
 pub struct World {
     everything: Shared<AllTheData>,  // Single lock for everything
 }
+// This is an anti-pattern because the World object should be a stateless facade, not a data holder.
 
 // ✅ DO THIS INSTEAD (Session 76)
 pub struct Position {
@@ -762,70 +749,14 @@ let entity = entity_view.spawn_entity(&world, components).await?;
 entity_view.despawn_entity(&world, entity).await?;
 ```
 
-## ECS Facade Pattern (Session 81 Design)
-
-The concurrent `BindingRegistry` enables `systems/ecs` to act as a pure facade. The `World` object becomes a stateless pass-through that holds a reference to the registry.
-
-```rust
-// In systems/ecs
-pub struct World {
-    registry: Handle<BindingRegistry>, // Handle is Arc
-    // ... other stateless handles or config
-}
-
-impl World {
-    pub fn new(registry: Handle<BindingRegistry>) -> Self {
-        Self { registry }
-    }
-
-    // The World's public API methods become simple pass-through calls
-    // to the underlying BindingRegistry.
-
-    pub fn get_view(&self, view_id: ViewId) -> Option<Handle<dyn ViewTrait>> {
-        self.registry.get_view(view_id)
-    }
-
-    pub async fn get_model(
-        &self,
-        view_id: ViewId,
-        model_type: ModelType,
-        model_id: ModelId,
-    ) -> ModuleResult<Handle<dyn ModelTrait>> {
-        self.registry.get_model(view_id, model_type, model_id).await
-    }
-
-    // Registration can also be passed through, as the registry supports
-    // concurrent writes.
-    pub fn register_view(&self, view: Handle<dyn ViewTrait>) {
-        self.registry.register_view(view);
-    }
-}
-```
-
-## Anti-Patterns to Avoid
-
-### WRONG: Using global World
-```rust
-// ❌ NEVER DO THIS
-static WORLD: Lazy<Handle<World>> = Lazy::new(World::new);
-
-// ✅ DO THIS INSTEAD (Session 76)
-pub struct ModuleState {
-    world: Handle<World>,
-}
-// Pass World as parameter or store in module state
-```
-
-### WRONG: Serializing components
-```rust
 // ❌ NEVER DO THIS
 let component_bytes = bincode::serialize(&position)?;
 components.insert(entity_id, component_bytes);
 
 // ✅ DO THIS INSTEAD (Session 76)
-let pool = world.get_pool::<Position>()?;
+let pool = world.get_pool::<Position>()?;  // World acts as a facade, delegating to the BindingRegistry
 pool.insert(entity_id, position);  // Store native type
-```
+
 
 ### WRONG: Coarse locking
 ```rust
