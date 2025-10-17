@@ -25,41 +25,9 @@
 - Won't compile against new modules/types
 
 **Fix Required**:
-```rust
-// DELETE: core/ecs/src/module_exports.rs (entire file)
-// DELETE: systems/ecs/src/module_exports.rs (entire file)
-
-// CREATE: core/ecs/src/view/*.rs - Trait definitions
-#[async_trait]
-pub trait EntityView: ViewTrait {
-    async fn spawn_entity(&self, world: &World, components: Vec<Component>) -> EcsResult<Entity>;
-    // ... other methods
-}
-
-// CREATE: core/ecs exports
-#[no_mangle]
-pub static PLAYGROUND_VIEW: &dyn ViewTrait = &EcsView;
-
-#[no_mangle]
-pub static PLAYGROUND_MODELS: &[ModelTypeInfo] = &[
-    ModelTypeInfo { model_type: 0x0001, type_name: "Entity" },
-    ModelTypeInfo { model_type: 0x0002, type_name: "Component" },
-];
-
-// CREATE: systems/ecs/src/viewmodel/*.rs - Trait implementations
-pub struct EntityViewModel;
-
-#[async_trait]
-impl EntityView for EntityViewModel {
-    async fn spawn_entity(&self, world: &World, components: Vec<Component>) -> EcsResult<Entity> {
-        // Direct implementation
-    }
-}
-
-// CREATE: systems/ecs exports
-#[no_mangle]
-pub static PLAYGROUND_VIEWMODEL: &dyn ViewModelTrait = &EntityViewModel;
-```
+- **DELETE** `core/ecs/src/module_exports.rs` and `systems/ecs/src/module_exports.rs` entirely.
+- **CONVERT** `core/ecs/src/view/` files to be proper trait definitions.
+- **REWRITE** `systems/ecs/src/viewmodel/` files to implement the new traits with direct `async fn` signatures, removing all serialization.
 
 ### 2. Core/ECS View Layer Needs Trait Definitions
 **Location**: core/ecs/src/view/
@@ -80,13 +48,14 @@ pub static PLAYGROUND_VIEWMODEL: &dyn ViewModelTrait = &EntityViewModel;
 **Location**: systems/ecs/src/viewmodel/
 **Status**: ⚠️ PARTIAL
 **Current**: Has old serialization-based implementations
-**Required**: Convert to trait implementations per Session 79 architecture
+**Required**: Rewrite existing implementations to be compliant with the new trait-based architecture.
 
-**Files to Update**:
-- All `systems/ecs/src/viewmodel/*/*.rs` files
-- Remove serialization signatures
-- Implement View traits directly
-- Use async-trait for async methods
+**Actions**:
+- For each file in `systems/ecs/src/viewmodel/`:
+  1. Change the function signature from the old `Pin<Box<dyn Future>>` and `&[u8]` pattern to the new direct-call `async fn` signature (e.g., `async fn spawn_entity(&self, world: &World, components: Vec<Component>) -> EcsResult<Entity>`).
+  2. Remove all `bincode::deserialize` and `bincode::serialize` calls.
+  3. Adapt the core function logic to work with the direct parameters and return types.
+  4. Wrap the rewritten functions in an `impl TraitName for EcsViewModel` block.
 
 ## Pending - Other Modules Need MVVM Conversion 🟡
 

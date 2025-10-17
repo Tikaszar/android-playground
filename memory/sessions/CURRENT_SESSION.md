@@ -32,20 +32,17 @@ Session 82 fixed the build system to correctly generate version constants:
 
 ## Work Remaining for Future Sessions
 
-### 1. Integrate versions into systems/ecs code
-- Create `systems/ecs/src/version.rs` with generated constants
-- Update `systems/ecs/src/lib.rs` to declare version module
-- Create EcsViewModel struct implementing ViewModelTrait
-- Implement `api_version()` method using API_VERSION
-- Implement `save_state()` and `restore_state()` methods using STATE_FORMAT_VERSION
+### 1. Rewrite systems/ecs to be Trait-Compliant
+- **Clean up**: Delete the obsolete `systems/ecs/src/module_exports.rs` file.
+- **Integrate Build System**: Create `build.rs` and update `Cargo.toml` to link with `playground-build-utils`.
+- **Implement ViewModel**: In `systems/ecs/src/lib.rs`, define the `EcsViewModel` struct and implement the `ViewModelTrait`, including `api_version()`, `save_state()`, and `restore_state()` using the auto-generated version constants.
+- **Rewrite Implementations**: Rewrite the existing function bodies in `systems/ecs/src/viewmodel/` to be compliant with the new `async fn` trait definitions. This involves removing all serialization logic and adapting the core logic to the new direct-call signatures.
+- **Finalize**: Add the `impl EcsViewTrait for EcsViewModel` compile-time check and the `#[no_mangle]` static export for the `PLAYGROUND_VIEWMODEL`.
 
-### 2. Update module_exports.rs or replace with new pattern
-- Decide whether to keep old exports for compatibility
-- Add new trait-based exports alongside old pattern
-
-### 3. Test complete compilation
-- Verify systems/ecs compiles with version integration
-- Test that versions match between core and system
+### 2. Test Complete Compilation and Hot-Reload
+- Verify `systems/ecs` compiles successfully after the rewrite.
+- Perform integration tests to ensure `core/ecs` and `systems/ecs` load and function correctly together.
+- Test the stateful hot-reload functionality.
 
 ## Key Design Decisions Finalized
 
