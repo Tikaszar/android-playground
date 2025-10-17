@@ -41,9 +41,15 @@ indexmap = "2.0"
 rayon = "1.7"
 crossbeam = "0.8"
 
+[build-dependencies]
+playground-build-utils = { path = "../../modules/build-utils" }
+
 [dev-dependencies]
 tokio-test = "0.4"
 criterion = "0.5"
+
+[package.metadata.playground.implements]
+core_path = "../../core/ecs"
 
 [package.metadata.provides]
 core = "playground-core-ecs"

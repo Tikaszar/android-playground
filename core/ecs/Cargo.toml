@@ -19,6 +19,9 @@ futures = { workspace = true }
 bincode = { workspace = true }
 tracing = { workspace = true }
 
+[build-dependencies]
+playground-build-utils = { path = "../../modules/build-utils" }
+
 [dev-dependencies]
 tokio-test = "0.4"
 

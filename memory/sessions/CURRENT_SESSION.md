@@ -1,94 +1,82 @@
-# Current Session - Session 80: Fragment-Based MVVM Infrastructure with Runtime Types
+# Current Session - Session 82: Build System Integration
 
 ## Session Goal
-Add fragment support to MVVM traits for logical grouping of View/ViewModel methods and implement runtime type generation for Models.
+Integrate the automated build system into core/ecs, systems/ecs, and modules/build-utils to enable version generation for hot-reload safety.
 
-## Context from Session 79
-Session 79 completed the modules/* infrastructure with:
-- Trait-based MVVM (ModelTrait, ViewTrait, ViewModelTrait)
-- Triple-nested sharding (ViewId → ModelType → ModelPool)
-- Lock-free Views/ViewModels access
-- Object recycling in pools
-- THE single unsafe block in loader
-- All modules/* packages compile ✅
+## Context from Session 81
+Session 81 completed the design and implementation of:
+- Two-version safety scheme (API Version + State Format Version)
+- Stateful hot-reload with save_state/restore_state methods
+- BindingRegistry refactor with arc-swap for lock-free reads
+- modules/build-utils crate for directory hashing
 
 ## Work Completed ✅
 
-### 1. Runtime Type Generation
-- ✅ Created `model_type_of<T>()` function using TypeId hashing
-- ✅ All ECS models now implement ModelTrait with runtime types
-- ✅ No hardcoded constants, no risk of overlaps
-- ✅ Compile-time type safety maintained
+### 1. Updated modules/build-utils
+- ✅ Added `toml = "0.9.8"` dependency for TOML parsing
+- ✅ Updated `sha2 = "0.11.0-rc.2"` to latest version
+- ✅ Updated `walkdir = "2.5.0"` to latest version
+- ✅ Implemented `generate_versions()` unified function
+- ✅ Implemented `check_if_system_module()` helper
+- ✅ Implemented `get_core_path()` helper with TOML parsing
+- ✅ Core modules generate API_VERSION only
+- ✅ System modules generate API_VERSION + STATE_FORMAT_VERSION
 
-### 2. Associated Types Pattern Implementation
-- ✅ DELETED ViewFragmentTrait and ViewModelFragmentTrait (not needed with associated types)
-- ✅ Updated EcsViewTrait to use Associated Types pattern
-- ✅ Created fragment structs (EntityFragment, ComponentFragment, etc.)
-- ✅ Moved all implementations from view.rs files to fragment.rs files
-- ✅ Updated EcsView to compose fragments via associated types
-- ✅ Deleted all old view.rs files from fragments
-- ✅ Updated all mod.rs files to export fragments
+### 2. Created core/ecs/build.rs
+- ✅ One-line boilerplate: `playground_build_utils::generate_versions()`
+- ✅ Generates `API_VERSION` from hashing `src/view/` directory
+- ✅ Verified: Generated `API_VERSION = 1378979596`
 
-### 2. Fragment Pattern Changes
-- ✅ Each fragment is now its own struct (EntityFragment, ComponentFragment, etc.)
-- ✅ EcsView composes all fragments via fields
-- ✅ Associated types provide compile-time safety
-- ✅ Preserved ALL existing functionality in EventView and WorldView traits
+### 3. Updated core/ecs/Cargo.toml
+- ✅ Added `[build-dependencies]` section
+- ✅ Added `playground-build-utils = { path = "../../modules/build-utils" }`
+
+### 4. Created systems/ecs/build.rs
+- ✅ One-line boilerplate: `playground_build_utils::generate_versions()`
+- ✅ Detects System module via metadata
+- ✅ Reads core_path from Cargo.toml metadata
+
+### 5. Updated systems/ecs/Cargo.toml
+- ✅ Added `[build-dependencies]` section
+- ✅ Added `playground-build-utils = { path = "../../modules/build-utils" }`
+- ✅ Added `[package.metadata.playground.implements]` section
+- ✅ Added `core_path = "../../core/ecs"`
 
 ## Work Remaining
 
-### 1. Fix Remaining Compilation Issues
-- Fix WorldView trait to include missing methods (save_world_state, load_world_state, etc.)
-- Ensure all fragments compile correctly
+### 1. Update core/ecs to use generated API_VERSION
+- Add `include!(concat!(env!("OUT_DIR"), "/versions.rs"));` to lib.rs
+- Implement `api_version()` method in EcsView using API_VERSION constant
 
-### 2. Convert systems/ecs to Fragment Implementations
-- Create fragment structs for ViewModel implementations
-- Update EcsViewModel to use associated types pattern
-- Delete obsolete module_exports.rs
+### 2. Update systems/ecs to use generated versions
+- Add `include!(concat!(env!("OUT_DIR"), "/versions.rs"));` to lib.rs
+- Implement `api_version()` method in EcsViewModel using API_VERSION constant
+- Implement `save_state()` and `restore_state()` methods using STATE_FORMAT_VERSION
 
-### 3. Test Full System
+### 3. Test Full Build
 - Verify core/ecs compiles completely
-- Verify systems/ecs compiles
-- Test module loading
-
-### 4. Plan for Session 81
-- **Implement `BindingRegistry` Refactor**: Change `modules/binding` to use the flattened, concurrent map with `arc-swap`.
-- **Implement Build System**: Create the central `modules/build-utils` crate and add the boilerplate `build.rs` hooks and `Cargo.toml` metadata to all `Core` and `System` modules to generate the automated version constants.
-- **Implement Stateful Hot-Reload**: Update `ViewModelTrait` with optional state methods. Update the loader and registry to perform the version checks and orchestrate the save/restore process.
+- Verify systems/ecs compiles completely
+- Verify versions match between core and system
 
 ## Key Design Decisions
 
-### Fragment Pattern
-Fragments are **source code organization** not runtime organization:
-- One View/ViewModel trait object at runtime (still single symbol export)
-- Multiple fragment traits in source code for logical grouping
-- Composite trait (EcsViewTrait) enforces all fragments at compile time
+### Build System Pattern
+The build system uses a "Boilerplate Hook" pattern:
+- Central logic in `modules/build-utils/src/lib.rs`
+- One-line `build.rs` in each module
+- Metadata in `Cargo.toml` for System modules
+- Generated constants in `OUT_DIR/versions.rs`
 
-### Compile-Time Enforcement
-```rust
-pub trait EcsViewTrait:
-    ViewTrait +
-    EntityView +
-    ComponentView +
-    // ... all fragments
-{}
-
-impl EcsViewTrait for EcsViewModel {}  // Won't compile if missing any fragment
-```
-
-### Feature Gates (Future)
-```rust
-pub trait RenderingViewTrait:
-    ViewTrait +
-    WindowView +
-    #[cfg(feature = "shaders")]
-    + ShaderView
-{}
-```
+### Version Generation
+- **Core modules**: Hash `src/view/` → API_VERSION
+- **System modules**: Hash core's `src/view/` → API_VERSION, hash own `src/model/` → STATE_FORMAT_VERSION
+- Deterministic via SHA256 hashing
+- Automatic on every build
 
 ## Success Criteria
-- ✅ modules/types has fragment support
-- ⏳ core/ecs uses fragment traits
-- ⏳ systems/ecs implements fragments
-- ⏳ Compile-time enforcement works
-- ⏳ All packages compile
+- ✅ modules/build-utils has unified generate_versions() function
+- ✅ core/ecs has build.rs and generates API_VERSION
+- ✅ systems/ecs has build.rs and metadata
+- ⏳ core/ecs uses API_VERSION constant
+- ⏳ systems/ecs uses both version constants
+- ⏳ Full system compiles
