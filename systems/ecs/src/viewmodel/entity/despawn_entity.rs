@@ -1,44 +1,24 @@
 //! Despawn an entity
 
-use playground_modules_types::{ModuleResult, ModuleError};
-use playground_core_ecs::{EntityId, Generation};
-use std::pin::Pin;
-use std::future::Future;
-
-#[derive(serde::Deserialize)]
-struct DespawnEntityArgs {
-    id: EntityId,
-    generation: Generation,
-}
+use playground_core_ecs::{World, Entity, EcsResult, EcsError};
 
 /// Despawn an entity
-pub fn despawn_entity(args: &[u8]) -> Pin<Box<dyn Future<Output = ModuleResult<Vec<u8>>> + Send>> {
-    let args = args.to_vec();
-    Box::pin(async move {
-        // Deserialize entity from args
-        let entity_args: DespawnEntityArgs = bincode::deserialize(&args)
-            .map_err(|e| ModuleError::DeserializationError(e.to_string()))?;
+pub async fn despawn_entity(world: &World, entity: Entity) -> EcsResult<()> {
+    // Remove entity from entities map
+    let removed = {
+        let mut entities = world.entities.write().await;
+        entities.remove(&entity.id).is_some()
+    };
 
-        // Get World
-        let world = crate::state::get_world()
-            .map_err(|e| ModuleError::Generic(e))?;
+    if !removed {
+        return Err(EcsError::EntityNotFound(entity.id));
+    }
 
-        // Remove entity from entities map
-        let removed = {
-            let mut entities = world.entities.write().await;
-            entities.remove(&entity_args.id).is_some()
-        };
+    // Remove all components for this entity
+    {
+        let mut components = world.components.write().await;
+        components.remove(&entity.id);
+    }
 
-        if !removed {
-            return Err(ModuleError::Generic(format!("Entity {:?} not found", entity_args.id)));
-        }
-
-        // Remove all components for this entity
-        {
-            let mut components = world.components.write().await;
-            components.remove(&entity_args.id);
-        }
-
-        Ok(Vec::new())
-    })
+    Ok(())
 }
