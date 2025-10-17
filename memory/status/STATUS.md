@@ -1,28 +1,29 @@
 # Status - Current Implementation Status
 
 ## Build Status
-- **Last known**: ✅ modules/types fragment support complete (Session 80)
-- **Session 80**: Added fragment traits to modules/types ✅
-- **Working**: modules/* (types with fragments, loader, binding, registry, resolver)
-- **Needs Update**: core/ecs and systems/ecs to use fragment traits
+- **Last known**: ✅ Automated versioning system complete (Session 82)
+- **Session 82**: Fixed build-utils and integrated core/ecs with version system ✅
+- **Working**: modules/* (all packages), core/ecs with version integration
+- **Needs Update**: systems/ecs to integrate version constants into code
 
 ## Package Implementation Status
 
-### Modules Infrastructure ✅ COMPLETE (Sessions 79-80)
+### Modules Infrastructure ✅ COMPLETE (Sessions 79-82)
 | Package | Status | Notes |
 |---------|--------|-------|
 | modules/types | ✅ | Trait-based MVVM with fragments (Session 80) |
 | modules/loader | ✅ | THE single unsafe block, extracts trait objects |
-| modules/binding | ✅ | Concurrent, flattened binding map with `arc-swap`, object recycling. |
+| modules/binding | ✅ | Concurrent, flattened binding map with `arc-swap`, object recycling |
 | modules/resolver | ✅ | Cargo.toml parsing |
 | modules/registry | ✅ | Runtime module orchestration |
+| modules/build-utils | ✅ | Automated version generation (Session 82) |
 
 ### Core Layer (MVVM Pattern)
 
 | Package | Model | View | Notes |
 |---------|-------|------|-------|
 | core/types | ✅ | N/A | ThreadSafe primitives (Handle, Shared, Atomic, Once) |
-| core/ecs | ✅ | ⚠️ | Model complete (Sessions 71); View needs trait conversion |
+| core/ecs | ✅ | ✅ | Model+View complete; Integrated with version system (Session 82) |
 | core/console | ⚠️ | ⚠️ | Needs MVVM conversion |
 | core/server | ⚠️ | ⚠️ | Needs MVVM conversion |
 | core/client | ⚠️ | ⚠️ | Needs MVVM conversion |
@@ -68,9 +69,11 @@ All 9 IDE plugins are BROKEN (dependencies removed but code unchanged):
 ## Feature Implementation
 
 ### Working Features ✅
+- Automated version generation system (Session 82)
+- API_VERSION generation from view+model hash
+- STATE_FORMAT_VERSION generation from model hash
 - Fragment-based MVVM infrastructure (Session 80)
 - Trait-based MVVM (ModelTrait, ViewTrait, ViewModelTrait)
-- Fragment traits (ViewFragmentTrait, ViewModelFragmentTrait)
 - Concurrent, flattened binding map with non-blocking updates
 - Lock-free View/ViewModel access
 - Object recycling for Models
@@ -178,14 +181,16 @@ All 9 IDE plugins are BROKEN (dependencies removed but code unchanged):
 ## Progress Summary
 
 ### Completed ✅
+- Session 82: Automated version generation system with correct hashing ✅
+- Session 82: core/ecs integrated with version system ✅
 - Session 80: Fragment-based MVVM infrastructure in modules/types ✅
 - Session 79: Trait-based MVVM module system infrastructure
 - Session 77: ThreadSafe primitives and ComponentPool design
 - Session 71-73: Core/ECS Model+View layers (data structures)
 - Session 74-75: Systems/ECS ViewModel stubs
-- modules/* infrastructure (all 5 packages)
+- modules/* infrastructure (all 6 packages including build-utils)
 - THE single unsafe block implementation
-- Triple-nested sharding architecture
+- Concurrent binding registry with arc-swap
 - Object recycling system
 - Fragment traits for logical grouping
 

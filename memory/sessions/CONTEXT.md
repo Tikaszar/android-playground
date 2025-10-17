@@ -1,7 +1,26 @@
 # Context - Session Continuity
 
-## Session 82 In Progress 🔄
-Integrating automated build system for version generation in core/ecs, systems/ecs, and modules/build-utils.
+## Session 82 Complete ✅
+Fixed automated build system to correctly generate version constants for hot-reload safety.
+
+### What Was Completed
+1. ✅ Fixed `generate_api_version()` to hash BOTH view AND model directories
+2. ✅ Core modules: API_VERSION = hash(src/view/ + src/model/)
+3. ✅ System modules: API_VERSION = hash(core's view + model), STATE_FORMAT_VERSION = hash(core's model)
+4. ✅ Fixed TOML parsing in `get_core_path()` to use `toml::from_str()`
+5. ✅ Integrated core/ecs with version system (compiles successfully)
+6. ✅ Verified systems/ecs generates correct version constants
+
+### Key Fixes
+- **API_VERSION** now represents the complete API contract (view + model)
+- **STATE_FORMAT_VERSION** tracks core's model structure for state serialization
+- TOML parsing fixed to correctly read nested metadata
+- Version constants verified to match between core/ecs and systems/ecs
+
+### Verified Version Constants
+- core/ecs: API_VERSION = 3428876969
+- systems/ecs: API_VERSION = 3428876969 ✅ (matches!)
+- systems/ecs: STATE_FORMAT_VERSION = 935823075
 
 ## Session 81 Complete ✅
 Completed design and infrastructure for automated versioning and stateful hot-reload:

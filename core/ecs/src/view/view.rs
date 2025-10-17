@@ -45,6 +45,10 @@ impl ViewTrait for EcsView {
     fn view_id(&self) -> ViewId {
         crate::ECS_VIEW_ID
     }
+
+    fn api_version(&self) -> u32 {
+        crate::API_VERSION
+    }
 }
 
 // Implement EcsViewTrait with associated types

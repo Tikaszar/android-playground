@@ -11,10 +11,14 @@ pub const ECS_VIEW_ID: ViewId = 0x1000_0000_0000_0001;
 // Public API
 pub mod error;
 pub mod model;
+pub mod version;
 pub mod view;
 
 // Re-export error types
 pub use error::{EcsError, EcsResult};
+
+// Re-export version constant
+pub use version::API_VERSION;
 
 // Re-export all model types
 pub use model::{
