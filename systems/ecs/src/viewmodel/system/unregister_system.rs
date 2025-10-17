@@ -1,13 +1,16 @@
 //! Unregister a system
 
-use playground_modules_types::{ModuleResult, ModuleError};
-use std::pin::Pin;
-use std::future::Future;
+use playground_core_ecs::{World, System, EcsResult};
 
-pub fn unregister_system(args: &[u8]) -> Pin<Box<dyn Future<Output = ModuleResult<Vec<u8>>> + Send>> {
-    let args = args.to_vec();
-    Box::pin(async move {
-        // TODO: Implement unregister_system
-        Err(ModuleError::Generic("unregister_system".to_string()))
-    })
+/// Unregister a system
+pub async fn unregister_system(world: &World, system: &System) -> EcsResult<()> {
+    let system_id = system.id;
+
+    // Remove system metadata from World
+    {
+        let mut systems = world.systems.write().await;
+        systems.remove(&system_id);
+    }
+
+    Ok(())
 }

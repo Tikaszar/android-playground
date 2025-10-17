@@ -1,13 +1,12 @@
 //! Run multiple systems
 
-use playground_modules_types::{ModuleResult, ModuleError};
-use std::pin::Pin;
-use std::future::Future;
+use playground_core_ecs::{World, System, EcsResult};
+use crate::viewmodel::system::run_system::run_system;
 
-pub fn run_systems(args: &[u8]) -> Pin<Box<dyn Future<Output = ModuleResult<Vec<u8>>> + Send>> {
-    let args = args.to_vec();
-    Box::pin(async move {
-        // TODO: Implement run_systems
-        Err(ModuleError::Generic("run_systems".to_string()))
-    })
+/// Run multiple systems
+pub async fn run_systems(world: &World, systems: Vec<System>) -> EcsResult<()> {
+    for system in systems {
+        run_system(world, &system).await?;
+    }
+    Ok(())
 }

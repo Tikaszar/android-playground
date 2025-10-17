@@ -41,15 +41,28 @@ All storage functions converted to new signatures:
 - export_json, import_json
 - get_storage_size
 
-**Progress: 76/114 methods complete (67%)**
+### 6. System Module (17/17 methods) ✅ COMPLETE
+All system functions converted to new signatures:
+- register_system, unregister_system
+- run_system, run_systems
+- schedule_systems (topological sort)
+- step_systems
+- get_system, get_all_systems
+- enable_system, disable_system, is_system_enabled
+- get_system_stats, get_system_dependencies
+- update_system_dependencies
+- get_dependent_systems
+- system_exists
+- clear_system_stats
+
+**Progress: 93/114 methods complete (82%)**
 
 ## Work Remaining
 
 ### Module Conversions Still Needed
-- ⏳ System: 17 files to convert
 - ⏳ World: 21 files to convert
 
-**Total remaining: 38 files**
+**Total remaining: 21 files**
 
 ### Final Integration Steps
 - ⏳ Create new lib.rs with EcsViewModel struct
@@ -63,9 +76,9 @@ All storage functions converted to new signatures:
 - ✅ Direct async functions
 - ✅ Proper error handling
 - ✅ Complete implementations (no TODOs)
+- ✅ Topological sort for system scheduling
 
 ## Next Session Priorities
-1. Convert System module (17 files)
-2. Convert World module (21 files)
-3. Create final lib.rs integration
-4. Test compilation
+1. Convert World module (21 files)
+2. Create final lib.rs integration
+3. Test compilation

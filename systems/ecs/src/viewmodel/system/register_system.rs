@@ -1,13 +1,26 @@
 //! Register a new system
 
-use playground_modules_types::{ModuleResult, ModuleError};
-use std::pin::Pin;
-use std::future::Future;
+use playground_core_ecs::{World, System, SystemId, QueryId, EcsResult};
+use playground_modules_types::handle;
 
-pub fn register_system(args: &[u8]) -> Pin<Box<dyn Future<Output = ModuleResult<Vec<u8>>> + Send>> {
-    let args = args.to_vec();
-    Box::pin(async move {
-        // TODO: Implement register_system
-        Err(ModuleError::Generic("register_system".to_string()))
-    })
+/// Register a new system
+pub async fn register_system(
+    world: &World,
+    name: String,
+    query: QueryId,
+    dependencies: Vec<SystemId>
+) -> EcsResult<System> {
+    // Generate new system ID
+    let system_id = SystemId(world.next_system_id.fetch_add(1) as u32);
+
+    // Store system metadata in World
+    {
+        let mut systems = world.systems.write().await;
+        systems.insert(system_id, (name.clone(), query, dependencies.clone()));
+    }
+
+    // Create System handle
+    let system = System::new(system_id, name, query, dependencies, handle(world.clone()));
+
+    Ok(system)
 }

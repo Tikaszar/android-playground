@@ -1,13 +1,21 @@
 //! Get a system by ID
 
-use playground_modules_types::{ModuleResult, ModuleError};
-use std::pin::Pin;
-use std::future::Future;
+use playground_core_ecs::{World, System, SystemId, EcsResult};
+use playground_modules_types::handle;
 
-pub fn get_system(args: &[u8]) -> Pin<Box<dyn Future<Output = ModuleResult<Vec<u8>>> + Send>> {
-    let args = args.to_vec();
-    Box::pin(async move {
-        // TODO: Implement get_system
-        Err(ModuleError::Generic("get_system".to_string()))
-    })
+/// Get a system by ID
+pub async fn get_system(world: &World, system_id: SystemId) -> EcsResult<System> {
+    let systems = world.systems.read().await;
+
+    if let Some((name, query, dependencies)) = systems.get(&system_id) {
+        Ok(System::new(
+            system_id,
+            name.clone(),
+            *query,
+            dependencies.clone(),
+            handle(world.clone())
+        ))
+    } else {
+        Err(playground_core_ecs::EcsError::SystemNotFound(format!("{:?}", system_id)))
+    }
 }

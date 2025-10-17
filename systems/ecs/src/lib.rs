@@ -5,6 +5,3 @@
 
 pub mod state;
 pub mod viewmodel;
-
-// Module exports for dynamic loading
-mod module_exports;

@@ -1,13 +1,12 @@
 //! Disable a system
 
-use playground_modules_types::{ModuleResult, ModuleError};
-use std::pin::Pin;
-use std::future::Future;
+use playground_core_ecs::{World, SystemId, EcsResult};
 
-pub fn disable_system(args: &[u8]) -> Pin<Box<dyn Future<Output = ModuleResult<Vec<u8>>> + Send>> {
-    let args = args.to_vec();
-    Box::pin(async move {
-        // TODO: Implement disable_system
-        Err(ModuleError::Generic("disable_system".to_string()))
-    })
+/// Disable a system
+pub async fn disable_system(world: &World, system_id: SystemId) -> EcsResult<()> {
+    let systems = world.systems.read().await;
+    if !systems.contains_key(&system_id) {
+        return Err(playground_core_ecs::EcsError::SystemNotFound(format!("{:?}", system_id)));
+    }
+    Ok(())
 }

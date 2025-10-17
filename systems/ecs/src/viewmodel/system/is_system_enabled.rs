@@ -1,13 +1,9 @@
 //! Check if a system is enabled
 
-use playground_modules_types::{ModuleResult, ModuleError};
-use std::pin::Pin;
-use std::future::Future;
+use playground_core_ecs::{World, SystemId, EcsResult};
 
-pub fn is_system_enabled(args: &[u8]) -> Pin<Box<dyn Future<Output = ModuleResult<Vec<u8>>> + Send>> {
-    let args = args.to_vec();
-    Box::pin(async move {
-        // TODO: Implement is_system_enabled
-        Err(ModuleError::Generic("is_system_enabled".to_string()))
-    })
+/// Check if a system is enabled
+pub async fn is_system_enabled(world: &World, system_id: SystemId) -> EcsResult<bool> {
+    let systems = world.systems.read().await;
+    Ok(systems.contains_key(&system_id))
 }

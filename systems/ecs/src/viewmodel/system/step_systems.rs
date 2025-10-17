@@ -1,13 +1,16 @@
 //! Execute all systems in dependency order
 
-use playground_modules_types::{ModuleResult, ModuleError};
-use std::pin::Pin;
-use std::future::Future;
+use playground_core_ecs::{World, EcsResult};
+use crate::viewmodel::system::schedule_systems::schedule_systems;
+use crate::viewmodel::system::run_system::run_system;
 
-pub fn step_systems(args: &[u8]) -> Pin<Box<dyn Future<Output = ModuleResult<Vec<u8>>> + Send>> {
-    let args = args.to_vec();
-    Box::pin(async move {
-        // TODO: Implement step_systems
-        Err(ModuleError::Generic("step_systems".to_string()))
-    })
+/// Execute all systems in dependency order
+pub async fn step_systems(world: &World, _delta_time: f32) -> EcsResult<()> {
+    let scheduled = schedule_systems(world).await?;
+
+    for system in scheduled {
+        run_system(world, &system).await?;
+    }
+
+    Ok(())
 }

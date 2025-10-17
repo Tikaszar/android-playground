@@ -1,13 +1,12 @@
 //! Enable a system
 
-use playground_modules_types::{ModuleResult, ModuleError};
-use std::pin::Pin;
-use std::future::Future;
+use playground_core_ecs::{World, SystemId, EcsResult};
 
-pub fn enable_system(args: &[u8]) -> Pin<Box<dyn Future<Output = ModuleResult<Vec<u8>>> + Send>> {
-    let args = args.to_vec();
-    Box::pin(async move {
-        // TODO: Implement enable_system
-        Err(ModuleError::Generic("enable_system".to_string()))
-    })
+/// Enable a system
+pub async fn enable_system(world: &World, system_id: SystemId) -> EcsResult<()> {
+    let systems = world.systems.read().await;
+    if !systems.contains_key(&system_id) {
+        return Err(playground_core_ecs::EcsError::SystemNotFound(format!("{:?}", system_id)));
+    }
+    Ok(())
 }

@@ -1,13 +1,22 @@
 //! Get all registered systems
 
-use playground_modules_types::{ModuleResult, ModuleError};
-use std::pin::Pin;
-use std::future::Future;
+use playground_core_ecs::{World, System, EcsResult};
+use playground_modules_types::handle;
 
-pub fn get_all_systems(args: &[u8]) -> Pin<Box<dyn Future<Output = ModuleResult<Vec<u8>>> + Send>> {
-    let args = args.to_vec();
-    Box::pin(async move {
-        // TODO: Implement get_all_systems
-        Err(ModuleError::Generic("get_all_systems".to_string()))
-    })
+/// Get all registered systems
+pub async fn get_all_systems(world: &World) -> EcsResult<Vec<System>> {
+    let systems = world.systems.read().await;
+
+    let mut result = Vec::new();
+    for (system_id, (name, query, dependencies)) in systems.iter() {
+        result.push(System::new(
+            *system_id,
+            name.clone(),
+            *query,
+            dependencies.clone(),
+            handle(world.clone())
+        ));
+    }
+
+    Ok(result)
 }

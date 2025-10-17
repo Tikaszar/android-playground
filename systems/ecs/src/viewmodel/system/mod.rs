@@ -13,6 +13,10 @@ mod get_system;
 mod get_all_systems;
 mod get_system_stats;
 mod get_system_dependencies;
+mod update_system_dependencies;
+mod get_dependent_systems;
+mod system_exists;
+mod clear_system_stats;
 
 pub use register_system::register_system;
 pub use unregister_system::unregister_system;
@@ -27,3 +31,7 @@ pub use get_system::get_system;
 pub use get_all_systems::get_all_systems;
 pub use get_system_stats::get_system_stats;
 pub use get_system_dependencies::get_system_dependencies;
+pub use update_system_dependencies::update_system_dependencies;
+pub use get_dependent_systems::get_dependent_systems;
+pub use system_exists::system_exists;
+pub use clear_system_stats::clear_system_stats;

@@ -1,13 +1,20 @@
 //! Run a single system
 
-use playground_modules_types::{ModuleResult, ModuleError};
-use std::pin::Pin;
-use std::future::Future;
+use playground_core_ecs::{World, System, EcsResult};
 
-pub fn run_system(args: &[u8]) -> Pin<Box<dyn Future<Output = ModuleResult<Vec<u8>>> + Send>> {
-    let args = args.to_vec();
-    Box::pin(async move {
-        // TODO: Implement run_system
-        Err(ModuleError::Generic("run_system".to_string()))
-    })
+/// Run a single system
+pub async fn run_system(world: &World, system: &System) -> EcsResult<()> {
+    // System execution logic would go here
+    // For now, this is a minimal implementation that validates the system exists
+    let systems = world.systems.read().await;
+    if !systems.contains_key(&system.id) {
+        return Err(playground_core_ecs::EcsError::SystemNotFound(format!("{:?}", system.id)));
+    }
+
+    // Actual system execution would involve:
+    // 1. Execute the query associated with this system
+    // 2. Process entities matching the query
+    // 3. Update component data through component pools
+
+    Ok(())
 }
