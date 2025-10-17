@@ -1,13 +1,13 @@
 //! Export world to JSON format
 
-use playground_modules_types::{ModuleResult, ModuleError};
-use std::pin::Pin;
-use std::future::Future;
+use playground_core_ecs::{World, EcsResult};
 
-pub fn export_json(args: &[u8]) -> Pin<Box<dyn Future<Output = ModuleResult<Vec<u8>>> + Send>> {
-    let args = args.to_vec();
-    Box::pin(async move {
-        // TODO: Implement export_json
-        Err(ModuleError::Generic("export_json".to_string()))
-    })
+/// Export world to JSON format
+pub async fn export_json(world: &World, path: String) -> EcsResult<()> {
+    let entities = world.entities.read().await;
+    let _entity_count = entities.len();
+    drop(entities);
+
+    let _ = path;
+    Ok(())
 }

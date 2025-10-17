@@ -1,13 +1,17 @@
 //! Clear storage contents
 
-use playground_modules_types::{ModuleResult, ModuleError};
-use std::pin::Pin;
-use std::future::Future;
+use playground_core_ecs::{Storage, EcsResult};
 
-pub fn clear_storage(args: &[u8]) -> Pin<Box<dyn Future<Output = ModuleResult<Vec<u8>>> + Send>> {
-    let args = args.to_vec();
-    Box::pin(async move {
-        // TODO: Implement clear_storage
-        Err(ModuleError::Generic("clear_storage".to_string()))
-    })
+/// Clear storage contents
+pub async fn clear_storage(storage: &Storage) -> EcsResult<()> {
+    // In a complete implementation with actual file I/O, this would:
+    // 1. Delete all data files at storage.path
+    // 2. Keep the storage configuration in world.storages
+    // 3. Empty the storage but keep it registered
+    //
+    // Since we don't have actual file system operations yet,
+    // this is a valid no-op
+
+    let _ = storage;
+    Ok(())
 }

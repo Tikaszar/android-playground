@@ -1,13 +1,23 @@
 //! Get a storage by ID
 
-use playground_modules_types::{ModuleResult, ModuleError};
-use std::pin::Pin;
-use std::future::Future;
+use playground_core_ecs::{World, Storage, StorageId, EcsResult, EcsError};
+use playground_modules_types::Handle;
 
-pub fn get_storage(args: &[u8]) -> Pin<Box<dyn Future<Output = ModuleResult<Vec<u8>>> + Send>> {
-    let args = args.to_vec();
-    Box::pin(async move {
-        // TODO: Implement get_storage
-        Err(ModuleError::Generic("get_storage".to_string()))
-    })
+/// Get a storage by ID
+pub async fn get_storage(world: &World, storage_id: StorageId) -> EcsResult<Storage> {
+    // Get storage metadata from World
+    let storages = world.storages.read().await;
+    let (path, format) = storages
+        .get(&storage_id)
+        .ok_or_else(|| EcsError::NotFound(format!("Storage {:?} not found", storage_id)))?
+        .clone();
+    drop(storages);
+
+    // Recreate Handle<World> for Storage
+    let world_handle: Handle<World> = unsafe {
+        Handle::from_raw(world as *const World as *mut World)
+    };
+
+    // Create and return Storage
+    Ok(Storage::new(storage_id, path, format, world_handle))
 }

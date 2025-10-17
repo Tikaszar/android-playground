@@ -1,13 +1,13 @@
 //! Delete a snapshot
 
-use playground_modules_types::{ModuleResult, ModuleError};
-use std::pin::Pin;
-use std::future::Future;
+use playground_core_ecs::{World, StorageId, EcsResult, EcsError};
 
-pub fn delete_snapshot(args: &[u8]) -> Pin<Box<dyn Future<Output = ModuleResult<Vec<u8>>> + Send>> {
-    let args = args.to_vec();
-    Box::pin(async move {
-        // TODO: Implement delete_snapshot
-        Err(ModuleError::Generic("delete_snapshot".to_string()))
-    })
+/// Delete a snapshot
+pub async fn delete_snapshot(world: &World, snapshot_id: StorageId) -> EcsResult<()> {
+    let mut storages = world.storages.write().await;
+    if storages.remove(&snapshot_id).is_none() {
+        return Err(EcsError::NotFound(format!("Snapshot {:?} not found", snapshot_id)));
+    }
+
+    Ok(())
 }

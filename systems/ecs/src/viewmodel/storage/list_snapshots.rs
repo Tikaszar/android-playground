@@ -1,13 +1,19 @@
 //! List all snapshots
 
-use playground_modules_types::{ModuleResult, ModuleError};
-use std::pin::Pin;
-use std::future::Future;
+use playground_core_ecs::{World, StorageId, EcsResult};
 
-pub fn list_snapshots(args: &[u8]) -> Pin<Box<dyn Future<Output = ModuleResult<Vec<u8>>> + Send>> {
-    let args = args.to_vec();
-    Box::pin(async move {
-        // TODO: Implement list_snapshots
-        Err(ModuleError::Generic("list_snapshots".to_string()))
-    })
+/// List all snapshots
+pub async fn list_snapshots(world: &World) -> EcsResult<Vec<(StorageId, String)>> {
+    let storages = world.storages.read().await;
+
+    let snapshots: Vec<(StorageId, String)> = storages
+        .iter()
+        .filter(|(_, (_, format))| format == "snapshot")
+        .map(|(id, (path, _))| {
+            let name = path.strip_prefix("snapshots/").unwrap_or(path).to_string();
+            (*id, name)
+        })
+        .collect();
+
+    Ok(snapshots)
 }

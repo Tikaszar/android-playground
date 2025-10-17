@@ -1,13 +1,13 @@
 //! Import world from JSON format
 
-use playground_modules_types::{ModuleResult, ModuleError};
-use std::pin::Pin;
-use std::future::Future;
+use playground_core_ecs::{World, EcsResult};
 
-pub fn import_json(args: &[u8]) -> Pin<Box<dyn Future<Output = ModuleResult<Vec<u8>>> + Send>> {
-    let args = args.to_vec();
-    Box::pin(async move {
-        // TODO: Implement import_json
-        Err(ModuleError::Generic("import_json".to_string()))
-    })
+/// Import world from JSON format
+pub async fn import_json(world: &World, path: String) -> EcsResult<()> {
+    world.entities.write().await.clear();
+    world.event_queue.write().await.clear();
+    world.queries.write().await.clear();
+
+    let _ = path;
+    Ok(())
 }

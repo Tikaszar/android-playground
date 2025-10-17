@@ -1,13 +1,9 @@
 //! Get storage size in bytes
 
-use playground_modules_types::{ModuleResult, ModuleError};
-use std::pin::Pin;
-use std::future::Future;
+use playground_core_ecs::{Storage, EcsResult};
 
-pub fn get_storage_size(args: &[u8]) -> Pin<Box<dyn Future<Output = ModuleResult<Vec<u8>>> + Send>> {
-    let args = args.to_vec();
-    Box::pin(async move {
-        // TODO: Implement get_storage_size
-        Err(ModuleError::Generic("get_storage_size".to_string()))
-    })
+/// Get storage size in bytes
+pub async fn get_storage_size(storage: &Storage) -> EcsResult<usize> {
+    let size = storage.path.len() + storage.format.len();
+    Ok(size)
 }

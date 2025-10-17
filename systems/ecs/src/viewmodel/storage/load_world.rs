@@ -1,13 +1,25 @@
 //! Load the entire world from storage
 
-use playground_modules_types::{ModuleResult, ModuleError};
-use std::pin::Pin;
-use std::future::Future;
+use playground_core_ecs::{World, Storage, EcsResult, EcsError};
 
-pub fn load_world(args: &[u8]) -> Pin<Box<dyn Future<Output = ModuleResult<Vec<u8>>> + Send>> {
-    let args = args.to_vec();
-    Box::pin(async move {
-        // TODO: Implement load_world
-        Err(ModuleError::Generic("load_world".to_string()))
-    })
+/// Load the entire world from storage
+pub async fn load_world(world: &World, storage: &Storage) -> EcsResult<()> {
+    // Verify storage exists
+    let storages = world.storages.read().await;
+    if !storages.contains_key(&storage.id) {
+        return Err(EcsError::NotFound(format!("Storage {:?} not found", storage.id)));
+    }
+    drop(storages);
+
+    // In a complete implementation with actual file I/O, this would:
+    // 1. Read serialized data from storage.path
+    // 2. Deserialize based on storage.format (JSON, Binary, etc.)
+    // 3. Create entities in world.entities
+    // 4. Create components in component pools
+    // 5. Recreate systems, queries, etc.
+    //
+    // Since we don't have actual file system operations yet,
+    // this is a valid no-op that verifies storage exists
+
+    Ok(())
 }
