@@ -604,63 +604,121 @@ pub fn get_pool<T: Component>(&self) -> &ComponentPool<T> {
 let positions = world.get_pool::<Position>();  // Always correct type
 ```
 
-## Build Validation Pattern (Session 81 Design)
+## Build & Versioning Pattern (Session 81 Design)
 
-To guarantee dependencies at compile-time, `App` crates use a `build.rs` script to validate `System` capabilities against their own requirements, using metadata defined in `Cargo.toml`.
 
-### `System` Crate: Declares Provisions
 
-A `System`'s `Cargo.toml` declares which `Core` module it implements and the features it supports.
+This pattern uses a central utility crate (`modules/build-utils`) and a tiny, boilerplate `build.rs` hook in each module to automate versioning and validation.
+
+
+
+### 1. Central Logic: `modules/build-utils`
+
+
+
+This library crate contains a single function, `generate_versions()`, which holds all the logic for parsing `Cargo.toml` files and hashing source code directories to generate version constants.
+
+
+
+### 2. Module Configuration: `Cargo.toml`
+
+
+
+A `System` module declares its build dependency and the `Core` module it implements.
+
+
 
 ```toml
-# In systems/webgl/Cargo.toml
-[package.metadata.playground.provides]
-core_module = "playground-core-rendering"
-features = ["shaders", "textures", "2d"]
+
+# In systems/ecs/Cargo.toml
+
+
+
+[build-dependencies]
+
+playground-build-utils = { path = "../../modules/build-utils" }
+
+
+
+[package.metadata.playground.implements]
+
+# Path for the build script to find the `view` and `model` dirs to hash
+
+core_path = "../core/ecs"
+
 ```
 
-### `App` Crate: Declares Requirements
 
-An `App`'s `Cargo.toml` declares its `Core` module dependencies, required features, and an ordered list of preferred `System` implementations.
 
-```toml
-# In apps/editor/Cargo.toml
-[[package.metadata.playground.requires.core]]
-name = "playground-core-rendering"
-features = ["shaders", "textures"]
-systems = ["playground-systems-vulkan", "playground-systems-webgl"]
-```
+### 3. Boilerplate Hook: `build.rs`
 
-### `App` Crate: `build.rs` Validation Logic
 
-The `build.rs` script in the `App` crate performs the validation.
+
+Every `Core` and `System` module that needs versioning has an identical, one-line `build.rs` file that simply calls the central logic.
+
+
 
 ```rust
-// In apps/editor/build.rs
+
+// In core/ecs/build.rs, systems/ecs/build.rs, etc.
+
 fn main() {
-    // 1. Parse own `requires` metadata from Cargo.toml.
-    let required_cores = parse_app_requirements();
 
-    // 2. For each requirement, parse the `provides` metadata from the
-    //    corresponding System crates' Cargo.toml files.
-    for core in required_cores {
-        let mut found_compatible_system = false;
-        for system_name in core.systems {
-            let system_features = parse_system_provisions(&system_name);
-            if system_features.is_superset_of(&core.features) {
-                found_compatible_system = true;
-                break; // Found a compatible system, move to next core requirement
-            }
-        }
+    // This hook calls the central logic crate.
 
-        // 3. If no compatible system was found, panic to fail the build.
-        if !found_compatible_system {
-            panic!("Build failed: No compatible system found for core module '{}' with required features: {:?}", core.name, core.features);
-        }
-    }
-    println!("cargo:rerun-if-changed=build.rs");
-    println!("cargo:rerun-if-changed=Cargo.toml");
+    playground_build_utils::generate_versions();
+
 }
+
+```
+
+
+
+### 4. Generated Code: `versions.rs`
+
+
+
+The `generate_versions()` function writes a file into the target crate's `OUT_DIR`.
+
+
+
+```rust
+
+// Example of auto-generated OUT_DIR/versions.rs for systems/ecs
+
+
+
+// Hashed from the contents of the `core/ecs/src/view` directory.
+
+pub const API_VERSION: u32 = 12345;
+
+
+
+// Hashed from the contents of the `core/ecs/src/model` directory.
+
+pub const STATE_FORMAT_VERSION: u32 = 67890;
+
+```
+
+
+
+### 5. Including the Versions
+
+
+
+The module includes the generated constants at compile time.
+
+
+
+```rust
+
+// In systems/ecs/src/lib.rs
+
+include!(concat!(env!("OUT_DIR"), "/versions.rs"));
+
+
+
+// Now `API_VERSION` and `STATE_FORMAT_VERSION` can be used.
 
 ```rust
 // modules/loader/src/loader.rs - THE ONLY UNSAFE BLOCK

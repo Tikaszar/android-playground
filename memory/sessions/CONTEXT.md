@@ -25,23 +25,18 @@ Converting core/ecs to Associated Types pattern for fragment-based MVVM architec
 
 ### Next Steps (Session 81)
 
-With the core architectural designs now finalized, the plan for the next implementation session is as follows:
+With the architectural design finalized, the implementation plan is as follows:
 
-1.  **Implement Automated Versioning Framework**:
-    -   Create `build.rs` scripts in `core` and `system` modules to hash `view` and `model` directories, generating `API_VERSION` and `STATE_FORMAT_VERSION` constants.
-    -   Add the `api_version()` method to `ViewTrait` and `ViewModelTrait` in `modules/types`.
-
-2.  **Implement `BindingRegistry` Refactor**:
-    -   Modify `modules/binding` to use the flattened, concurrent map with `arc-swap`.
-    -   Incorporate the `api_version()` check into the binding logic to ensure API compatibility.
-
-3.  **Implement Stateful Hot-Reload Logic**:
-    -   Add the optional `save_state` and `restore_state` methods to `ViewModelTrait`.
-    -   Update the `modules/loader` to orchestrate the save/restore process.
-    -   Ensure the `restore_state` implementation pattern includes checking the embedded `STATE_FORMAT_VERSION`.
-
-4.  **Begin `core/ecs` and `systems/ecs` Conversion**:
-    -   With the complete foundational architecture in place, start the rewrite of the ECS modules, implementing the new versioned, state-aware MVVM patterns.
+1.  **Create `modules/build-utils` Crate**: Implement the central `generate_versions()` function with the content-hashing logic.
+2.  **Update All Modules for Build System**:
+    -   Add a `build-dependencies` entry for `playground-build-utils` to the `Cargo.toml` of each `Core` and `System` module.
+    -   Add the one-line `build.rs` hook to each of those modules.
+    -   Add the `[package.metadata.playground.implements]` key to the `Cargo.toml` of each `System` module.
+3.  **Implement API and State Traits**:
+    -   Add the `api_version()` method to `ViewTrait` and `ViewModelTrait`.
+    -   Add the optional `save_state()` and `restore_state()` methods to `ViewModelTrait`.
+4.  **Refactor `BindingRegistry` and Loader**: Update the binding and loading logic to perform the `api_version()` check and to orchestrate the save/restore process.
+5.  **Convert `core/ecs` and `systems/ecs`**: Begin the rewrite of the ECS modules, implementing the new versioned, state-aware MVVM patterns.
 
 See CURRENT_SESSION.md for details.
 

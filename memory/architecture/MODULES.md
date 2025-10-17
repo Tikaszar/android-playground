@@ -203,28 +203,31 @@ pub static PLAYGROUND_VIEWMODEL: &dyn ViewModelTrait = &EcsViewModel;
 
 ## Module Declaration in Cargo.toml (Session 81 Design)
 
-The relationship between `Apps`, `Core` modules, and `Systems` is declared explicitly in `Cargo.toml` files to enable build-time validation.
+The build system relies on metadata in `Cargo.toml` for both build-time validation and for the automated versioning process.
 
-### App Declares Requirements
-An `App` declares which `Core` modules it uses, the `features` it needs from them, and an ordered list of preferred `Systems` to provide the implementation.
+### `System` Module Configuration
+A `System` module declares a build dependency on the central `build-utils` crate and specifies the path to the `Core` module it implements.
+```toml
+# in systems/ecs/Cargo.toml
+
+[build-dependencies]
+playground-build-utils = { path = "../../modules/build-utils" }
+
+[package.metadata.playground.implements]
+# Path for the build script to find the `view` and `model` dirs to hash
+core_path = "../core/ecs"
+```
+
+### `App` Module Configuration
+An `App` declares which `Core` modules it requires and which `Systems` it prefers to use for the implementation. This is used for a separate validation step.
 ```toml
 # in apps/editor/Cargo.toml
+
 [[package.metadata.playground.requires.core]]
 name = "playground-core-rendering"
 features = ["shaders", "textures"]
 systems = ["playground-systems-vulkan", "playground-systems-webgl"]
 ```
-
-### System Declares Provisions
-A `System` declares which `Core` module it implements and the set of `features` it supports.
-```toml
-# in systems/webgl/Cargo.toml
-[package.metadata.playground.provides]
-core_module = "playground-core-rendering"
-features = ["shaders", "textures", "2d"]
-```
-
-This structure allows an `App`'s `build.rs` script to validate that a compatible `System` exists for all of its requirements before the engine is ever compiled, preventing runtime errors.
 
 ## Module Infrastructure (modules/*)
 
@@ -312,12 +315,12 @@ fn main() {
 ## Hot-Reload Process (With State Preservation)
 
 1.  **Detect Change**: A file watcher detects a change in a module's source code.
-2.  **Save State**: The loader calls `save_state()` on the current `ViewModel`. If `Some(Ok(state_bytes))` is returned, the bytes (which include the **State Format Version**) are stored.
+2.  **Save State**: The loader calls `save_state()` on the current `ViewModel`. If state is returned, the bytes (which include the **State Format Version**) are stored.
 3.  **Unload Old Module**: The old module is unloaded.
-4.  **Compile Module**: The new version of the module is compiled. Its `build.rs` script generates the new **API Version** and **State Format Version** constants.
-5.  **Load New Module**: The loader loads the new `.so`/`.dll`.
-6.  **Extract Symbols & Bind**: The loader gets the new `View` and `ViewModel` trait objects. The `BindingRegistry` asserts that `view.api_version() == viewmodel.api_version()`. If they mismatch, the hot-reload fails, preventing an API incompatibility crash.
-7.  **Restore State**: If state was saved in step 2, the loader calls `restore_state()` on the new `ViewModel`. The `restore_state` implementation is responsible for checking the **State Format Version** within the state bytes before attempting to deserialize the data.
+4.  **Compile Module**: The `cargo build` command is run on the changed module. This triggers its `build.rs` hook, which calls `modules/build-utils` to generate the new, correct **API Version** and **State Format Version** constants.
+5.  **Load New Module**: The loader loads the newly compiled `.so`/`.dll`.
+6.  **Extract Symbols & Bind**: The loader gets the new `View` and `ViewModel` trait objects. The `BindingRegistry` asserts that `view.api_version() == viewmodel.api_version()`. A mismatch fails the reload.
+7.  **Restore State**: If state was saved, the loader calls `restore_state()` on the new `ViewModel`. The implementation then checks the **State Format Version** before deserializing.
 8.  **Resume**: The engine resumes, with all calls now safely directed to the new, version-checked, and state-restored `ViewModel`.
 
 ## Symbol Extraction (THE Unsafe Block)

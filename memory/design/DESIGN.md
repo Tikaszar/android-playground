@@ -48,7 +48,7 @@ A mobile-first game engine and IDE that runs entirely on Android devices (via Te
 
 ### Zero Runtime Failures
 - All errors at compile time when possible
-- **Build-Time Validation**: An App's `build.rs` script validates that chosen `System` modules meet all `Core` feature requirements before compilation, preventing runtime dependency errors.
+- **Build-Time Validation**: A central `build-utils` crate, called by a boilerplate `build.rs` script in each module, validates dependencies and generates version hashes at compile time.
 - **API Versioning**: The `BindingRegistry` checks a module's `api_version()` upon loading, preventing crashes from API contract mismatches.
 - NO unsafe code anywhere (except single Library::new)
 - NO runtime type casting

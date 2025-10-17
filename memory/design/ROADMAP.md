@@ -121,9 +121,9 @@
 - **Required for**: Safe, robust, and meaningful hot-reload testing and development.
 
 ### 5.2 Build Validation ⏳
-- **Design**: Complete (Session 81). A `build.rs` script in each `App` crate will validate its module requirements. It will parse its own `Cargo.toml` for `[[package.metadata.playground.requires.core]]` sections and check them against the `[package.metadata.playground.provides]` section in the corresponding `System` crates' `Cargo.toml` files.
-- **Implementation**: A `build.rs` script needs to be created for `App` crates, along with a helper crate to parse the metadata.
-- **Required for**: Guaranteeing at compile-time that an `App`'s chosen `System` backends can provide all required features.
+- **Design**: Complete. A central `modules/build-utils` crate will contain all versioning and validation logic. Each `Core` and `System` module will use a boilerplate `build.rs` script to call this central logic.
+- **Implementation**: The `modules/build-utils` crate needs to be created. The one-line `build.rs` script must be added to all relevant `Core` and `System` modules, along with the necessary `build-dependencies` in their `Cargo.toml` files.
+- **Required for**: Automated, safe, and reliable versioning and dependency validation.
 
 ### 5.3 Module Testing ⏳
 - Test hot-reload with state preservation

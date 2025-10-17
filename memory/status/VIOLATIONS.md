@@ -102,25 +102,22 @@ pub static PLAYGROUND_VIEWMODEL: &dyn ViewModelTrait = &EntityViewModel;
 
 ## Build System Changes 🟡
 
-### 6. Add Cargo.toml Metadata (Session 81 Design)
-**Location**: All `apps/*` and `systems/*` crates.
-**Fix Required**: `App` and `System` crates must declare their module dependencies and provisions in `Cargo.toml` using the `package.metadata.playground` keys. For example:
-```toml
-# In an App's Cargo.toml
-[[package.metadata.playground.requires.core]]
-name = "playground-core-rendering"
-features = ["shaders"]
-systems = ["playground-systems-webgl"]
+### 6. Add `build.rs` Hooks and Metadata
+**Location**: All `core/*` and `systems/*` crates.
+**Fix Required**: Each module must have a `build.rs` file that calls the central `modules/build-utils` logic. `System` modules must also have the correct `implements` metadata in their `Cargo.toml`.
 
-# In a System's Cargo.toml
-[package.metadata.playground.provides]
-core_module = "playground-core-rendering"
-features = ["shaders", "2d"]
+```toml
+# In systems/ecs/Cargo.toml
+[build-dependencies]
+playground-build-utils = { path = "../../modules/build-utils" }
+
+[package.metadata.playground.implements]
+core_path = "../core/ecs"
 ```
 
-### 7. Add build.rs Validation
-**Location**: All apps/*
-**Fix Required**: Compile-time feature checking
+### 7. Create `modules/build-utils` Crate
+**Location**: `modules/`
+**Fix Required**: The central `modules/build-utils` library crate, which contains all the versioning and validation logic, needs to be created.
 
 ### 8. Set Module Compilation
 **Location**: All core/*, systems/*, plugins/*, apps/*

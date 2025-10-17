@@ -5,9 +5,8 @@
 ### Session 81 (Design): Architecture Refinement
 - **`BindingRegistry` Refactoring**: Finalized a design to refactor the `BindingRegistry` using a flattened, concurrent map with `arc-swap`.
 - **Stateful Hot-Reload Design**: Finalized a design for state preservation by adding optional `save_state` and `restore_state` methods to `ViewModelTrait`.
-- **Automated Versioning Scheme**: Designed a two-version safety system, 100% automated via `build.rs` content hashing:
-    1.  **API Version**: Ensures `View` and `ViewModel` traits are compatible, checked at binding time.
-    2.  **State Format Version**: Ensures serialized data is compatible, checked at restore time.
+- **Automated Versioning Scheme**: Designed a two-version (`API` and `State Format`) safety system, automated via content hashing.
+- **Build System Design**: Finalized a "Boilerplate Hook" pattern where a central `modules/build-utils` crate contains all build logic, and each module uses a one-line `build.rs` script to call it. This provides a robust, idiomatic, and fully automated build process.
 
 ### Session 65: Hot-Loadable Module Architecture Design
 - Designed complete hot-loadable module system to replace VTable

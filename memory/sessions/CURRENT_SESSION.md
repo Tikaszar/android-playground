@@ -53,8 +53,8 @@ Session 79 completed the modules/* infrastructure with:
 
 ### 4. Plan for Session 81
 - **Implement `BindingRegistry` Refactor**: Change `modules/binding` to use the flattened, concurrent map with `arc-swap`.
-- **Implement Automated Versioning**: Create the `build.rs` scripts for `Core` and `System` modules to generate `API Version` and `State Format Version` hashes. Add the `api_version()` method to the base traits.
-- **Implement Stateful Hot-Reload**: Update `ViewModelTrait` with optional state methods. Update the `modules/loader` and `BindingRegistry` to perform the API version check and orchestrate the save/restore process, including the state format version check.
+- **Implement Build System**: Create the central `modules/build-utils` crate and add the boilerplate `build.rs` hooks and `Cargo.toml` metadata to all `Core` and `System` modules to generate the automated version constants.
+- **Implement Stateful Hot-Reload**: Update `ViewModelTrait` with optional state methods. Update the loader and registry to perform the version checks and orchestrate the save/restore process.
 
 ## Key Design Decisions
 

@@ -236,28 +236,26 @@ systems = [
 ]
 ```
 
-### Compile-Time Validation (Session 81 Design)
+### Automated Build System (Session 81 Design)
 
-To guarantee that a chosen `System` can support the features an `App` requires, a `build.rs` script in the `App` crate performs validation before compilation.
+To automate versioning and validation, the workspace uses a centralized build-logic pattern. This ensures consistency and avoids duplicated code, while integrating perfectly with standard `cargo build` commands.
 
-1.  **`System` Declares what it Provides**: A `System`'s `Cargo.toml` explicitly lists the `core_module` it implements and the `features` it supports.
-    ```toml
-    # In systems/webgl/Cargo.toml
-    [package.metadata.playground.provides]
-    core_module = "playground-core-rendering"
-    features = ["shaders", "textures", "2d"]
+1.  **Central Logic Crate (`modules/build-utils`)**: A dedicated library crate that contains all the logic for version generation. It provides a single function, `generate_versions()`.
+
+2.  **Boilerplate Hook (`build.rs`)**: Every `Core` and `System` module that requires versioning has an identical, one-line `build.rs` script. This file is pure boilerplate that calls the central logic:
+    ```rust
+    // In core/ecs/build.rs, systems/ecs/build.rs, etc.
+    fn main() { playground_build_utils::generate_versions(); }
     ```
 
-2.  **`App` Declares what it Requires**: An `App`'s `Cargo.toml` lists the `Core` modules it needs, the `features` it requires from them, and an ordered list of preferred `Systems` to provide them.
+3.  **Configuration (`Cargo.toml`)**: Each of these modules adds `playground-build-utils` to its `[build-dependencies]`. `System` modules also declare which `Core` module they implement:
     ```toml
-    # In apps/editor/Cargo.toml
-    [[package.metadata.playground.requires.core]]
-    name = "playground-core-rendering"
-    features = ["shaders", "textures"]
-    systems = ["playground-systems-vulkan", "playground-systems-webgl"]
+    # In systems/ecs/Cargo.toml
+    [package.metadata.playground.implements]
+    core_path = "../core/ecs"
     ```
 
-3.  **`build.rs` Logic**: The `App`'s build script parses these metadata sections. If it cannot find a `System` in the preference list that provides all required `features` for a given `Core` module, it will `panic!`, causing the compilation to fail with a clear error message.
+4.  **Process**: During `cargo build`, the hook script for each crate is triggered. It calls the central `generate_versions()` function, which then inspects that crate's `Cargo.toml` and generates the appropriate `API_VERSION` and/or `STATE_FORMAT_VERSION` constants for it.
 
 ## Module Loading from Cargo.toml
 
