@@ -98,7 +98,6 @@ pub async fn spawn_entity(world: &World, components: Vec<Component>) -> EcsResul
 8. Test compilation
 
 ## Notes
-- File-by-file conversion is tedious but necessary to maintain architecture
 - Each function maintains its core logic, only signature changes
 - Pattern is consistent across all conversions
 - Estimated remaining work: ~90 files × 2 minutes = ~3 hours of focused work
