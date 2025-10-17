@@ -1,38 +1,36 @@
-//! Unsubscribe from events
+//! Unsubscribe from a specific event with listener
 
-use playground_modules_types::{ModuleResult, ModuleError};
-use playground_core_ecs::SubscriptionId;
-use std::pin::Pin;
-use std::future::Future;
+use playground_core_ecs::{World, EventId, EcsResult};
 
-/// Unsubscribe from events
-pub fn unsubscribe_event(args: &[u8]) -> Pin<Box<dyn Future<Output = ModuleResult<Vec<u8>>> + Send>> {
-    let args = args.to_vec();
-    Box::pin(async move {
-        // Deserialize subscription ID from args
-        let subscription_id: SubscriptionId = bincode::deserialize(&args)
-            .map_err(|e| ModuleError::DeserializationError(e.to_string()))?;
+/// Unsubscribe from a specific event with listener
+pub async fn unsubscribe_event(world: &World, event_id: EventId, listener: String) -> EcsResult<()> {
+    // Find subscription ID matching the listener name
+    let subscriptions = world.subscriptions.read().await;
+    let subscription_id = subscriptions
+        .iter()
+        .find(|(_, sub)| sub.event_id == event_id && sub.name == listener)
+        .map(|(id, _)| *id);
+    drop(subscriptions);
 
-        // Get World
-        let world = crate::state::get_world()
-            .map_err(|e| ModuleError::Generic(e))?;
+    if let Some(sub_id) = subscription_id {
+        // Remove from subscriptions
+        let mut subscriptions = world.subscriptions.write().await;
+        subscriptions.remove(&sub_id);
+        drop(subscriptions);
 
         // Remove from pre-handlers
-        {
-            let mut pre_handlers = world.pre_handlers.write().await;
-            for handlers in pre_handlers.values_mut() {
-                handlers.retain(|id| *id != subscription_id);
-            }
+        let mut pre_handlers = world.pre_handlers.write().await;
+        for handlers in pre_handlers.values_mut() {
+            handlers.retain(|id| *id != sub_id);
         }
+        drop(pre_handlers);
 
         // Remove from post-handlers
-        {
-            let mut post_handlers = world.post_handlers.write().await;
-            for handlers in post_handlers.values_mut() {
-                handlers.retain(|id| *id != subscription_id);
-            }
+        let mut post_handlers = world.post_handlers.write().await;
+        for handlers in post_handlers.values_mut() {
+            handlers.retain(|id| *id != sub_id);
         }
+    }
 
-        Ok(Vec::new())
-    })
+    Ok(())
 }

@@ -1,49 +1,30 @@
-//! Subscribe to events with a specific priority
+//! Subscribe to an event (generic subscription)
 
-use playground_modules_types::{ModuleResult, ModuleError};
-use playground_core_ecs::{EventId, Priority, SubscriptionId};
-use std::pin::Pin;
-use std::future::Future;
+use playground_core_ecs::{World, EventId, Subscription, SubscriptionId, Priority, EcsResult};
 use std::sync::atomic::Ordering;
 
-#[derive(serde::Deserialize)]
-struct SubscribeEventArgs {
-    event_id: EventId,
-    priority: Priority,
-    name: String,
-}
+/// Subscribe to an event (generic subscription)
+pub async fn subscribe_event(world: &World, event_id: EventId, listener: String) -> EcsResult<Subscription> {
+    // Generate subscription ID
+    let subscription_id = SubscriptionId::new(
+        world.next_subscription_id.fetch_add(1, Ordering::SeqCst) as u64
+    );
 
-/// Subscribe to events with a specific priority
-pub fn subscribe_event(args: &[u8]) -> Pin<Box<dyn Future<Output = ModuleResult<Vec<u8>>> + Send>> {
-    let args = args.to_vec();
-    Box::pin(async move {
-        // Deserialize args
-        let args: SubscribeEventArgs = bincode::deserialize(&args)
-            .map_err(|e| ModuleError::DeserializationError(e.to_string()))?;
+    // Default to post-handler for generic subscriptions
+    let mut post_handlers = world.post_handlers.write().await;
+    post_handlers.entry(event_id).or_insert_with(Vec::new).push(subscription_id);
+    drop(post_handlers);
 
-        // Get World
-        let world = crate::state::get_world()
-            .map_err(|e| ModuleError::Generic(e))?;
+    // Store subscription
+    let subscription = Subscription {
+        id: subscription_id,
+        event_id,
+        priority: Priority::Normal,
+        name: listener,
+    };
 
-        // Generate subscription ID
-        let subscription_id = SubscriptionId(world.next_subscription_id.fetch_add(1, Ordering::SeqCst) as u64);
+    let mut subscriptions = world.subscriptions.write().await;
+    subscriptions.insert(subscription_id, subscription.clone());
 
-        // Add to appropriate handler map based on priority
-        match args.priority {
-            Priority::Pre => {
-                let mut pre_handlers = world.pre_handlers.write().await;
-                pre_handlers.entry(args.event_id).or_insert_with(Vec::new).push(subscription_id);
-            }
-            _ => {
-                let mut post_handlers = world.post_handlers.write().await;
-                post_handlers.entry(args.event_id).or_insert_with(Vec::new).push(subscription_id);
-            }
-        }
-
-        // Serialize subscription ID
-        let result = bincode::serialize(&subscription_id)
-            .map_err(|e| ModuleError::SerializationError(e.to_string()))?;
-
-        Ok(result)
-    })
+    Ok(subscription)
 }

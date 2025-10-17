@@ -1,37 +1,18 @@
 //! Get a query by ID
 
-use playground_modules_types::{ModuleResult, ModuleError};
-use playground_core_ecs::{QueryId, Query};
-use std::pin::Pin;
-use std::future::Future;
+use playground_core_ecs::{World, QueryId, Query, EcsResult, EcsError};
 
 /// Get a query by ID
-pub fn get_query(args: &[u8]) -> Pin<Box<dyn Future<Output = ModuleResult<Vec<u8>>> + Send>> {
-    let args = args.to_vec();
-    Box::pin(async move {
-        // Deserialize query ID
-        let query_id: QueryId = bincode::deserialize(&args)
-            .map_err(|e| ModuleError::DeserializationError(e.to_string()))?;
+pub async fn get_query(world: &World, query_id: QueryId) -> EcsResult<Query> {
+    // Get query from World
+    let queries = world.queries.read().await;
+    let filter = queries
+        .get(&query_id)
+        .ok_or_else(|| EcsError::QueryNotFound(query_id))?
+        .clone();
 
-        // Get World
-        let world = crate::state::get_world()
-            .map_err(|e| ModuleError::Generic(e))?;
+    // Create Query object
+    let query = Query::new(query_id, filter, world.clone());
 
-        // Get query from World
-        let filter = {
-            let queries = world.queries.read().await;
-            queries.get(&query_id)
-                .ok_or_else(|| ModuleError::Generic(format!("Query {:?} not found", query_id)))?
-                .clone()
-        };
-
-        // Create Query object
-        let query = Query::new(query_id, filter, world.clone());
-
-        // Serialize and return
-        let result = bincode::serialize(&query)
-            .map_err(|e| ModuleError::SerializationError(e.to_string()))?;
-
-        Ok(result)
-    })
+    Ok(query)
 }

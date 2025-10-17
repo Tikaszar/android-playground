@@ -1,63 +1,45 @@
 //! Get the count of entities matching a query
 
-use playground_modules_types::{ModuleResult, ModuleError};
-use playground_core_ecs::Query;
-use std::pin::Pin;
-use std::future::Future;
+use playground_core_ecs::{World, Query, EcsResult, EcsError};
 
 /// Get the count of entities matching a query
-pub fn query_count(args: &[u8]) -> Pin<Box<dyn Future<Output = ModuleResult<Vec<u8>>> + Send>> {
-    let args = args.to_vec();
-    Box::pin(async move {
-        // Deserialize query
-        let query: Query = bincode::deserialize(&args)
-            .map_err(|e| ModuleError::DeserializationError(e.to_string()))?;
+pub async fn query_count(world: &World, query: &Query) -> EcsResult<usize> {
+    // Get filter from stored queries
+    let queries = world.queries.read().await;
+    let filter = queries
+        .get(&query.id)
+        .ok_or_else(|| EcsError::QueryNotFound(query.id))?
+        .clone();
+    drop(queries);
 
-        // Get World
-        let world = crate::state::get_world()
-            .map_err(|e| ModuleError::Generic(e))?;
+    // Get all entities
+    let entities = world.entities.read().await;
 
-        // Get filter from stored queries
-        let filter = {
-            let queries = world.queries.read().await;
-            queries.get(&query.id)
-                .ok_or_else(|| ModuleError::Generic(format!("Query {:?} not found", query.id)))?
-                .clone()
+    // Count matching entities
+    let mut count: usize = 0;
+
+    for (entity_id, _generation) in entities.iter() {
+        // Check if entity has all included components
+        let matches = if filter.include.is_empty() {
+            true
+        } else {
+            // Simplified check - real implementation would query component pools
+            entity_id.0 > 100
         };
 
-        // Get all entities
-        let entities = world.entities.read().await;
-
-        // Count matching entities
-        let mut count: usize = 0;
-
-        for (entity_id, _generation) in entities.iter() {
-            // Check if entity has all included components
-            let matches = if filter.include.is_empty() {
-                true
+        if matches {
+            // Check exclusions
+            let excluded = if !filter.exclude.is_empty() {
+                entity_id.0 < 50
             } else {
-                // Simplified check - real implementation would query component pools
-                entity_id.0 > 100
+                false
             };
 
-            if matches {
-                // Check exclusions
-                let excluded = if !filter.exclude.is_empty() {
-                    entity_id.0 < 50
-                } else {
-                    false
-                };
-
-                if !excluded {
-                    count += 1;
-                }
+            if !excluded {
+                count += 1;
             }
         }
+    }
 
-        // Serialize and return
-        let result = bincode::serialize(&count)
-            .map_err(|e| ModuleError::SerializationError(e.to_string()))?;
-
-        Ok(result)
-    })
+    Ok(count)
 }
